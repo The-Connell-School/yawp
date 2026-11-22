@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   resolveDeckPictures,
+  searchWords,
   type PictureShelf,
 } from './picture-lookup.server';
 import type { Slide, SlideDeck } from './slide-deck';
@@ -775,9 +776,12 @@ describe('the second look (Nov 22, night)', () => {
       look,
     });
     // Each as the slide asked for it (Risorgimento, not the article it redirects to).
-    expect(seen.sort()).toEqual(
+    // Levittown's lead picture is not one (a landmark, not the town): it gets
+    // the second try, a search of Commons, and the look sees what that found.
+    expect([...new Set(seen)].sort()).toEqual(
       [
         'Giuseppe Garibaldi',
+        'Levittown, New York',
         'Mary Shelley',
         'Risorgimento',
         'allen ginsberg',
@@ -788,7 +792,9 @@ describe('the second look (Nov 22, night)', () => {
       subject: 'Giuseppe Garibaldi',
       why: 'not the thing',
     });
-    expect(result.look).toEqual({ seen: 4, turnedDown: 1, unchecked: 0 });
+    // Four lead pictures, then the two the second try found for Levittown.
+    expect(result.look).toMatchObject({ turnedDown: 1, unchecked: 0 });
+    expect(result.look!.seen).toBeGreaterThanOrEqual(4);
     expect(db.created.map((row) => row.subject)).not.toContain(
       'giuseppe garibaldi'
     );
@@ -1060,5 +1066,15 @@ describe('withResolvedPictures', () => {
     });
     expect(result.reply).toBe('Just a plan, no deck.');
     expect(result.ids).toEqual([]);
+  });
+});
+
+describe('the second try: what Commons is searched for (visuals review, Nov 22)', () => {
+  test('the subject, then the words of "should show" that say which one', () => {
+    expect(searchWords({ subject: 'Gas mask', shows: 'Early World War I gas mask worn by soldiers on the Western Front' })).toBe('Gas mask Early World War soldiers Western');
+    expect(searchWords({ subject: 'Tenement', shows: 'A crowded New York tenement in the 1890s' })).toBe('Tenement crowded New York 1890s');
+  });
+  test('a phrase the planner gave to find it by is used as it is', () => {
+    expect(searchWords({ subject: 'Owen killed', find: 'Wilfred Owen 1918', shows: 'x' })).toBe('Wilfred Owen 1918');
   });
 });

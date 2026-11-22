@@ -59,7 +59,28 @@ export const GALLERY_SLIDE_LAYOUTS = [
  */
 export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map', 'define', 'person'] as const;
 
-export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS, ...CONTEXT_SLIDE_LAYOUTS] as const;
+/**
+ * How a text is built (Nov 22): reviewers found a literature deck had almost
+ * nothing to look at, and a diagram of how a text is organized helps a reader
+ * more than a picture beside it does (Carney & Levin 2002). Drawn by the
+ * kit's v4 layout from boxes and words; every older look draws it as a list
+ * (`legacyContextSlide`, `classicSlide`).
+ */
+export const STRUCTURE_SLIDE_LAYOUTS = ['diagram'] as const;
+
+/**
+ * What a diagram draws: the `parts` of a text in a strip, each as wide as its
+ * share (a sonnet's quatrains and couplet); `frames` one inside the other (a
+ * story inside a story); a `cast` of cards (who is in it, and what each wants).
+ */
+export const DIAGRAM_KINDS = ['parts', 'frames', 'cast'] as const;
+export type DiagramKind = (typeof DIAGRAM_KINDS)[number];
+/** The most a diagram holds; a longer one is cut to this, never a lost deck. */
+export const MAX_DIAGRAM_ITEMS = 6;
+/** The most phrases an excerpt slide marks in its passage. */
+export const MAX_HIGHLIGHTS = 4;
+
+export const SLIDE_LAYOUTS = [...CLASSIC_SLIDE_LAYOUTS, ...GALLERY_SLIDE_LAYOUTS, ...CONTEXT_SLIDE_LAYOUTS, ...STRUCTURE_SLIDE_LAYOUTS] as const;
 
 export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 export type ClassicSlideLayout = (typeof CLASSIC_SLIDE_LAYOUTS)[number];
@@ -303,6 +324,29 @@ const slideSchema = z
       .min(1)
       .max(4)
       .optional(),
+    // A diagram slide (Nov 22): how the text is built, in boxes and words.
+    // `weight` is a part's share of the strip (a quatrain 4, the couplet 2);
+    // `note` is the small grey line (a part's lines, who a person is to another).
+    diagram: z
+      .object({
+        kind: z.enum(DIAGRAM_KINDS),
+        items: z
+          .array(
+            z.object({
+              label: z.string().trim().min(1).max(40),
+              text: z.string().trim().min(1).max(120).optional(),
+              note: z.string().trim().min(1).max(60).optional(),
+              weight: z.coerce.number().min(1).max(40).optional(),
+            })
+          )
+          .min(2)
+          .max(MAX_DIAGRAM_ITEMS),
+      })
+      .optional(),
+    // An excerpt slide's phrases to look at (Nov 22; Mayer's signaling
+    // principle: mark the words the task is about), copied from the passage,
+    // in the order of the tasks. Drawn in the color of its task.
+    highlight: z.array(z.string().trim().min(2).max(80)).min(1).max(MAX_HIGHLIGHTS).optional(),
   })
   // Deliberately not .strict(): one stray key should not cost the teacher the
   // whole deck. Unknown fields are dropped, required ones still enforced.
@@ -337,6 +381,7 @@ const slideSchema = z
     if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
     if (slide.layout === 'define') needs('terms', 'at least one word', Boolean(slide.terms?.length));
     if (slide.layout === 'person') needs('people', 'at least one person', Boolean(slide.people?.length));
+    if (slide.layout === 'diagram') needs('diagram', 'a diagram: `kind` and two to six `items`', Boolean(slide.diagram));
     if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures, or `wants`', Boolean(slide.image || slide.wants));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
@@ -429,6 +474,8 @@ const FIELD_ALIASES: Record<string, string> = {
   correct: 'answer',
   correctAnswer: 'answer',
   correct_answer: 'answer',
+  highlights: 'highlight',
+  highlighted: 'highlight',
   picture: 'image',
   pictureId: 'image',
   imageId: 'image',
@@ -659,9 +706,166 @@ const OWN_TITLES: Record<string, string> = {
   person: 'People',
 };
 
+const clipTo = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
+
+/** A diagram's kind, by the names a model reaches for. */
+const DIAGRAM_KIND_ALIASES: Record<string, DiagramKind> = {
+  parts: 'parts',
+  part: 'parts',
+  strip: 'parts',
+  sections: 'parts',
+  structure: 'parts',
+  movements: 'parts',
+  frames: 'frames',
+  frame: 'frames',
+  nested: 'frames',
+  'frame narrative': 'frames',
+  'frame-narrative': 'frames',
+  frame_narrative: 'frames',
+  cast: 'cast',
+  characters: 'cast',
+  cards: 'cast',
+  people: 'cast',
+  family: 'cast',
+  who: 'cast',
+};
+
+/** The same forgiveness, one level down, for one part, frame or person of a diagram. */
+const DIAGRAM_ITEM_ALIASES: Record<string, string> = {
+  name: 'label',
+  title: 'label',
+  heading: 'label',
+  part: 'label',
+  character: 'label',
+  body: 'text',
+  description: 'text',
+  detail: 'text',
+  summary: 'text',
+  content: 'text',
+  wants: 'text',
+  relation: 'note',
+  role: 'note',
+  caption: 'note',
+  size: 'weight',
+  share: 'weight',
+  span: 'weight',
+};
+
+const DIAGRAM_TITLES: Record<DiagramKind, string> = { parts: 'The parts', frames: 'A story inside a story', cast: 'Who is in it' };
+
+type DiagramItem = { label: string; text?: string; note?: string; weight?: number };
+
+/** One part of a diagram, however it was written; null when it has no name to draw. */
+function normalizeDiagramItem(raw: unknown): DiagramItem | null {
+  let item: Record<string, unknown>;
+  if (typeof raw === 'string') {
+    // "Couplet: the turn" is a label and its text.
+    const line = raw.replace(TYPED_ENUMERATION, '').trim();
+    const cut = /^(.{1,40}?)\s*(?::\s+|\s[–—-]\s+)(.+)$/.exec(line);
+    item = cut ? { label: cut[1], text: cut[2] } : { label: line };
+  } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    item = applyAliases(raw as Record<string, unknown>, DIAGRAM_ITEM_ALIASES);
+    // "lines": 4 is how much of the poem the part is; "lines": "1–4" is which.
+    const lines = (raw as Record<string, unknown>).lines;
+    if (typeof lines === 'number' && item.weight === undefined) item.weight = lines;
+    if (typeof lines === 'string' && lines.trim() && item.note === undefined) item.note = /^\d/.test(lines.trim()) ? `lines ${lines.trim()}` : lines;
+  } else {
+    return null;
+  }
+  // Words too long for their box are cut, never the reason a deck is lost.
+  const words = (value: unknown, max: number) => {
+    const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    return text ? clipTo(text, max) : undefined;
+  };
+  const label = words(item.label, 40);
+  if (!label) return null;
+  const text = words(item.text, 120);
+  const note = words(item.note, 60);
+  // "4", 4 and "4 lines" are all four.
+  const number = typeof item.weight === 'number' ? item.weight : typeof item.weight === 'string' ? Number(/\d+(?:\.\d+)?/.exec(item.weight)?.[0]) : NaN;
+  const weight = Number.isFinite(number) && number > 0 ? number : undefined;
+  return { label, ...(text ? { text } : {}), ...(note ? { note } : {}), ...(weight ? { weight } : {}) };
+}
+
+/** Shares written as percentages (50, 25, 25) or fractions (0.5, 0.25, 0.25), kept in proportion within 1 to 40. */
+function fitWeights(items: DiagramItem[]): DiagramItem[] {
+  const given = items.flatMap((item) => (item.weight ? [item.weight] : []));
+  if (!given.length) return items;
+  const [least, most] = [Math.min(...given), Math.max(...given)];
+  const scale = most > 40 ? 40 / most : least < 1 ? 1 / least : 1;
+  return items.map((item) => (item.weight ? { ...item, weight: Math.min(40, Math.max(1, Math.round(item.weight * scale * 100) / 100)) } : item));
+}
+
+/**
+ * A diagram, however the planner wrote it (Nov 22): whole (`diagram: { kind,
+ * items }`), as a bare list, with its items under their kind's name
+ * (`"parts": [...]`), or flat on the slide. Read from the slide as written,
+ * before `items` is taken for bullets. `diagram` is null when there are not
+ * two things to draw; `lines` are its items as a list, for the slide that
+ * takes its place.
+ */
+function readDiagram(raw: Record<string, unknown>): { asked: boolean; diagram: { kind: DiagramKind; items: DiagramItem[] } | null; lines: string[]; used: string[] } | null {
+  const kindOf = (value: unknown) => (typeof value === 'string' ? DIAGRAM_KIND_ALIASES[value.trim().toLowerCase()] : undefined);
+  const layout = typeof raw.layout === 'string' ? raw.layout.trim().toLowerCase() : '';
+  const given = raw.diagram;
+  const inner = given && typeof given === 'object' && !Array.isArray(given) ? (given as Record<string, unknown>) : {};
+  // "cast" and "people" were names for a person slide first: with `people`, they still are.
+  const named = layout !== 'diagram' && !Array.isArray(raw.people) ? kindOf(layout) : undefined;
+  const asked = layout === 'diagram' || given !== undefined;
+  if (!asked && !named) return null;
+
+  let kind = kindOf(inner.kind) ?? kindOf(inner.type) ?? kindOf(raw.kind) ?? named;
+  let list: unknown[] | undefined = Array.isArray(given) ? given : Array.isArray(inner.items) ? inner.items : undefined;
+  const used = ['diagram', 'kind'];
+  for (const holder of [inner, raw]) {
+    for (const name of DIAGRAM_KINDS) {
+      if (list || !Array.isArray(holder[name])) continue;
+      list = holder[name] as unknown[];
+      kind ??= name;
+      if (holder === raw) used.push(name);
+    }
+  }
+  if (!list && Array.isArray(raw.items)) {
+    list = raw.items;
+    used.push('items');
+  }
+  // A slide only called "cast", with nothing of a diagram in it, is left as it was.
+  if (!list && !asked) return null;
+
+  const items = fitWeights((list ?? []).flatMap((item) => normalizeDiagramItem(item) ?? []));
+  const lines = items.slice(0, MAX_BULLETS).map((item) => clipTo(item.text ? `${item.label}: ${item.text}` : item.label, MAX_LINE_CHARS));
+  if (items.length < 2) return { asked: true, diagram: null, lines, used };
+  // No kind, or one Yawp! does not draw: parts when they have sizes, else cards, which suit anything.
+  kind ??= items.some((item) => item.weight) ? 'parts' : 'cast';
+  return { asked: true, diagram: { kind, items: items.slice(0, MAX_DIAGRAM_ITEMS) }, lines, used };
+}
+
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-  const slide = applyAliases(raw as Record<string, unknown>, FIELD_ALIASES);
+  const read = readDiagram(raw as Record<string, unknown>);
+  const written = { ...(raw as Record<string, unknown>) };
+  if (read) for (const key of read.used) delete written[key];
+  const slide = applyAliases(written, FIELD_ALIASES);
+  if (read?.diagram) {
+    slide.diagram = read.diagram;
+    // A diagram carried on another kind of slide stays there; named or alone, it is the slide.
+    const layout = typeof slide.layout === 'string' ? slide.layout.trim().toLowerCase() : '';
+    if (!LAYOUT_SET.has(layout) || DIAGRAM_KIND_ALIASES[layout]) slide.layout = 'diagram';
+    if (slide.layout === 'diagram' && (typeof slide.title !== 'string' || !slide.title.trim())) slide.title = DIAGRAM_TITLES[read.diagram.kind];
+  } else if (read) {
+    // A deck is never lost over a diagram: one that cannot be drawn is its
+    // items in a list, and with no items the slide is read by what it holds.
+    const layout = typeof slide.layout === 'string' ? slide.layout.trim().toLowerCase() : '';
+    if (layout === 'diagram' || DIAGRAM_KIND_ALIASES[layout] || !LAYOUT_SET.has(layout)) {
+      if (read.lines.length) {
+        slide.layout = 'bullets';
+        slide.bullets = read.lines;
+        if (typeof slide.title !== 'string' || !slide.title.trim()) slide.title = 'How it is built';
+      } else {
+        delete slide.layout;
+      }
+    }
+  }
 
   if (slide.left !== undefined) slide.left = normalizeColumn(slide.left);
   if (slide.right !== undefined) slide.right = normalizeColumn(slide.right);
@@ -743,6 +947,22 @@ function normalizeSlide(raw: unknown): unknown {
     delete slide.image;
   } else if (typeof slide.image === 'string') {
     slide.image = slide.image.trim();
+  }
+  // The phrases to mark in a passage: one written alone is a list of one, and
+  // an empty or overlong one is dropped or cut, never the reason a deck is lost.
+  if (slide.highlight !== undefined) {
+    const phrases = (Array.isArray(slide.highlight) ? slide.highlight : [slide.highlight])
+      .map((item) => {
+        const record = item && typeof item === 'object' && !Array.isArray(item) ? (item as Record<string, unknown>) : null;
+        return record ? record.phrase ?? record.text : item;
+      })
+      .flatMap((item) => (typeof item === 'string' ? [item.replace(/\s+/g, ' ').trim()] : []))
+      // Cut at a word, with no ellipsis: what is left is still in the passage.
+      .map((phrase) => (phrase.length > 80 ? phrase.slice(0, 81).replace(/\s+\S*$/, '').slice(0, 80).trim() : phrase))
+      .filter((phrase) => phrase.length >= 2)
+      .slice(0, MAX_HIGHLIGHTS);
+    if (phrases.length) slide.highlight = phrases;
+    else delete slide.highlight;
   }
 
   return slide;
@@ -1036,6 +1256,11 @@ export function slideSearchText(slide: Slide): string {
     .join(' ');
 }
 
+/** A diagram as a list, for every look that does not draw one: "Couplet: the turn". */
+export function diagramLines(slide: Pick<Slide, 'diagram'>): string[] {
+  return (slide.diagram?.items ?? []).slice(0, MAX_BULLETS).map((item) => clipTo(item.text ? `${item.label}: ${item.text}` : item.label, MAX_LINE_CHARS));
+}
+
 export type ClassicSlide = Slide & { layout: ClassicSlideLayout };
 
 const CLASSIC_SET = new Set<string>(CLASSIC_SLIDE_LAYOUTS);
@@ -1088,6 +1313,8 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('bullets', { bullets: (slide.terms ?? []).map((term) => `${term.word}: ${term.definition}`.slice(0, 200)) });
     case 'person':
       return as('bullets', { bullets: (slide.people ?? []).map((person) => `${person.name}: ${person.role}`.slice(0, 200)) });
+    case 'diagram':
+      return as('bullets', { bullets: diagramLines(slide) });
     case 'map':
       return as('bullets', {
         bullets: (slide.places ?? [])

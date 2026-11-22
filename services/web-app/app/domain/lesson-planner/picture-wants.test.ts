@@ -500,3 +500,19 @@ describe('a deck is not lost for an agenda or exit without a title (preview, Nov
     ).toBeFalsy();
   });
 });
+
+describe('one picture, one slide (visuals review, Nov 22)', () => {
+  test('the first slide to ask for a subject shows it; a later one goes without, and without a slot note', () => {
+    const deck = {
+      title: 'Dulce',
+      slides: [
+        { layout: 'notes', title: 'Owen', speakerNotes: 'n', facts: ['Born 1893'], wants: { subject: 'Wilfred Owen' } },
+        { layout: 'big_idea', title: 'The old Lie', body: 'He names it.', speakerNotes: 'n', wants: { subject: 'Wilfred Owen', shows: 'Owen in uniform' } },
+      ],
+    } as never;
+    const out = withFoundPictures(deck, new Map([[pictureKey('Wilfred Owen'), 'pic_1']])) as { slides: Array<{ image?: string; wants?: unknown }> };
+    expect(out.slides[0]!.image).toBe('pic_1');
+    expect(out.slides[1]!.image).toBeUndefined();
+    expect(out.slides[1]!.wants).toBeUndefined();
+  });
+});

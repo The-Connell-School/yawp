@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { legacyContextSlide, nextFocus, slideSteps, withSlideFocus } from './context-slides';
+import { planGalleryDeck } from './deck-gallery';
 import { classicSlide, fenceSlideDeck, parseSlideDeck, validateSlideDeck, type Slide, type SlideDeck } from './slide-deck';
 
 const TIMELINE: Slide = {
@@ -125,6 +126,29 @@ describe('older looks draw a list', () => {
     for (const slide of [TIMELINE, MAP]) {
       expect(validateSlideDeck(JSON.stringify(deck([legacyContextSlide(slide)]))).ok).toBe(true);
     }
+  });
+
+  test('spec v3: a diagram as three lines at most, every part still there (Nov 22)', () => {
+    const sonnet = {
+      layout: 'diagram',
+      title: 'How Sonnet 73 is built',
+      diagram: {
+        kind: 'parts',
+        items: [
+          { label: 'Quatrain 1', text: 'Autumn', weight: 4 },
+          { label: 'Quatrain 2', text: 'Twilight', weight: 4 },
+          { label: 'Quatrain 3', text: 'A dying fire', weight: 4 },
+          { label: 'Couplet', text: 'So love well', weight: 2 },
+        ],
+      },
+      speakerNotes: 'n',
+    } as Slide;
+    const legacy = legacyContextSlide(sonnet);
+    expect(legacy).toMatchObject({ layout: 'notes', facts: ['Quatrain 1: Autumn; Quatrain 2: Twilight', 'Quatrain 3: A dying fire; Couplet: So love well'] });
+    expect(legacy.diagram).toBeUndefined();
+    expect(validateSlideDeck(JSON.stringify(deck([legacy]))).ok).toBe(true);
+    // The spec v3 plan knows what to do with it.
+    expect(planGalleryDeck(deck([sonnet])).map((plan) => plan.template)).toEqual(['notes']);
   });
 
   test('the classic looks: bullets', () => {

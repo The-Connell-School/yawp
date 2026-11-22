@@ -8,7 +8,7 @@
  * with one in focus (never stored), and the same slide as a plain list for
  * the older looks that do not draw a line or a map.
  */
-import type { Slide, SlideDeck } from './slide-deck';
+import { diagramLines, type Slide, type SlideDeck } from './slide-deck';
 
 export const CONTEXT_LAYOUTS = ['timeline', 'map'] as const;
 
@@ -47,9 +47,9 @@ export function nextFocus(slide: Pick<Slide, 'layout' | 'events' | 'places'>, fo
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
 /**
- * A timeline, a map, a define or a person slide as a `notes` slide (dated
- * lines, places, words or people, each in a line), for the spec v3 look. Any
- * other slide comes back as itself.
+ * A timeline, a map, a define, a person or a diagram slide as a `notes` slide
+ * (dated lines, places, words, people or parts, each in a line), for the spec
+ * v3 look. Any other slide comes back as itself.
  */
 export function legacyContextSlide(slide: Slide): Slide {
   if (slide.layout === 'timeline') {
@@ -75,6 +75,15 @@ export function legacyContextSlide(slide: Slide): Slide {
   if (slide.layout === 'person') {
     const { people, ...rest } = slide;
     return { ...rest, layout: 'notes', facts: (people ?? []).slice(0, 3).map((person) => clip(`${person.name}: ${person.role}`, 200)) };
+  }
+  if (slide.layout === 'diagram') {
+    // A notes slide holds three lines: a longer diagram shares them out in
+    // order, so the sonnet keeps its couplet.
+    const { diagram, ...rest } = slide;
+    const lines = diagramLines({ diagram });
+    const per = Math.ceil(lines.length / 3);
+    const facts = [0, 1, 2].map((i) => clip(lines.slice(i * per, (i + 1) * per).join('; '), 200)).filter(Boolean);
+    return facts.length ? { ...rest, layout: 'notes', facts } : slide;
   }
   return slide;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
-import { CLASSIC_SLIDE_LAYOUTS, GALLERY_SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
+import { CLASSIC_SLIDE_LAYOUTS, GALLERY_SLIDE_LAYOUTS, validateSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
@@ -16,6 +16,7 @@ import {
 import {
   buildLessonPlannerSystemPrompt,
   buildLessonPlannerSystemPromptBlocks,
+  buildTextStructureSection,
   LESSON_PLANNER_PROMPT_VERSION,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
   recommendedLessonPlannerPrompts,
@@ -2366,6 +2367,44 @@ describe('buildLessonPlannerSystemPrompt — slides that teach (Kevin, Nov 21)',
     expect(on).toContain('A read or excerpt slide needs its passage');
     expect(on).toContain('ask the teacher for the passage');
     expect(textOf(false)).not.toContain('A read or excerpt slide needs its passage');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — how a text is built (Nov 22)', () => {
+  const textOf = (flags: { deckGallery?: boolean; deckKitV4?: boolean; contextTools?: boolean } = { deckGallery: true, deckKitV4: true, contextTools: true }) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckKitV41: true, ...flags })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('the diagram, its three kinds and when to use one', () => {
+    const on = textOf();
+    expect(on).toContain('- diagram — boxes and words');
+    for (const kind of ['parts', 'frames', 'cast']) expect(on).toContain(`\`"kind": "${kind}"\``);
+    expect(on).toContain('when a slide teaches how a text is built or who is in it');
+    expect(on).toContain('One diagram in a close-reading lesson is usually right; never a diagram of something the lesson does not teach.');
+  });
+
+  test('each example is a diagram the deck takes exactly as written', () => {
+    const examples = buildTextStructureSection().flatMap((line) => [...line.matchAll(/`("diagram": \{.*\})`/g)].map((match) => JSON.parse(`{${match[1]}}`).diagram));
+    expect(examples.map((diagram) => diagram.kind)).toEqual(['parts', 'frames', 'cast']);
+    for (const diagram of examples) {
+      const checked = validateSlideDeck(JSON.stringify({ title: 'Deck', slides: [{ layout: 'diagram', title: 'How it is built', diagram, speakerNotes: 'n' }] }));
+      expect(checked.ok && checked.deck.slides[0]).toMatchObject({ layout: 'diagram', diagram });
+    }
+    // The sonnet's couplet is half a quatrain.
+    expect(examples[0].items.map((item: { weight: number }) => item.weight)).toEqual([4, 4, 4, 2]);
+  });
+
+  test('the phrases an excerpt slide marks, in the order of its tasks', () => {
+    const on = textOf();
+    expect(on).toContain('`highlight` on an excerpt slide: name the one to three phrases the tasks point at, copied exactly from the passage, in the order of the tasks; Yawp! draws each in the color of its task.');
+    expect(on).toContain('never words that are not in `body`');
+  });
+
+  test('only with context tools on the kit’s v4 look, which draws them', () => {
+    expect(textOf({ deckGallery: true, deckKitV4: true, contextTools: false })).not.toContain('- diagram —');
+    expect(textOf({ deckGallery: true, deckKitV4: false, contextTools: true })).not.toContain('- diagram —');
+    expect(textOf({ deckGallery: false, deckKitV4: true, contextTools: true })).not.toContain('`highlight` on an excerpt slide');
   });
 });
 

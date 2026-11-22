@@ -46,6 +46,14 @@ type ListSpec = {
   blank: () => unknown;
   /** The part to type in first. */
   focusKey?: string;
+  /**
+   * A diagram is read so leniently that the Save check passes one with a
+   * nameless item or a single item (the item is dropped; the slide becomes a
+   * list). On the slide neither is offered: `needs` is the part an item
+   * cannot be left without, `least` the fewest items the list keeps.
+   */
+  needs?: string;
+  least?: number;
   /** What a screen reader calls item N (and its part). */
   label: (n: number, key?: string) => string;
 };
@@ -101,7 +109,34 @@ const LISTS: Record<string, ListSpec> = {
     focusKey: 'caption',
     label: (n, key) => (key === 'year' ? `Year ${n}` : `Event ${n}`),
   },
+  // A diagram's parts, frames or people (Nov 22).
+  diagram: {
+    max: 6,
+    parts: { label: 40, text: 120, note: 60 },
+    blank: () => ({ label: 'Name', text: 'What it does' }),
+    focusKey: 'label',
+    needs: 'label',
+    least: 2,
+    label: (n, key) => (key === 'text' ? `Diagram part ${n} sentence` : key === 'note' ? `Diagram part ${n} note` : `Diagram part ${n}`),
+  },
 };
+
+/** A list that is kept inside its field, beside something else: a diagram's items, beside its kind. */
+const INSIDE: Record<string, string> = { diagram: 'items' };
+
+/** The field's list, wherever the slide keeps it. */
+function listOf(slide: Record<string, unknown> | undefined, field: string): unknown[] | undefined {
+  const value = slide?.[field];
+  const inside = INSIDE[field];
+  return (inside ? (value as Record<string, unknown> | undefined)?.[inside] : value) as unknown[] | undefined;
+}
+
+/** The slide with the field's list set; an emptied list takes its field with it. */
+function withList(slide: Slide & Record<string, unknown>, field: string, list: unknown[]): Slide {
+  const inside = INSIDE[field];
+  const value = !list.length ? undefined : inside ? { ...(slide[field] as object), [inside]: list } : list;
+  return { ...slide, [field]: value } as Slide;
+}
 
 const TEXT_LABELS: Record<string, string> = {
   title: 'Slide title',
@@ -160,7 +195,7 @@ export function sourceLimit(source: KitV4Source): number {
 function stored(deck: SlideDeck, slideIndex: number, source: KitV4Source): string | undefined {
   const holder = (source.on === 'deck' ? deck : deck.slides[slideIndex]) as Record<string, unknown> | undefined;
   let value: unknown = holder?.[source.field];
-  if (source.index !== undefined) value = (value as unknown[] | undefined)?.[source.index];
+  if (source.index !== undefined) value = (source.on === 'deck' ? (value as unknown[] | undefined) : listOf(holder, source.field))?.[source.index];
   if (source.key) value = (value as Record<string, unknown> | undefined)?.[source.key];
   return typeof value === 'string' ? value : undefined;
 }
@@ -182,11 +217,11 @@ function write(deck: SlideDeck, slideIndex: number, source: KitV4Source, line: s
   const slide = deck.slides[slideIndex] as (Slide & Record<string, unknown>) | undefined;
   if (!slide) return null;
   if (source.index !== undefined) {
-    const list = [...((slide[source.field] as unknown[] | undefined) ?? [])];
+    const list = [...(listOf(slide, source.field) ?? [])];
     const item = list[source.index];
     if (item === undefined) return null;
     list[source.index] = source.key ? { ...(item as object), [source.key]: line } : line;
-    return withSlide(deck, slideIndex, { ...slide, [source.field]: list } as Slide);
+    return withSlide(deck, slideIndex, withList(slide, source.field, list));
   }
   if (source.key) {
     const column = slide[source.field] as Record<string, string> | undefined;
@@ -226,6 +261,7 @@ export function applySlideText(deck: SlideDeck, slideIndex: number, source: KitV
     }
   }
   const empty = !line.trim();
+  if (empty && source.on === 'slide' && source.index !== undefined && source.key && LISTS[source.field]?.needs === source.key) return deck;
   const next = write(deck, slideIndex, source, empty ? '' : line);
   if (!next) return deck;
   return !empty || stillSaves(next) ? next : deck;
@@ -249,11 +285,11 @@ export function insertSlideListItem(deck: SlideDeck, slideIndex: number, source:
   const spec = source.on === 'slide' && source.index !== undefined ? LISTS[source.field] : undefined;
   const slide = deck.slides[slideIndex] as (Slide & Record<string, unknown>) | undefined;
   if (!spec || !slide) return null;
-  const list = [...((slide[source.field] as unknown[] | undefined) ?? [])];
+  const list = [...(listOf(slide, source.field) ?? [])];
   if (source.index! >= list.length || list.length >= drawn(deck, slideIndex, source.field)) return null;
   list.splice(source.index! + 1, 0, spec.blank());
   return {
-    deck: withSlide(deck, slideIndex, { ...slide, [source.field]: list } as Slide),
+    deck: withSlide(deck, slideIndex, withList(slide, source.field, list)),
     focus: { on: 'slide', field: source.field, index: source.index! + 1, ...(spec.focusKey ? { key: spec.focusKey } : {}) },
   };
 }
@@ -263,10 +299,10 @@ export function removeSlideListItem(deck: SlideDeck, slideIndex: number, source:
   const spec = source.on === 'slide' && source.index !== undefined ? LISTS[source.field] : undefined;
   const slide = deck.slides[slideIndex] as (Slide & Record<string, unknown>) | undefined;
   if (!spec || !slide) return null;
-  const list = [...((slide[source.field] as unknown[] | undefined) ?? [])];
-  if (source.index! >= list.length) return null;
+  const list = [...(listOf(slide, source.field) ?? [])];
+  if (source.index! >= list.length || list.length <= (spec.least ?? 0)) return null;
   list.splice(source.index!, 1);
-  const next = withSlide(deck, slideIndex, { ...slide, [source.field]: list.length ? list : undefined } as Slide);
+  const next = withSlide(deck, slideIndex, withList(slide, source.field, list));
   if (!stillSaves(next)) return null;
   return {
     deck: next,

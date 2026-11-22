@@ -26,7 +26,7 @@
  * and a title slide that names the teacher, then the class and date, with
  * no "Yawp! Writing Program" line.
  */
-import type { Slide, SlideDeck } from './slide-deck';
+import { MAX_HIGHLIGHTS, type Slide, type SlideDeck } from './slide-deck';
 import { resolveDeckArt, type DeckArt } from './deck-art';
 import { contrastRatio, normalizedHex, splitColorMarks } from './deck-colors';
 import { galleryTemplate, withoutLessonNumber, type GalleryTemplate } from './deck-gallery';
@@ -169,8 +169,8 @@ export function kitV4Band(color: string): string {
 
 // The plan ----------------------------------------------------------------
 
-/** The gallery's templates, a quiz, and the two that give a text its background (Nov 19). */
-export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map' | 'define' | 'person';
+/** The gallery's templates, a quiz, the four that give a text its background (Nov 19), and how it is built (Nov 22). */
+export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map' | 'define' | 'person' | 'diagram';
 
 export type KitV4Plan = {
   slide: Slide;
@@ -205,6 +205,7 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
   map: null,
   define: null,
   person: null,
+  diagram: null,
 };
 
 /** Labels that only decorate. */
@@ -247,7 +248,7 @@ const wordsOf = (text: string) =>
     .filter(Boolean);
 
 function headlineOf(template: KitV4Template, slide: Slide): string {
-  if (['steps', 'notes', 'read', 'divider', 'compare', 'title', 'discuss'].includes(template)) return slide.title;
+  if (['steps', 'notes', 'read', 'divider', 'compare', 'title', 'discuss', 'diagram'].includes(template)) return slide.title;
   return slide.question ?? slide.body ?? slide.title;
 }
 
@@ -280,6 +281,8 @@ function labelFor(template: KitV4Template, slide: Slide, previous: string | null
 
 function templateOf(slide: Slide): KitV4Template {
   if (slide.layout === 'timeline' || slide.layout === 'map' || slide.layout === 'define' || slide.layout === 'person') return slide.layout;
+  // A diagram with nothing in it to draw is its title, as any slide without its parts is.
+  if (slide.layout === 'diagram') return slide.diagram ? 'diagram' : 'big_idea';
   if (slide.choices?.length) return 'quiz';
   return galleryTemplate(slide);
 }
@@ -397,8 +400,8 @@ export type KitV4Element =
   | (Box & {
       kind: 'rect';
       fill: string;
-      /** A split slide's panel, a quiz answer's band, a timeline's line or mark or a map's pin, a name's plate on a map. */
-      role: 'panel' | 'band' | 'mark' | 'plate';
+      /** A split slide's panel, a quiz answer's band, a timeline's line or mark or a map's pin, a name's plate on a map, a diagram's block, frame or card. */
+      role: 'panel' | 'band' | 'mark' | 'plate' | 'block';
       /** On a stepped slide: the event or place a click on this puts in focus. */
       step?: number;
     })
@@ -560,6 +563,536 @@ function passageSize(passage: string): number {
   return [30, 26, 22, 20, 18].find((size) => size <= start && fits(size)) ?? 18;
 }
 
+// Marked phrases ----------------------------------------------------------
+
+/**
+ * Text as it is compared: lower case, curly quotes straight, any run of
+ * spaces or line ends one space. `at` is where each letter came from.
+ */
+function comparable(text: string): { plain: string; at: number[] } {
+  let plain = '';
+  const at: number[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    let letter = text[i]!;
+    if (/\s/.test(letter)) {
+      if (plain.endsWith(' ')) continue;
+      letter = ' ';
+    } else if ('‘’ʼ′`'.includes(letter)) letter = "'";
+    else if ('“”″'.includes(letter)) letter = '"';
+    else if (letter.toLowerCase().length === 1) letter = letter.toLowerCase();
+    plain += letter;
+    at.push(i);
+  }
+  return { plain, at };
+}
+
+export type KitV4Highlight = {
+  /** Where the phrase is in the passage. */
+  start: number;
+  end: number;
+  /** Which of the slide's phrases it is, from 0: its color, and its task's. */
+  phrase: number;
+};
+
+/**
+ * Where an excerpt slide's phrases are in its passage (Nov 22), in the order
+ * they are read. A planner copies a phrase nearly as printed: the case, the
+ * kind of quote mark and a line break inside it may differ, so those are not
+ * held against it. Each phrase is marked once, where it first stands as whole
+ * words; one that is not in the passage, or lies over one already marked, is
+ * left out rather than guessed at.
+ */
+export function findHighlights(passage: string, phrases: string[]): KitV4Highlight[] {
+  const { plain, at } = comparable(passage);
+  const found: KitV4Highlight[] = [];
+  const whole = (from: number, length: number) => !/[\p{L}\p{N}]/u.test(plain[from - 1] ?? ' ') && !/[\p{L}\p{N}]/u.test(plain[from + length] ?? ' ');
+  phrases.slice(0, MAX_HIGHLIGHTS).forEach((phrase, index) => {
+    const asked = comparable(phrase).plain.trim();
+    // "the sleeping fog." where the passage has "the sleeping fog,".
+    const bare = asked.replace(/^[\s.,;:!?"'…-]+|[\s.,;:!?"'…-]+$/g, '');
+    for (const words of asked === bare ? [asked] : [asked, bare]) {
+      if (words.length < 2) continue;
+      let first = -1;
+      let from = plain.indexOf(words);
+      while (from >= 0 && !whole(from, words.length)) {
+        if (first < 0) first = from;
+        from = plain.indexOf(words, from + 1);
+      }
+      if (from < 0) from = first;
+      if (from < 0) continue;
+      const start = at[from]!;
+      const end = at[from + words.length - 1]! + 1;
+      if (!found.some((taken) => start < taken.end && taken.start < end)) found.push({ start, end, phrase: index });
+      return;
+    }
+  });
+  return found.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * A passage with its marked phrases, a paragraph to each line as printed. A
+ * line of verse is its own paragraph because the PDF, writing one run after
+ * another, starts the line after a line break inside a run where that run
+ * began, not at the margin. A blank line (between stanzas) is a line's space
+ * after the line before it. Georgia is never bold, so the marked words are
+ * set in Arial Bold, as the author's name under the passage is, a little
+ * smaller so its letters are as tall as Georgia's.
+ */
+function markedPassage(passage: string, marks: KitV4Highlight[], size: number, toneOf: (phrase: number) => string): KitV4Para[] {
+  const paras: KitV4Para[] = [];
+  let start = 0;
+  for (const line of passage.split('\n')) {
+    const end = start + line.length;
+    if (!line.trim()) {
+      const before = paras.at(-1);
+      if (before) before.after = (before.after ?? 0) + size * PASSAGE_LEADING;
+    } else {
+      const runs: KitV4Run[] = [];
+      let cursor = start;
+      for (const mark of marks) {
+        if (mark.end <= start || mark.start >= end) continue;
+        const from = Math.max(mark.start, start);
+        const to = Math.min(mark.end, end);
+        runs.push(serif(passage.slice(cursor, from), size, KIT_V4.ink), sans(passage.slice(from, to), Math.round(size * 0.92), toneOf(mark.phrase), true));
+        cursor = to;
+      }
+      runs.push(serif(passage.slice(cursor, end), size, KIT_V4.ink));
+      paras.push(para(runs, 0, PASSAGE_LEADING));
+    }
+    start = end + 1;
+  }
+  const last = paras.at(-1);
+  // The same space over the credit line as an unmarked passage has.
+  if (last) last.after = 26;
+  return paras;
+}
+
+function hueApart(a: string, b: string): number {
+  const distance = Math.abs(hue(a).h - hue(b).h);
+  return Math.min(distance, 360 - distance);
+}
+
+/**
+ * A color at its brightest that still reads on cream at 4.5:1. A deck color
+ * is darker than that (pine is nearly ink), and a marked phrase has to stand
+ * apart from the ink around it and from the phrase marked beside it.
+ */
+function brightOnCream(hex: string): string {
+  const value = normalizedHex(hex)!.slice(1);
+  const channels = [0, 2, 4].map((at) => parseInt(value.slice(at, at + 2), 16));
+  let out = normalizedHex(hex)!;
+  for (let step = 1; step <= 60; step += 1) {
+    const next = `#${channels.map((channel) => Math.min(255, Math.round(channel * (1 + step * 0.05))).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+    if (contrastRatio(next, KIT_V4.cream) < 4.5) break;
+    out = next;
+  }
+  return out;
+}
+
+/**
+ * A color for each marked phrase: the deck's own, in the order color marks
+ * number them, then the house's, leaving out any that is near one already
+ * there, so no phrase is taken for another. Each at its brightest that reads
+ * on cream.
+ */
+export function kitV4HighlightColors(colors: string[]): string[] {
+  // A deck's second color can be a second blue (the Great Wave's): told apart on a panel, not in two phrases.
+  const tones = colors.filter((color, i) => colors.slice(0, i).every((earlier) => hueApart(earlier, color) >= 30));
+  for (const house of KIT_V4_HOUSE_PALETTE.map(kitV4Readable)) {
+    if (tones.length >= MAX_HIGHLIGHTS) break;
+    if (tones.every((tone) => hueApart(tone, house) >= 30)) tones.push(house);
+  }
+  return tones.map(brightOnCream);
+}
+
+/**
+ * A marked phrase's color for its task's dot on the panel. Every deck color
+ * is dark enough to carry white type, so on a panel none of them shows as it
+ * is: it is lightened until it does, and keeps its hue.
+ */
+export function kitV4OnPanel(tone: string, panel: string): string {
+  const value = normalizedHex(tone)!.slice(1);
+  const channels = [0, 2, 4].map((at) => parseInt(value.slice(at, at + 2), 16));
+  for (let step = 0; step <= 20; step += 1) {
+    const out = `#${channels.map((channel) => Math.round(channel + (255 - channel) * (step / 20)).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+    if (contrastRatio(out, panel) >= 3) return out;
+  }
+  return KIT_V4.white;
+}
+
+// Diagrams ----------------------------------------------------------------
+
+/** A letter's width as a share of its size: Arial, and Arial Bold. */
+const LETTER = 0.5;
+const BOLD_LETTER = 0.58;
+
+/**
+ * How many lines words take in a box. Like the quiz's rows and the passage,
+ * a letter is taken as about half its size wide. Unlike them it breaks at
+ * words: a diagram's boxes are narrow, and there a long word costs a line.
+ */
+function linesIn(text: string, size: number, width: number, perLetter = LETTER): number {
+  const perLine = Math.max(1, Math.floor(width / (size * perLetter)));
+  let lines = 1;
+  let used = 0;
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const joined = used ? used + 1 + word.length : word.length;
+    if (joined <= perLine) {
+      used = joined;
+      continue;
+    }
+    if (used) lines += 1;
+    used = word.length;
+    while (used > perLine) {
+      lines += 1;
+      used -= perLine;
+    }
+  }
+  return lines;
+}
+
+/** The words cut to the lines there are, ending in an ellipsis; as they are when they fit. */
+function clipToLines(text: string, size: number, width: number, lines: number, perLetter = LETTER): string {
+  if (linesIn(text, size, width, perLetter) <= lines) return text;
+  const words = text.split(/\s+/).filter(Boolean);
+  while (words.length > 1) {
+    words.pop();
+    const cut = `${words.join(' ').replace(/[\s,;:.–—-]+$/, '')}…`;
+    if (linesIn(cut, size, width, perLetter) <= lines) return cut;
+  }
+  const perLine = Math.max(2, Math.floor(width / (size * perLetter)));
+  return `${text.slice(0, perLine * lines - 1)}…`;
+}
+
+const longestWordOf = (text: string) => Math.max(...text.split(/\s+/).map((word) => word.length));
+
+/** One of a box's lines of words (a name, a sentence, a note), with the sizes it steps down through. */
+type Piece = { text: string; sizes: number[]; bold?: boolean; leading: number; after: number };
+type SetPiece = { text: string; size: number; whole: boolean };
+
+const sizeAt = (piece: Piece, step: number) => piece.sizes[Math.min(step, piece.sizes.length - 1)]!;
+const letterOf = (piece: Piece) => (piece.bold ? BOLD_LETTER : LETTER);
+
+function piecesHeight(pieces: Piece[], width: number, step: number): number {
+  const shown = pieces.filter((piece) => piece.text);
+  return shown.reduce(
+    (sum, piece, i) => sum + linesIn(piece.text, sizeAt(piece, step), width, letterOf(piece)) * sizeAt(piece, step) * piece.leading + (i < shown.length - 1 ? piece.after : 0),
+    0
+  );
+}
+
+/**
+ * The first step down at which every box holds its words, with no word
+ * broken across lines ("Counterargume / nt"): one size for all, so a row
+ * reads as a row.
+ */
+function fitStep(boxes: Array<{ pieces: Piece[]; width: number; height: number }>): number {
+  const steps = Math.max(1, ...boxes.flatMap((box) => box.pieces.map((piece) => piece.sizes.length)));
+  const whole = (box: { pieces: Piece[]; width: number }, step: number) =>
+    box.pieces.every((piece) => !piece.text || longestWordOf(piece.text) * sizeAt(piece, step) * letterOf(piece) <= box.width);
+  for (let step = 0; step < steps; step += 1) {
+    if (boxes.every((box) => whole(box, step) && piecesHeight(box.pieces, box.width, step) <= box.height)) return step;
+  }
+  return steps - 1;
+}
+
+/**
+ * A box's words at a step. Words never run out of their box: what does not
+ * fit at the smallest size is cut with an ellipsis, the first piece keeping
+ * its line and a later one going when there is no line left for it.
+ */
+function setPieces(pieces: Piece[], width: number, height: number, step: number): SetPiece[] {
+  let room = height;
+  return pieces.map((piece, i) => {
+    const size = sizeAt(piece, step);
+    const line = size * piece.leading;
+    if (!piece.text) return { text: '', size, whole: true };
+    const later = pieces.slice(i + 1).filter((next) => next.text);
+    const kept = later.reduce((sum, next) => sum + sizeAt(next, step) * next.leading, later.length ? piece.after : 0);
+    let lines = Math.floor((room - kept + 0.5) / line);
+    if (lines < 1) lines = i === 0 ? 1 : Math.floor((room + 0.5) / line);
+    if (lines < 1) return { text: '', size, whole: false };
+    const text = clipToLines(piece.text, size, width, lines, letterOf(piece));
+    room -= linesIn(text, size, width, letterOf(piece)) * line + piece.after;
+    return { text, size, whole: text === piece.text };
+  });
+}
+
+/** A run of a diagram's words, typed on the slide where it shows all of its field. */
+function diagramRun(run: KitV4Run, index: number, key: 'label' | 'text' | 'note', whole = true, lead = 0): KitV4Run {
+  return whole ? from(run, on('diagram', { index, key, ...(lead ? { lead } : {}) })) : run;
+}
+
+/**
+ * A diagram's boxes and words (Nov 22), between `top` and `bottom` of the
+ * slide. The renderers draw filled boxes and words and nothing else, so each
+ * kind is made of those: a strip of blocks, frames that are a colored box
+ * with a cream one a little smaller over it, cards with a band.
+ */
+function diagramElements(slide: Slide, { colors, color, top, bottom }: { colors: string[]; color: string; top: number; bottom: number }): KitV4Element[] {
+  const diagram = slide.diagram;
+  if (!diagram) return [];
+  const elements: KitV4Element[] = [];
+  const items = diagram.items;
+  const n = items.length;
+  const left = MARGIN;
+  const fullW = KIT_V4_WIDTH - MARGIN * 2;
+  const room = bottom - top;
+  const tone = (i: number) => colors[i % colors.length] ?? color;
+  const block = (box: Box, fill: string) => elements.push({ kind: 'rect', role: 'block', fill, ...box });
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  /** A box's words as paragraphs: `look` gives each piece its color and the field it is typed back to. */
+  const words = (item: number, set: SetPiece[], pieces: Piece[], look: Array<{ tone: string; key: 'label' | 'text' | 'note' } | null>) =>
+    set.map((piece, i) => {
+      const style = look[i];
+      const run = sans(piece.text, piece.size, style?.tone ?? KIT_V4.ink, Boolean(pieces[i]!.bold));
+      return para([style ? diagramRun(run, item, style.key, piece.whole) : run], pieces[i]!.after, pieces[i]!.leading);
+    });
+
+  if (diagram.kind === 'parts') {
+    const GAP = 8;
+    // A part with no size is a usual one.
+    const given = items.flatMap((item) => (item.weight ? [item.weight] : []));
+    const usual = given.length ? sum(given) / given.length : 1;
+    const weights = items.map((item) => item.weight ?? usual);
+    const usable = fullW - GAP * (n - 1);
+    // No block thinner than its number.
+    const THIN = 36;
+    let widths = weights.map((weight) => (usable * weight) / sum(weights));
+    const thin = widths.filter((width) => width < THIN).length;
+    if (thin) {
+      const rest = sum(widths.filter((width) => width >= THIN));
+      widths = widths.map((width) => (width < THIN ? THIN : (width * (usable - thin * THIN)) / rest));
+    }
+    const xs = widths.map((_, i) => left + sum(widths.slice(0, i)) + GAP * i);
+
+    // A block under 150 wide holds no sentence a class can read: the strip
+    // shows the proportions, and the words go under it in a numbered list.
+    if (widths.some((width) => width < 150)) {
+      const stripH = 64;
+      const cols = n <= 3 ? 1 : 2;
+      const per = Math.ceil(n / cols);
+      const COL_GAP = 48;
+      const CHIP = 34;
+      const colW = (fullW - COL_GAP * (cols - 1)) / cols;
+      const textW = colW - CHIP - 16;
+      const pieces = items.map((item): Piece[] => [
+        { text: item.label, sizes: [26, 24, 22, 20, 18], bold: true, leading: 1.2, after: 4 },
+        { text: item.text ?? '', sizes: [24, 22, 20, 18, 16], leading: 1.3, after: 4 },
+        { text: item.note ?? '', sizes: [19, 18, 17, 16, 15], leading: 1.3, after: 0 },
+      ]);
+      const ROW_GAP = 18;
+      const rowRoom = (room - stripH - 28 - ROW_GAP * (per - 1)) / per;
+      const step = fitStep(pieces.map((list) => ({ pieces: list, width: textW, height: rowRoom })));
+      const rowH = Math.min(rowRoom, Math.max(CHIP, ...pieces.map((list) => piecesHeight(list, textW, step))));
+      const y = top + Math.max(0, Math.min(100, (room - stripH - 28 - per * rowH - ROW_GAP * (per - 1)) * 0.4));
+      items.forEach((item, i) => {
+        block({ x: xs[i]!, y, w: widths[i]!, h: stripH }, tone(i));
+        const pad = widths[i]! >= 60 ? 14 : Math.max(4, (widths[i]! - 12) / 2);
+        elements.push(column({ x: xs[i]! + pad, y, w: widths[i]! - pad - 2, h: stripH }, [para([sans(String(i + 1), 20, KIT_V4.white, true)])]));
+        const rowX = left + Math.floor(i / per) * (colW + COL_GAP);
+        const rowY = y + stripH + 28 + (i % per) * (rowH + ROW_GAP);
+        block({ x: rowX, y: rowY, w: CHIP, h: CHIP }, tone(i));
+        elements.push(column({ x: rowX + 12, y: rowY + 1, w: CHIP - 13, h: CHIP - 1 }, [para([sans(String(i + 1), 18, KIT_V4.white, true)])]));
+        elements.push(
+          column(
+            { x: rowX + CHIP + 16, y: rowY, w: textW, h: rowH },
+            words(i, setPieces(pieces[i]!, textW, rowH, step), pieces[i]!, [{ tone: tone(i), key: 'label' }, { tone: KIT_V4.ink, key: 'text' }, { tone: KIT_V4.grey, key: 'note' }]),
+            'top'
+          )
+        );
+      });
+      return elements;
+    }
+
+    // Each part's name in its block, one size for all; where a name does not
+    // fit its block even small, every name goes under the strip instead.
+    const INSIDE = 14;
+    const labelSize = [28, 24, 22, 20, 18].find((size) =>
+      items.every((item, i) => linesIn(item.label, size, widths[i]! - INSIDE * 2, BOLD_LETTER) <= 2 && longestWordOf(item.label) * size * BOLD_LETTER <= widths[i]! - INSIDE * 2)
+    );
+    // Under the strip a name is as large as its longest word allows in its
+    // block, whatever size the sentences under it need.
+    const underLabel = [24, 22, 20, 18].find((size) => items.every((item, i) => longestWordOf(item.label) * size * BOLD_LETTER <= widths[i]!)) ?? 18;
+    const pieces = items.map((item): Piece[] => [
+      { text: labelSize ? '' : item.label, sizes: [24, 24, 22, 20, 18].map((size) => Math.min(size, underLabel)), bold: true, leading: 1.2, after: 6 },
+      // A sentence is never much larger than the name over it.
+      { text: item.text ?? '', sizes: [24, 22, 20, 18, 16].map((size) => (labelSize ? size : Math.min(size, underLabel + 2))), leading: 1.3, after: 8 },
+      { text: item.note ?? '', sizes: [19, 18, 17, 16, 15], leading: 1.3, after: 0 },
+    ]);
+    const labelLines = labelSize ? Math.max(...items.map((item, i) => linesIn(item.label, labelSize, widths[i]! - INSIDE * 2, BOLD_LETTER))) : 1;
+    const least = Math.round(labelLines * (labelSize ?? 26) * 1.15 + 44);
+    const UNDER = 16;
+    const wanted = Math.max(...pieces.map((list, i) => piecesHeight(list, widths[i]!, 0)));
+    // The strip takes the room the words leave, up to a bar a class can see from the back.
+    const stripH = Math.max(least, Math.min(150, room - UNDER - wanted - 40));
+    const step = fitStep(pieces.map((list, i) => ({ pieces: list, width: widths[i]!, height: room - stripH - UNDER })));
+    const under = Math.min(room - stripH - UNDER, Math.max(...pieces.map((list, i) => piecesHeight(list, widths[i]!, step))));
+    const y = top + Math.max(0, Math.min(100, (room - stripH - UNDER - under) * 0.4));
+    const underH = bottom - (y + stripH + UNDER);
+    items.forEach((item, i) => {
+      block({ x: xs[i]!, y, w: widths[i]!, h: stripH }, tone(i));
+      elements.push(
+        column({ x: xs[i]! + INSIDE, y, w: widths[i]! - INSIDE * 2, h: stripH }, [
+          para([labelSize ? diagramRun(sans(item.label, labelSize, KIT_V4.white, true), i, 'label') : sans(String(i + 1), 26, KIT_V4.white, true)], 0, 1.15),
+        ])
+      );
+      elements.push(
+        column(
+          { x: xs[i]!, y: y + stripH + UNDER, w: widths[i]!, h: underH },
+          words(i, setPieces(pieces[i]!, widths[i]!, underH, step), pieces[i]!, [{ tone: tone(i), key: 'label' }, { tone: KIT_V4.ink, key: 'text' }, { tone: KIT_V4.grey, key: 'note' }]),
+          'top'
+        )
+      );
+    });
+    return elements;
+  }
+
+  if (diagram.kind === 'frames') {
+    // Four frames are as many as stay readable one inside the other; a fifth
+    // and sixth are lines in the innermost.
+    const drawn = items.slice(0, 4);
+    const more = items.slice(4);
+    const count = drawn.length;
+    // Four frames have less room each: a little less air around their words.
+    const snug = count === 4;
+    const BORDER = 5;
+    const PAD_X = 22;
+    const PAD_TOP = snug ? 10 : 12;
+    const PAD_BOTTOM = snug ? 12 : 14;
+    const INSET = 34;
+    const textW = (k: number) => fullW - 2 * k * INSET - 2 * (BORDER + PAD_X);
+    const sizes =
+      count <= 2
+        ? { label: [30, 26, 24, 22, 20], text: [26, 24, 22, 20, 18], note: [20, 18, 17, 16, 15] }
+        : count === 3
+          ? { label: [26, 24, 22, 20, 18], text: [24, 22, 20, 18, 16], note: [18, 17, 16, 15, 15] }
+          : { label: [24, 22, 20, 18, 18], text: [22, 20, 18, 16, 15], note: [17, 16, 15, 15, 15] };
+    const moreLines = (k: number): Piece[] => (k === count - 1 ? more.map((item) => ({ text: item.text ? `${item.label}: ${item.text}` : item.label, sizes: sizes.text, leading: 1.3, after: 4 })) : []);
+    // Stacked: the name, then its sentence, then its note. In a line: all three run on, to save height.
+    const stacked = (k: number): Piece[] => [
+      { text: drawn[k]!.label, sizes: sizes.label, bold: true, leading: 1.2, after: 4 },
+      { text: drawn[k]!.text ?? '', sizes: sizes.text, leading: 1.3, after: 4 },
+      { text: drawn[k]!.note ?? '', sizes: sizes.note, leading: 1.3, after: more.length && k === count - 1 ? 8 : 0 },
+      ...moreLines(k),
+    ];
+    const pick = (list: number[], step: number) => list[Math.min(step, list.length - 1)]!;
+    const inLine = (k: number, step: number) => {
+      const item = drawn[k]!;
+      const run = (text: string | undefined, size: number, letter: number) => (text ? (text.length + 3) * size * letter : 0);
+      // A little over, for the ends of lines a word did not reach.
+      const long = (run(item.label, pick(sizes.label, step), BOLD_LETTER) + run(item.text, pick(sizes.text, step), LETTER) + run(item.note, pick(sizes.note, step), LETTER)) * 1.04;
+      const extra = moreLines(k);
+      return Math.max(1, Math.ceil(long / textW(k))) * pick(sizes.label, step) * 1.3 + (extra.length ? 8 + piecesHeight(extra, textW(k), step) : 0);
+    };
+    const GAP = snug ? 8 : 12;
+    const INSET_BOTTOM = snug ? 12 : 16;
+    const fixed = count * (BORDER + PAD_TOP) + (count - 1) * (GAP + INSET_BOTTOM) + PAD_BOTTOM + BORDER;
+    const tries = [0, 1, 2, 3, 4].flatMap((step) => [
+      { step, line: false },
+      { step, line: true },
+    ]);
+    const heads = (step: number, line: boolean) => drawn.map((_, k) => (line ? inLine(k, step) : piecesHeight(stacked(k), textW(k), step)));
+    const chosen = tries.find(({ step, line }) => fixed + sum(heads(step, line)) <= room);
+    // Nothing fits: every frame keeps its name and one line of its sentence.
+    const tight = !chosen;
+    const { step, line } = chosen ?? { step: 4, line: true };
+    const size = { label: pick(sizes.label, step), text: pick(sizes.text, step), note: pick(sizes.note, step) };
+    const headH = tight ? drawn.map(() => size.label * 1.3) : heads(step, line);
+    const slack = Math.max(0, room - fixed - sum(headH));
+    // Room to spare opens the frames up a little, then lets the innermost breathe; the rest stays under the diagram.
+    const open = count > 1 ? Math.min(34, (slack * 0.35) / (count - 1)) : 0;
+    const inner = Math.min(110, slack - 2 * open * (count - 1));
+    const height = fixed + sum(headH) + 2 * open * (count - 1) + inner;
+    let y = top + Math.max(0, Math.min(100, (room - height) * 0.4));
+    let foot = y + height;
+    drawn.forEach((item, k) => {
+      const x = left + k * INSET;
+      const w = fullW - 2 * k * INSET;
+      block({ x, y, w, h: foot - y }, tone(k));
+      block({ x: x + BORDER, y: y + BORDER, w: w - BORDER * 2, h: foot - y - BORDER * 2 }, KIT_V4.cream);
+      const last = k === count - 1;
+      const box = { x: x + BORDER + PAD_X, y: y + BORDER + PAD_TOP, w: textW(k), h: last ? foot - BORDER - PAD_BOTTOM - (y + BORDER + PAD_TOP) : headH[k]! + GAP + open - 2 };
+      if (line || tight) {
+        // On one line the sentence is cut to what is left beside the name.
+        const beside = box.w - (item.label.length + 3) * size.label * BOLD_LETTER;
+        const sentence = item.text ? (tight ? clipToLines(item.text, size.text, Math.max(size.text * 4, beside), 1) : item.text) : '';
+        const extra = tight ? [] : moreLines(k);
+        elements.push(
+          column(
+            box,
+            [
+              para(
+                [
+                  diagramRun(sans(item.label, size.label, tone(k), true), k, 'label'),
+                  sentence ? diagramRun(sans(`   ${sentence}`, size.text, KIT_V4.ink), k, 'text', sentence === item.text, 3) : null,
+                  item.note && !tight ? diagramRun(sans(`   ${item.note}`, size.note, KIT_V4.grey), k, 'note', true, 3) : null,
+                ],
+                extra.length ? 8 : 0,
+                1.3
+              ),
+              ...extra.map((piece) => para([sans(piece.text, sizeAt(piece, step), KIT_V4.ink)], piece.after, piece.leading)),
+            ],
+            'top'
+          )
+        );
+      } else {
+        const pieces = stacked(k);
+        elements.push(column(box, words(k, setPieces(pieces, box.w, box.h, step), pieces, [{ tone: tone(k), key: 'label' }, { tone: KIT_V4.ink, key: 'text' }, { tone: KIT_V4.grey, key: 'note' }]), 'top'));
+      }
+      y += BORDER + PAD_TOP + headH[k]! + GAP + open;
+      foot -= INSET_BOTTOM + open;
+    });
+    return elements;
+  }
+
+  // A cast: cards in a grid, one row up to three, then two.
+  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  const rows = n <= 3 ? 1 : 2;
+  const GAP = 24;
+  const PAD = 20;
+  const cardW = (fullW - GAP * (cols - 1)) / cols;
+  const innerW = cardW - PAD * 2;
+  const sizes =
+    n === 2
+      ? { label: [36, 32, 28, 24, 22], text: [30, 28, 26, 24, 22, 20], note: [22, 22, 20, 18, 17, 16] }
+      : n <= 4
+        ? { label: [32, 28, 26, 24, 22], text: [28, 26, 24, 22, 20, 18], note: [21, 20, 19, 18, 17, 16] }
+        : { label: [26, 24, 22, 20, 18], text: [22, 21, 20, 19, 18, 17, 16], note: [18, 17, 17, 16, 16, 15, 15] };
+  // One size for every name, at which each fits its band in two lines or fewer.
+  const labelSize = sizes.label.find((size) => items.every((item) => linesIn(item.label, size, innerW, BOLD_LETTER) <= 2 && longestWordOf(item.label) * size * BOLD_LETTER <= innerW)) ?? sizes.label.at(-1)!;
+  const names = items.map((item) => clipToLines(item.label, labelSize, innerW, 2, BOLD_LETTER));
+  const bandH = Math.round(Math.max(...names.map((name) => linesIn(name, labelSize, innerW, BOLD_LETTER))) * labelSize * 1.15 + 26);
+  const most = (room - GAP * (rows - 1)) / rows;
+  const BAND_GAP = 16;
+  const FOOT = 18;
+  const pieces = items.map((item): Piece[] => [
+    { text: item.text ?? '', sizes: sizes.text, leading: 1.3, after: 10 },
+    { text: item.note ?? '', sizes: sizes.note, leading: 1.3, after: 0 },
+  ]);
+  const step = fitStep(pieces.map((list) => ({ pieces: list, width: innerW, height: most - bandH - BAND_GAP - FOOT })));
+  const wanted = Math.max(...pieces.map((list) => piecesHeight(list, innerW, step)));
+  // A card is as tall as its words, and never so short it stops being a card.
+  const cardH = Math.min(most, Math.max(bandH + BAND_GAP + wanted + FOOT + 8, rows === 1 ? 260 : 190));
+  const y0 = top + Math.max(0, Math.min(100, (room - rows * cardH - GAP * (rows - 1)) * 0.4));
+  items.forEach((item, i) => {
+    const x = left + (i % cols) * (cardW + GAP);
+    const y = y0 + Math.floor(i / cols) * (cardH + GAP);
+    block({ x, y, w: cardW, h: cardH }, KIT_V4.white);
+    block({ x, y, w: cardW, h: bandH }, color);
+    elements.push(column({ x: x + PAD, y: y + 2, w: innerW, h: bandH - 2 }, [para([diagramRun(sans(names[i]!, labelSize, KIT_V4.white, true), i, 'label', names[i] === item.label)], 0, 1.15)]));
+    const bodyH = cardH - bandH - BAND_GAP - FOOT;
+    elements.push(
+      column(
+        { x: x + PAD, y: y + bandH + BAND_GAP, w: innerW, h: bodyH },
+        words(i, setPieces(pieces[i]!, innerW, bodyH, step), pieces[i]!, [{ tone: KIT_V4.ink, key: 'text' }, { tone: KIT_V4.grey, key: 'note' }]),
+        'top'
+      )
+    );
+  });
+  return elements;
+}
+
 /** Label on cream: Arial bold 24 in the deck color. On a panel: gold. */
 const labelRun = (label: string | null, color: string) => (label ? sans(label, 24, color, true) : null);
 
@@ -634,8 +1167,12 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
 
   switch (plan.template) {
     case 'title': {
+      // The lesson's own picture hangs where the painting would, and wins over
+      // it (Nov 22): a photograph of the book's world says more than a
+      // painting chosen for its mood. Its credit is drawn with the picture.
+      const pictured = Boolean(slide.image);
       if (v41) {
-        const right = art ? 640 : W - MARGIN;
+        const right = art || pictured ? 640 : W - MARGIN;
         // Never "Yawp! Writing Program": the class and date, or nothing.
         const course = slide.course && !/yawp!?\s+writing\s+program/i.test(slide.course) ? slide.course : null;
         if (deck.unit) {
@@ -655,13 +1192,15 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
         if (who.length) {
           elements.push(column({ x: MARGIN, y: 590, w: right - MARGIN, h: 70 }, who.map((run) => para([run], 4)), 'top'));
         }
-        if (art) {
+        if (pictured) {
+          elements.push({ kind: 'picture', id: slide.image!, x: 680, y: 140, w: 520, h: 400 });
+        } else if (art) {
           elements.push({ kind: 'art', src: art.src, fit: 'contain', alt: `${art.title}, ${art.artist}`, x: 680, y: 140, w: 520, h: 400 });
           elements.push(credit(art, { x: 680, y: 556, w: 520, h: 60 }));
         }
         return out();
       }
-      const right = art ? 640 : W - MARGIN;
+      const right = art || pictured ? 640 : W - MARGIN;
       // 92px for a short title; a long one, or one long word, at 80.
       const longestWord = Math.max(...slide.title.split(/\s+/).map((word) => word.length));
       const titleSize = slide.title.length > 24 || longestWord > 9 ? 80 : 92;
@@ -673,7 +1212,9 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           para([slide.course ? from(sans(slide.course, 20, KIT_V4.grey), on('course')) : null]),
         ])
       );
-      if (art) {
+      if (pictured) {
+        elements.push({ kind: 'picture', id: slide.image!, x: 680, y: 110, w: 520, h: 430 });
+      } else if (art) {
         elements.push({ kind: 'art', src: art.src, fit: 'contain', alt: `${art.title}, ${art.artist}`, x: 680, y: 110, w: 520, h: 430 });
         elements.push(credit(art, { x: 680, y: 556, w: 520, h: 60 }));
       }
@@ -825,12 +1366,25 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const passage = slide.body ?? '';
       const who = slide.author ?? slide.attribution;
       const page = slide.page?.replace(/^p+\.\s*/i, '');
+      // The phrases the tasks point at (Nov 22), each in a color, and that
+      // color's dot before its task: students see where to look for what.
+      const marks = slide.highlight?.length ? findHighlights(passage, slide.highlight) : [];
+      const tones = kitV4HighlightColors(colors);
+      const toneOf = (phrase: number) => tones[phrase % tones.length]!;
+      const size = passageSize(passage);
+      // Marked, the passage is several runs, and typing into one of them could
+      // not be written back as the whole passage: it is changed in the editor's field.
+      const passageParas = marks.length
+        ? markedPassage(passage, marks, size, toneOf)
+        : [para([from(serif(passage, size, KIT_V4.ink), on('body'))], 26, PASSAGE_LEADING)];
+      const dot = (i: number) => (marks.some((mark) => mark.phrase === i) ? sans('● ', 24, kitV4OnPanel(toneOf(i), plan.panel!.color)) : null);
       split(
         [
           para([panelLabel], 22),
           ...tasks.map((task, i) =>
             para(
               [
+                dot(i),
                 task.verb ? from(sans(`${task.verb} `, 24, KIT_V4.white, true), tasksFrom(i, 'verb')) : null,
                 from(sans(task.text, 24, KIT_V4.white), tasksFrom(i, 'text')),
               ],
@@ -840,7 +1394,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           ),
         ],
         [
-          para([from(serif(passage, passageSize(passage), KIT_V4.ink), on('body'))], 26, 1.45),
+          ...passageParas,
           para([
             who ? from(sans(who, 18, KIT_V4.ink, true), on(slide.author != null ? 'author' : 'attribution')) : null,
             slide.work ? from(sans(`${who ? ', ' : ''}${slide.work}`, 18, KIT_V4.grey), on('work', { lead: who ? 2 : 0 })) : null,
@@ -1292,6 +1846,32 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           paras: [para([sans('Map: Natural Earth. Places: GeoNames. Borders are today’s.', 13, KIT_V4.grey)])],
         });
       }
+      return out();
+    }
+
+    case 'diagram': {
+      // How a text is built (Nov 22): its name at the top as on a compare
+      // slide, one line under it, and the diagram in the room that is left.
+      pushRunningHead(MARGIN);
+      const width = W - MARGIN * 2;
+      // One line at 48 or 44, two at 42 (all three Fraunces in spec v4.1), and a very long one smaller.
+      const titleLetter = v41 ? 0.6 : 0.55;
+      const titleSize = [48, 44].find((size) => linesIn(slide.title, size, width, titleLetter) === 1) ?? (linesIn(slide.title, 42, width, titleLetter) <= 2 ? 42 : 34);
+      const headTop = v41 ? 56 : 88;
+      const titleH = linesIn(slide.title, titleSize, width, titleSize > 40 ? titleLetter : 0.55) * titleSize * 1.08;
+      const line = slide.body ? clipToLines(slide.body, 22, width, 2) : '';
+      const lineH = line ? 12 + linesIn(line, 22, width) * 22 * 1.3 : 0;
+      elements.push(
+        column(
+          { x: MARGIN, y: headTop, w: width, h: Math.ceil(titleH + lineH + 10) },
+          [
+            para([from(head(slide.title, titleSize, KIT_V4.ink), on('title'))], line ? 12 : 0, 1.08),
+            para([line ? (line === slide.body ? from(sans(line, 22, v41 ? KIT_V4.grey : KIT_V4.body), on('body')) : sans(line, 22, v41 ? KIT_V4.grey : KIT_V4.body)) : null], 0, 1.3),
+          ],
+          'top'
+        )
+      );
+      elements.push(...diagramElements(slide, { colors, color, top: Math.round(headTop + titleH + lineH + 32), bottom: H - 52 }));
       return out();
     }
 

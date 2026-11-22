@@ -138,9 +138,20 @@ export function withFoundPictures<T extends SlideDeck>(
   if (!found.size) return deck;
   const idFor = (want: Want | undefined, has: string | undefined) =>
     want && !has ? found.get(pictureKey(want.subject)) : undefined;
+  // One picture, one slide (visuals review, Nov 22: the same photograph on
+  // two slides of a deck, in 13 of 25 reviews). The first slide to ask for a
+  // subject shows it; a later slide asking again goes without, and without a
+  // "picture to add" note for a picture the deck already has.
+  const shown = new Set<string>(deck.slides.flatMap((slide) => (slide.image ? [slide.image] : [])));
   return {
     ...deck,
     slides: deck.slides.map((slide): Slide => {
+      const again = slide.layout !== 'person' && !slide.image && slide.wants ? idFor(slide.wants, undefined) : undefined;
+      if (again && shown.has(again)) {
+        const { wants: _asked, ...rest } = slide;
+        return rest as Slide;
+      }
+      if (again) shown.add(again);
       const events = slide.events?.map((event) => {
         const eventImage = idFor(eventWant(event), event.image);
         return eventImage ? { ...event, image: eventImage } : event;

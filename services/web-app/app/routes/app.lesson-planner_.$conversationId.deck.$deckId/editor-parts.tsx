@@ -45,6 +45,7 @@ export const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   map: 'Map',
   define: 'Words',
   person: 'People',
+  diagram: 'Diagram',
 };
 
 const lines = (value: string) =>
@@ -188,7 +189,10 @@ export function SlideFields({
                   {(gallery ? SLIDE_LAYOUTS : CLASSIC_SLIDE_LAYOUTS)
                     // A picture slide comes only from the teacher's own deck (Nov 1):
                     // offered to keep, never to turn a slide with no picture into.
-                    .filter((layout) => layout !== 'picture' || slide.layout === 'picture')
+                    // The same for a diagram (Nov 22): its parts are written by the
+                    // planner or asked for in the command line, and there are no
+                    // fields here to make one from nothing.
+                    .filter((layout) => (layout !== 'picture' && layout !== 'diagram') || slide.layout === layout)
                     .map((layout) => (
                     <option key={layout} value={layout}>
                       {LAYOUT_LABELS[layout]}

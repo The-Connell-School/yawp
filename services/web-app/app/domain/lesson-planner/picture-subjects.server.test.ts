@@ -10,6 +10,8 @@ import {
   readPictureEditorAnswer,
   slidesWithoutSubjects,
   withNamedSubjects,
+  withTitlePicture,
+  readPictureEditorAuthor,
 } from './picture-subjects.server';
 import type { Slide, SlideDeck } from './slide-deck';
 
@@ -66,9 +68,8 @@ const DECK: SlideDeck = {
 
 describe('which slides the editor is asked about', () => {
   test('teaching slides with no picture and no request, by their number in the deck', () => {
-    expect(slidesWithoutSubjects(DECK).map(({ number }) => number)).toEqual([
-      3, 4, 7,
-    ]);
+    // Slide 7 is a Talk slide: routine, words only (visuals review, Nov 22).
+    expect(slidesWithoutSubjects(DECK).map(({ number }) => number)).toEqual([3, 4]);
   });
 
   test('the prompt names the deck and each slide with its words, and nothing routine', () => {
@@ -169,5 +170,47 @@ describe('withNamedSubjects', () => {
       return '';
     });
     expect(asked).toBe(false);
+  });
+});
+
+describe('the vetted kit and the title slide (visuals review, Nov 22)', () => {
+  const KIT = {
+    title: 'Dulce et Decorum Est',
+    author: 'Wilfred Owen',
+    visuals: [
+      { subject: 'Wilfred Owen', shows: 'Owen in uniform, about 1916', use: 'author' },
+      { subject: 'Lord Kitchener Wants You', shows: 'the 1914 recruiting poster', use: 'period' },
+    ],
+  };
+  const deck = (slides: unknown[]) => ({ title: 'Dulce', slides }) as never;
+
+  test('the editor is offered the kit, by exact title', () => {
+    const prompt = pictureEditorPrompt(DECK, slidesWithoutSubjects(DECK), KIT);
+    expect(prompt).toContain('Vetted pictures for Dulce et Decorum Est');
+    expect(prompt).toContain('- Lord Kitchener Wants You — the 1914 recruiting poster (period)');
+  });
+
+  test('no slide asks for the author: the title slide does, as their own article only', () => {
+    const out = withTitlePicture(deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }, { layout: 'big_idea', title: 'The old Lie', body: 'x', speakerNotes: 'n' }]), { kit: KIT }) as { slides: Array<{ wants?: unknown }> };
+    expect(out.slides[0]!.wants).toEqual({ subject: 'Wilfred Owen', shows: 'Owen in uniform, about 1916', own: true });
+  });
+
+  test('a slide already shows the author where the lesson talks about him: the title takes a picture of the work’s world', () => {
+    const out = withTitlePicture(
+      deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }, { layout: 'notes', title: 'Owen', facts: ['Born 1893'], speakerNotes: 'n', wants: { subject: 'Wilfred Owen' } }]),
+      { kit: KIT }
+    ) as { slides: Array<{ wants?: { subject: string } }> };
+    expect(out.slides[0]!.wants?.subject).toBe('Lord Kitchener Wants You');
+  });
+
+  test('no kit: the author the editor named; no author, no picture', () => {
+    const slides = [{ layout: 'title', title: 'A Letter', speakerNotes: 'n' }];
+    expect((withTitlePicture(deck(slides), { author: 'Martin Luther King Jr.' }) as { slides: Array<{ wants?: { subject: string } }> }).slides[0]!.wants?.subject).toBe('Martin Luther King Jr.');
+    expect((withTitlePicture(deck(slides), {}) as { slides: Array<{ wants?: unknown }> }).slides[0]!.wants).toBeUndefined();
+  });
+
+  test('the editor’s answer names the author', () => {
+    expect(readPictureEditorAuthor('{"author": "Martin Luther King Jr.", "slides": []}')).toBe('Martin Luther King Jr.');
+    expect(readPictureEditorAuthor('{"author": null, "slides": []}')).toBeNull();
   });
 });

@@ -41,6 +41,20 @@ const SLIDES: Slide[] = [
   slide({ layout: 'statement', title: 'Which is the thesis?', body: 'Pick the thesis.', choices: ['A topic', 'A claim with a reason', 'A fact'], answer: 2 }),
   slide({ layout: 'compare', title: 'Weak and strong', left: { label: 'Weak', text: 'Dogs are nice.' }, right: { label: 'Strong', text: 'Dogs make a home safer.' } }),
   slide({ layout: 'exit', title: 'Before you go', body: 'Bring your draft tomorrow.', button: 'Exit ticket', nextLesson: 'Conclusions' }),
+  slide({
+    layout: 'diagram',
+    title: 'How the sonnet is built',
+    body: 'Where does it turn?',
+    diagram: {
+      kind: 'parts',
+      items: [
+        { label: 'Quatrain 1', text: 'Autumn', note: 'lines 1–4', weight: 4 },
+        { label: 'Quatrain 2', text: 'Twilight', note: 'lines 5–8', weight: 4 },
+        { label: 'Quatrain 3', text: 'A dying fire', note: 'lines 9–12', weight: 4 },
+        { label: 'Couplet', text: 'So love well', note: 'lines 13–14', weight: 2 },
+      ],
+    },
+  }),
 ];
 
 const base = deck(SLIDES);
@@ -273,5 +287,48 @@ describe('names for a run: its key on the canvas and its label for a screen read
     expect(sourceLabel({ on: 'slide', field: 'mode' })).toBe('Label');
     expect(sourceLabel({ on: 'slide', field: 'agenda', index: 0, key: 'title' })).toBe('Agenda part 1');
     expect(sourceLabel({ on: 'slide', field: 'left', key: 'text' })).toBe('Left column text');
+  });
+});
+
+describe('a diagram’s words are typed on the slide like any list’s (Nov 22)', () => {
+  const diagram = at('diagram');
+  const items = (of: SlideDeck) => of.slides[diagram]!.diagram!.items;
+
+  test('a name, a sentence and a note go to their own item, and its weight stays', () => {
+    const named = applySlideText(base, diagram, find(base, diagram, 'diagram', 3, 'label').source, 'The couplet');
+    expect(items(named)[3]).toEqual({ label: 'The couplet', text: 'So love well', note: 'lines 13–14', weight: 2 });
+    expect(named.slides[diagram]!.diagram!.kind).toBe('parts');
+    expect(items(applySlideText(base, diagram, find(base, diagram, 'diagram', 0, 'text').source, 'Late autumn'))[0]!.text).toBe('Late autumn');
+    expect(items(applySlideText(base, diagram, find(base, diagram, 'diagram', 1, 'note').source, 'the second four'))[1]!.note).toBe('the second four');
+    expect(validateSlideDeck(JSON.stringify(named)).ok).toBe(true);
+  });
+
+  test('every kind draws its items from the same fields', () => {
+    for (const kind of ['frames', 'cast'] as const) {
+      const of = deck([slide({ layout: 'diagram', title: 'The Youngers', diagram: { kind, items: [{ label: 'Lena', text: 'A house', note: 'Mother' }, { label: 'Walter', text: 'A store', note: 'Her son' }] } })]);
+      expect(sourceText(of, 0, find(of, 0, 'diagram', 1, 'label').source)).toBe('Walter');
+      expect(sourceText(of, 0, find(of, 0, 'diagram', 1, 'text').source)).toBe('A store');
+      expect(applySlideText(of, 0, find(of, 0, 'diagram', 0, 'note').source, 'Head of the family').slides[0]!.diagram!.items[0]!.note).toBe('Head of the family');
+    }
+  });
+
+  test('a name is held to 40 characters and cannot be emptied; a sentence can', () => {
+    const label = find(base, diagram, 'diagram', 0, 'label').source;
+    expect(sourceLimit(label)).toBe(40);
+    expect(sourceLimit(find(base, diagram, 'diagram', 0, 'text').source)).toBe(120);
+    expect(applySlideText(base, diagram, label, '  ')).toBe(base);
+    expect(sourceLabel(label)).toBe('Diagram part 1');
+    expect(sourceKey(label)).toBe('slide.diagram.0.label');
+  });
+
+  test('Enter adds a part up to six; Backspace removes one down to two', () => {
+    const added = insertSlideListItem(base, diagram, find(base, diagram, 'diagram', 3, 'label').source)!;
+    expect(items(added.deck)).toHaveLength(5);
+    expect(items(added.deck)[4]).toEqual({ label: 'Name', text: 'What it does' });
+    expect(added.focus).toMatchObject({ field: 'diagram', index: 4, key: 'label' });
+    const removed = removeSlideListItem(base, diagram, find(base, diagram, 'diagram', 3, 'label').source)!;
+    expect(items(removed.deck).map((item) => item.label)).toEqual(['Quatrain 1', 'Quatrain 2', 'Quatrain 3']);
+    const two = deck([slide({ layout: 'diagram', title: 'Two', diagram: { kind: 'cast', items: [{ label: 'Lena' }, { label: 'Walter' }] } })]);
+    expect(removeSlideListItem(two, 0, find(two, 0, 'diagram', 0, 'label').source)).toBeNull();
   });
 });

@@ -192,7 +192,7 @@ export async function searchOpenPictures(
 }
 
 /** A file's record as a picture a school may show, or null: no open license, too small, or not a photograph a browser draws. */
-export function candidateFromFile(page: CommonsPage): FoundCandidate | null {
+export function candidateFromFile(page: CommonsPage, { minWidth = MIN_WIDTH }: { minWidth?: number } = {}): FoundCandidate | null {
   const info = page.imageinfo?.[0];
   if (!info) return null;
   const meta = info.extmetadata ?? {};
@@ -203,7 +203,7 @@ export function candidateFromFile(page: CommonsPage): FoundCandidate | null {
   // What will be downloaded: a rendering says its type in its name (a TIFF's is a JPEG); else the file's own type.
   const named = /\.jpe?g(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '';
   const type = info.thumburl ? named : (info.mime ?? named);
-  if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(type)) return null;
+  if (!license || !imageUrl || width < minWidth || !/^image\/(jpeg|png)$/.test(type)) return null;
   // A file whose credit says its copyright is disputed is not one a school should show (Night, Nov 22).
   if (/copyright claims?/i.test(`${plain(meta.Artist?.value, 400)} ${plain(meta.Credit?.value, 400)}`)) return null;
   const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');

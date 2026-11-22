@@ -31,9 +31,11 @@ const CANDIDATES: LookCandidate[] = [
 describe('what the model is told', () => {
   test('the rules from the live runs are in its instructions', async () => {
     const { SECOND_LOOK_SYSTEM } = await import('./picture-check.server');
-    expect(SECOND_LOOK_SYSTEM).toContain(
-      'never keep a book cover, a film still, a poster or an illustration for a fictional character'
-    );
+    expect(SECOND_LOOK_SYSTEM).toContain("never keep a film still, a film poster, a modern book cover or an actor's publicity photograph for a fictional character");
+    // Visuals review (Nov 22): art of a scene is the right picture for a play; a modern stand-in or a metaphor is not.
+    expect(SECOND_LOOK_SYSTEM).toContain('Art of the work is different and is kept');
+    expect(SECOND_LOOK_SYSTEM).toContain("It comes from the subject's own world and time");
+    expect(SECOND_LOOK_SYSTEM).toContain('It is not a metaphor');
     expect(SECOND_LOOK_SYSTEM).toContain(
       'Never keep a photograph of an atrocity'
     );

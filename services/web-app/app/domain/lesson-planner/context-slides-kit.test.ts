@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import JSZip from 'jszip';
-import { layoutKitV4Slide, planKitV4Deck, type KitV4Element, type KitV4Run } from './deck-kit-v4';
+import { kitV4Colors, layoutKitV4Slide, planKitV4Deck, type KitV4Element, type KitV4Run } from './deck-kit-v4';
 import { withSlideFocus } from './context-slides';
 import { sourceText } from './deck-on-slide';
 import { resolveDeckPlaces } from '~/domain/geo/places.server';
@@ -258,5 +258,58 @@ describe('a name never sits on another place’s pin (demo pass, Nov 21)', () =>
       for (const pin of pins) if ((pin as { step?: number }).step !== own) expect(hits(plate, pin)).toBe(false);
       for (const other of plates) if (other !== plate) expect(hits(plate, other)).toBe(false);
     }
+  });
+});
+
+describe('every renderer draws a diagram and a marked passage (Nov 22)', () => {
+  const built: SlideDeck = {
+    title: 'Sonnet 73',
+    kit: 'v4.1',
+    slides: [
+      {
+        layout: 'diagram',
+        title: 'How Sonnet 73 is built',
+        diagram: {
+          kind: 'parts',
+          items: [
+            { label: 'Quatrain 1', text: 'Autumn', weight: 4 },
+            { label: 'Quatrain 2', text: 'Twilight', weight: 4 },
+            { label: 'Quatrain 3', text: 'A dying fire', weight: 4 },
+            { label: 'Couplet', text: 'So love well', weight: 2 },
+          ],
+        },
+        speakerNotes: 'n',
+      } as Slide,
+      {
+        layout: 'excerpt',
+        title: 'Annotate',
+        body: 'That time of year thou mayst in me behold\nWhen yellow leaves, or none, or few, do hang',
+        highlight: ['yellow leaves'],
+        tasks: [{ verb: 'Circle', text: 'the season' }],
+        speakerNotes: 'n',
+      } as Slide,
+    ],
+  };
+
+  test('the PDF prints both slides', async () => {
+    const bytes = await renderSlidesPdf({ lessonTitle: 'Sonnet 73', deck: built });
+    expect(Buffer.from(bytes.slice(0, 4)).toString('latin1')).toBe('%PDF');
+  });
+
+  test('PowerPoint: the diagram’s blocks are shapes with real words, and the marked phrase is its own bold run', async () => {
+    const zip = await JSZip.loadAsync(await renderDeckPptxGallery(built));
+    const diagram = await zip.file('ppt/slides/slide1.xml')!.async('string');
+    for (const words of ['Quatrain 1', 'Couplet', 'So love well']) expect(diagram).toContain(words);
+    // The strip's blocks are filled in the deck's two colors.
+    for (const color of kitV4Colors(built)) expect(diagram).toContain(`<a:solidFill><a:srgbClr val="${color.slice(1)}"`);
+    const excerpt = await zip.file('ppt/slides/slide2.xml')!.async('string');
+    expect(excerpt).toMatch(/<a:rPr[^>]* b="1"[^>]*>(?:(?!<\/a:r>).)*<a:t>yellow leaves<\/a:t>/s);
+    expect(excerpt).toContain('When ');
+    expect(excerpt).toContain('●');
+  });
+
+  test('the spec v3 look draws the diagram as a list', () => {
+    const { kit: _kit, ...v3 } = built;
+    expect(planGalleryDeck(v3).map((plan) => plan.template)).toEqual(['notes', 'excerpt']);
   });
 });

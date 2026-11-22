@@ -23,6 +23,7 @@ import { cleanAltText } from '~/domain/office/pptx-pictures';
 import {
   candidateFromFile,
   downloadPicture,
+  searchOpenPictures,
   wikimediaHeaders,
   type CommonsPage,
   type FoundCandidate,
@@ -33,7 +34,7 @@ import {
   type LookAt,
   type LookVerdict,
 } from './picture-check.server';
-import { withNamedSubjects, type AskEditor } from './picture-subjects.server';
+import { withNamedSubjects, withTitlePicture, type AskEditor, type PictureKit } from './picture-subjects.server';
 import {
   pictureKey,
   pictureWords,
@@ -53,7 +54,14 @@ import {
 const WIKIPEDIA_API = 'https://en.wikipedia.org/w/api.php';
 /** A deck's pictures are a dozen at most: enough for every teaching slide, and one request. */
 const MAX_PICTURES = 12;
-const MIN_WIDTH = 480;
+/**
+ * The narrowest lead picture kept. 480 until the visuals review (Nov 22):
+ * portraits from before 1950 are small scans (Wilfred Owen's is 333 pixels
+ * wide, Zora Neale Hurston's 408, Edwin Booth's Hamlet 361), and the rule
+ * cost nearly every missing author's face. The second look still judges
+ * whether a picture reads when projected.
+ */
+const MIN_WIDTH = 320;
 /** A lead "image" that is not a picture of the thing: a map of where it is, a flag, a logo, a chart. */
 const NOT_A_PICTURE =
   /\.svg$|(^|[\s_\-(])(map|maps|locator|location|flag|logo|seal|icon|diagram|chart|coat[\s_]of[\s_]arms|incorporated[\s_]and[\s_]unincorporated)([\s_\-).]|$)/i;
@@ -77,6 +85,33 @@ function namedFor(file: string, article: string): boolean {
 }
 
 type Owner = { membershipId: string; conversationId: string | null };
+
+/** The most subjects given a second try in one deck: each is a search, two downloads and a look. */
+const MAX_SECOND_TRIES = 4;
+const SEARCH_STOP = new Set(
+  'a an and are as at by for from in into is it its of on or that the their this to was were with showing shows show such like worn used seen with portrait photograph photo picture image painting depiction scene view'.split(' ')
+);
+
+/**
+ * What Commons is searched for: the subject, then the few words of "should
+ * show" that say which one is meant (a year, a place, a kind), without the
+ * filler. "Gas mask" + "Early World War I gas mask worn by soldiers on the
+ * Western Front" → "Gas mask early World War I soldiers Western".
+ */
+export function searchWords(want: Pick<WantedPicture, 'subject' | 'shows' | 'find'>): string {
+  if (want.find) return want.find;
+  const subject = want.subject.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const has = new Set(subject.toLowerCase().split(/[^a-z0-9]+/));
+  const extra: string[] = [];
+  for (const word of (want.shows ?? '').split(/[^\p{L}\p{N}'’-]+/u)) {
+    const lower = word.toLowerCase();
+    if (word.length < 3 || SEARCH_STOP.has(lower) || has.has(lower)) continue;
+    has.add(lower);
+    extra.push(word);
+    if (extra.length === 5) break;
+  }
+  return [subject, ...extra].join(' ');
+}
 type Fetch = typeof fetch;
 
 /** Where found pictures are kept: this lesson's, and any kept before for the same subject. */
@@ -111,6 +146,8 @@ export type PictureCounts = {
   filled: number;
   reused: number;
   empty: number;
+  /** Found on the second try, by a search of Commons the look chose from. */
+  searched?: number;
 };
 export type ResolvedPictures<T> = {
   deck: T;
@@ -351,7 +388,7 @@ async function lookUp(
     if (page.title) records.set(fileKey(page.title), page);
   for (const [key, file] of fileFor) {
     const record = records.get(fileKey(file));
-    const candidate = record ? candidateFromFile(record) : null;
+    const candidate = record ? candidateFromFile(record, { minWidth: MIN_WIDTH }) : null;
     if (candidate) found.set(key, candidate);
     else why.set(key, files ? 'not a picture' : 'unavailable');
   }
@@ -390,6 +427,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const ids = new Map<string, string>();
   const why = new Map<string, Miss>();
   let reused = 0;
+  let searched = 0;
   let lookOutcome: ResolvedPictures<T>['look'] = null;
 
   const work = (async () => {
@@ -573,6 +611,103 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         else why.set(key, 'unavailable');
       })
     );
+    // A second try (visuals review, Nov 22). A general subject has a general
+    // lead picture ("Gas mask": a present-day rescue team; "Tenement": a
+    // modern block), and about a third of the pictures asked for were lost
+    // that way. For a few of those, Wikimedia Commons is searched with what
+    // the slide says the picture should show, and the second look chooses
+    // among what comes back or keeps none. Never without the look: a search
+    // alone is how an aircraft carrier once stood in for Garibaldi.
+    // A look that answered for nothing is down: no second try without it.
+    const lookIsDown = Boolean(lookOutcome && lookOutcome.seen > 0 && lookOutcome.unchecked === lookOutcome.seen);
+    if (deps.look && !lookIsDown) {
+      const again = wanted
+        .filter((want) => {
+          const key = pictureKey(want.subject);
+          const reason = why.get(key);
+          return !ids.get(key) && Boolean(want.shows) && (reason === 'none' || reason === 'not a picture' || reason === 'not the thing');
+        })
+        .slice(0, MAX_SECOND_TRIES);
+      const offered: Array<{ key: string; candidate: FoundCandidate }> = [];
+      for (const want of again) {
+        let hits: FoundCandidate[];
+        try {
+          hits = await searchOpenPictures(searchWords(want), { fetch: fetcher, limit: 5, timeoutMs });
+        } catch {
+          // Busy: the rest wait for another deck.
+          break;
+        }
+        const usable = hits
+          .filter(
+            (hit) =>
+              !FOR_THE_TEACHER.test(`${hit.title} ${hit.description}`) &&
+              !NOT_A_PICTURE.test(hit.title) &&
+              !offered.some((other) => other.candidate.sourceUrl === hit.sourceUrl)
+          )
+          .slice(0, 2);
+        for (const candidate of usable) offered.push({ key: pictureKey(want.subject), candidate });
+      }
+      const fetched = (
+        await Promise.all(
+          offered.map(async ({ key, candidate }) => {
+            const bytes = await downloadPicture(candidate.imageUrl, fetcher, timeoutMs).catch(() => null);
+            const contentType = bytes ? sniffPictureType(bytes) : null;
+            return bytes && (contentType === 'image/jpeg' || contentType === 'image/png') ? { key, candidate, bytes, contentType } : null;
+          })
+        )
+      ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+      if (fetched.length) {
+        const words = pictureWords(deck);
+        const asked = new Map(wanted.map((want) => [pictureKey(want.subject), want]));
+        const second = await secondLook(
+          fetched.map((item, i) => ({
+            n: i + 1,
+            subject: asked.get(item.key)?.subject ?? item.key,
+            shows: asked.get(item.key)?.shows,
+            words: words.get(item.key),
+            bytes: item.bytes,
+            contentType: item.contentType as 'image/jpeg' | 'image/png',
+          })),
+          deps.look
+        );
+        const seenBefore = lookOutcome ?? { seen: 0, turnedDown: 0, unchecked: 0 };
+        lookOutcome = {
+          seen: seenBefore.seen + fetched.length,
+          turnedDown: seenBefore.turnedDown + [...second.verdicts.values()].filter((verdict) => !verdict.keep).length,
+          unchecked: seenBefore.unchecked + second.unchecked,
+        };
+        for (const [i, item] of fetched.entries()) {
+          const verdict = second.verdicts.get(i + 1);
+          // The first one kept for a subject is the one.
+          if (!verdict?.keep || ids.get(item.key)) continue;
+          const size = imageDimensions(item.bytes);
+          const row = await deps.shelf
+            .create({
+              membershipId: owner.membershipId,
+              conversationId: owner.conversationId,
+              position: 0,
+              slideNumbers: [],
+              altText: cleanAltText(verdict.alt || item.candidate.description),
+              contentType: item.contentType,
+              byteSize: item.bytes.byteLength,
+              width: size?.width ?? null,
+              height: size?.height ?? null,
+              blob: item.bytes,
+              origin: 'found',
+              credit: item.candidate.credit,
+              license: item.candidate.license,
+              sourceUrl: item.candidate.sourceUrl,
+              subject: item.key,
+            })
+            .catch(() => null);
+          if (row) {
+            ids.set(item.key, row.id);
+            why.delete(item.key);
+            searched += 1;
+          }
+        }
+      }
+    }
   })().catch(() => undefined);
 
   // Whatever is in hand when the time is up is what the deck gets.
@@ -592,6 +727,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       filled: filled.size,
       reused,
       empty: empty.length,
+      ...(searched ? { searched } : {}),
     },
     empty,
     look: lookOutcome,
@@ -609,6 +745,8 @@ export async function withResolvedPictures(
   deps: Parameters<typeof resolveDeckPictures>[2] & {
     /** The picture editor: names a subject for each teaching slide that asks for none. */
     name?: AskEditor;
+    /** The work's vetted pictures, when the lesson is on one of the most-taught works. */
+    kit?: PictureKit | null;
   }
 ): Promise<{
   reply: string;
@@ -630,9 +768,10 @@ export async function withResolvedPictures(
   const outcome = readSlideDeck(reply);
   if (outcome.kind !== 'deck') return nothing;
   const edited = deps.name
-    ? await withNamedSubjects(outcome.deck, deps.name)
-    : { deck: outcome.deck, named: 0 };
-  const resolved = await resolveDeckPictures(edited.deck, owner, deps);
+    ? await withNamedSubjects(outcome.deck, deps.name, deps.kit)
+    : { deck: outcome.deck, named: 0, author: null };
+  const titled = withTitlePicture(edited.deck, { kit: deps.kit, author: edited.author });
+  const resolved = await resolveDeckPictures(titled, owner, deps);
   let settled = withoutEmptyPictureSlides(resolved.deck);
   // The gallery painting is a mood, not the thing: Kevin on the Leopard deck,
   // and the 13-lesson review (Nov 22: Hokusai's Great Wave on Homer, Gatsby

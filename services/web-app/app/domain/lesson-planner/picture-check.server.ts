@@ -33,7 +33,9 @@ export const SECOND_LOOK_SYSTEM = `You check pictures before they go on the slid
 For each picture decide "keep": true only if all of these hold:
 - It shows the subject itself: a portrait or photograph of the person; the place; the event or what it left; the object, building, document or artwork. A book's cover only when the subject is the book; a film poster only when the subject is the film. Not a different person, place or thing that shares the name, and not something merely nearby or related.
 - It would read when projected: not a page of small type, a blank, a logo, or a tiny detail.
-- A character in a novel, play or film has no photograph: never keep a book cover, a film still, a poster or an illustration for a fictional character, even when the slide is about the book.
+- A character in a novel, play or film has no photograph: never keep a film still, a film poster, a modern book cover or an actor's publicity photograph for a fictional character. Art of the work is different and is kept: a painting, engraving or first-edition illustration of a scene (Fuseli's Lady Macbeth, Millais's Ophelia, a nineteenth-century actor painted or photographed in the role, a first edition's title page) when the subject is that artwork, that work or that scene.
+- It comes from the subject's own world and time. Not a modern example standing in for a historical thing (a present-day rescue team for a 1917 gas mask, a modern apartment block for an 1890s tenement, a cathedral's porch for a Florida front porch, a royal state coach for a country carriage, a restored tourist site for the town as it was).
+- It is not a metaphor. A picture frame for a "frame narrative", a mask for "identity", scales for "justice": never keep these; a picture only decorates when it is not the thing the slide teaches.
 - It is fit for school: no graphic violence, gore, corpses or nudity. Never keep a photograph of an atrocity or its victims; a teacher chooses those.
 
 What the slide says it "should show" is a preference, not a test: keep a true picture of the subject even when it shows another side of it (a farm buried in dust for "a dust storm rolling over a town").

@@ -1056,7 +1056,14 @@ async function turnAction({ request }: ActionFunctionArgs) {
           const pictured = await withResolvedPictures(
             reply,
             { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
-            { shelf: pictureShelf, deadlineMs: 24_000, ...pictureModel }
+            {
+              shelf: pictureShelf,
+              // A second try for a few subjects is a search, downloads and one more look.
+              deadlineMs: 32_000,
+              ...pictureModel,
+              // The work's vetted pictures, from what the teacher asked for in this lesson.
+              kit: null,
+            }
           );
           reply = pictured.reply;
           foundPictureIds.push(...pictured.ids);
