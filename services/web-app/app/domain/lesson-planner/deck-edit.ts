@@ -128,8 +128,11 @@ export function slideListFields(slide: Slide): SlideListField[] {
 const MAX_PICTURE_WORDS = 320;
 
 /** Put a teacher's picture on a slide: a picture slide that keeps its words. */
+/** Teaching slides that show a picture beside their own words (Nov 22). */
+const HOLDS_ITS_PICTURE = new Set<Slide['layout']>(['picture', 'notes', 'big_idea']);
+
 export function withSlidePicture(slide: Slide, image: string): Slide {
-  if (slide.layout === 'picture') return { ...slide, image };
+  if (HOLDS_ITS_PICTURE.has(slide.layout)) return { ...slide, image };
   const words = slide.body ?? (slide.question ? undefined : slide.bullets?.join('; '));
   return {
     ...slide,
@@ -142,6 +145,7 @@ export function withSlidePicture(slide: Slide, image: string): Slide {
 
 /** Take the picture off a slide: a text slide, still with its words. */
 export function withoutSlidePicture(slide: Slide): Slide {
+  if (slide.layout !== 'picture' && HOLDS_ITS_PICTURE.has(slide.layout)) return { ...slide, image: undefined };
   const words = slide.body ?? slide.question;
   return words
     ? { ...slide, image: undefined, layout: 'statement', body: words }

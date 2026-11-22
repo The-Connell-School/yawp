@@ -747,9 +747,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     case 'notes': {
       const timeline = (slide.timeline ?? []).slice(0, 5);
       const facts = (slide.facts ?? (timeline.length ? [] : slide.bullets ?? [])).slice(0, 3);
-      split(
-        [para([panelLabel], 18), para([from(panelHeadline(slide.title), on('title'))], 0, 1.05)],
-        [
+      const notesCream = [
           ...timeline.map((entry, i) =>
             para(
               [
@@ -763,8 +761,22 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           ...facts.map((fact, i) =>
             para(mark(fact, (t, c) => sans(t, 26, c), on(slide.facts ? 'facts' : 'bullets', { index: i })), i === facts.length - 1 ? 0 : 20, 1.35)
           ),
-        ]
-      );
+      ];
+      if (slide.image) {
+        // Dual coding (Nov 22): the picture of the thing on the panel under its
+        // name, the facts beside it.
+        const left = plan.panel!.side === 'left';
+        const panelX = left ? 0 : W - PANEL_WIDTH;
+        elements.push({ kind: 'rect', role: 'panel', fill: plan.panel!.color, x: panelX, y: 0, w: PANEL_WIDTH, h: H });
+        elements.push(column({ x: panelX + 60, y: 48, w: PANEL_WIDTH - 120, h: 196 }, [para([panelLabel], 10), para([from(panelHeadline(slide.title), on('title'))], 0, 1.05)], 'top'));
+        elements.push({ kind: 'picture', id: slide.image, x: panelX + 60, y: 262, w: PANEL_WIDTH - 120, h: 398 });
+        const creamX = left ? PANEL_WIDTH + MARGIN : MARGIN;
+        const creamRight = left ? W - MARGIN : W - PANEL_WIDTH - 60;
+        pushRunningHead(creamX, creamRight);
+        elements.push(column({ x: creamX, y: TOP, w: creamRight - creamX, h: COLUMN_H }, notesCream));
+        return out();
+      }
+      split([para([panelLabel], 18), para([from(panelHeadline(slide.title), on('title'))], 0, 1.05)], notesCream);
       return out();
     }
 
@@ -831,17 +843,20 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
 
     case 'big_idea': {
       const statement = slide.body ?? slide.title;
-      const left = art ? 410 : MARGIN;
-      if (art) elements.push({ kind: 'art', src: art.crops.strip, fit: 'cover', alt: '', x: 0, y: 0, w: 330, h: H });
+      // Dual coding (Nov 22): its own picture beside the statement, in place of the painting's strip.
+      const pictured = Boolean(slide.image);
+      const left = pictured ? 600 : art ? 410 : MARGIN;
+      if (pictured) elements.push({ kind: 'picture', id: slide.image!, x: 60, y: 80, w: 480, h: 560 });
+      else if (art) elements.push({ kind: 'art', src: art.crops.strip, fit: 'cover', alt: '', x: 0, y: 0, w: 330, h: H });
       pushRunningHead(left);
       elements.push(
         column({ x: left, y: 96, w: W - MARGIN - left, h: H - 96 - 96 }, [
           para([label(color)], 22),
-          para(mark(statement, (t, c) => head(t, promptSize(statement), c), on(slide.body != null ? 'body' : 'title')), 26, 1.12),
+          para(mark(statement, (t, c) => head(t, pictured ? Math.min(promptSize(statement), 44) : promptSize(statement), c), on(slide.body != null ? 'body' : 'title')), 26, 1.12),
           para([slide.followUp ? from(serif(slide.followUp, 30, color), on('followUp')) : null], 0, 1.25),
         ])
       );
-      if (art) elements.push(credit(art, { x: left, y: H - 56, w: W - MARGIN - left, h: 30 }));
+      if (art && !pictured) elements.push(credit(art, { x: left, y: H - 56, w: W - MARGIN - left, h: 30 }));
       return out();
     }
 
@@ -1062,13 +1077,17 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       // Two rows when the slide names them: the world above the line, the book below.
       const twoRows = Boolean(slide.tracks) && events.some((event) => event.track === 2);
       const side = (event: (typeof events)[number], i: number) => (twoRows ? (event.track === 2 ? 'below' : 'above') : i % 2 ? 'below' : 'above');
-      elements.push(column({ x: MARGIN, y: 48, w: W - MARGIN * 2, h: 92 }, [para([from(head(slide.title, slide.title.length > 34 ? 40 : 48, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      // The event in focus shows its own picture, top right (dual coding, Nov 22).
+      const shot = inFocus?.image;
+      const beside = shot ? 370 : 0;
+      elements.push(column({ x: MARGIN, y: 48, w: W - MARGIN * 2 - beside, h: 92 }, [para([from(head(slide.title, slide.title.length > 34 ? 40 : 48, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      if (shot) elements.push({ kind: 'picture', id: shot, x: W - MARGIN - 340, y: 36, w: 340, h: 236 });
       // Under the headline: the event in focus, in a sentence; with none, the slide's own line.
       if (inFocus) {
         const words = inFocus.detail ?? inFocus.title;
         elements.push(
           column(
-            { x: MARGIN, y: 152, w: W - MARGIN * 2 - 120, h: 108 },
+            { x: MARGIN, y: 152, w: W - MARGIN * 2 - Math.max(120, beside), h: 108 },
             [para([from(serif(words, words.length > 150 ? 24 : 28, KIT_V4.ink), on('events', { index: focus!, key: inFocus.detail ? 'detail' : 'title' }))], 0, 1.3)],
             'top'
           )

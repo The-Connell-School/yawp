@@ -87,6 +87,17 @@ const column = z.object({
   text: z.string().trim().min(1).max(MAX_COLUMN_CHARS),
 });
 
+/**
+ * The picture a slide or an event wants (Kevin, Nov 22: dual coding): the
+ * subject by its own name, as an encyclopedia titles it, and what the picture
+ * should show. Yawp! finds it and sets `image`; the planner never writes an
+ * address.
+ */
+const pictureWant = z.object({
+  subject: z.string().trim().min(1).max(120),
+  shows: z.string().trim().min(1).max(160).optional(),
+});
+
 const slideSchema = z
   .object({
     layout: z.enum(SLIDE_LAYOUTS),
@@ -167,6 +178,8 @@ const slideSchema = z
     // A picture from the teacher's own deck, by its id (Nov 1). Only an id:
     // it goes into a URL, so anything else is dropped before validation.
     image: z.string().regex(PICTURE_ID).optional(),
+    // The picture this slide wants beside its words (Nov 22).
+    wants: pictureWant.optional(),
     // A timeline slide's events (Nov 19), in order. With two rows, `track`
     // says which row an event sits in and `tracks` names the rows.
     events: z
@@ -176,6 +189,9 @@ const slideSchema = z
           title: z.string().trim().min(1).max(60),
           detail: z.string().trim().min(1).max(220).optional(),
           track: z.coerce.number().int().min(1).max(2).optional(),
+          // This event's own picture, shown when it is in focus (Nov 22).
+          wants: pictureWant.optional(),
+          image: z.string().regex(PICTURE_ID).optional(),
         })
       )
       .min(2)
@@ -585,6 +601,20 @@ function normalizeSlide(raw: unknown): unknown {
     slide.answer = normalizeAnswer(slide.answer, slide.choices);
     if (slide.answer === undefined) delete slide.answer;
   }
+  // A want written as a bare subject is a want; an event's picture is an id or none.
+  const asWant = (raw: unknown) => (typeof raw === 'string' && raw.trim() ? { subject: raw.trim() } : raw);
+  if (slide.wants !== undefined) slide.wants = asWant(slide.wants);
+  if (Array.isArray(slide.events)) {
+    slide.events = slide.events.map((event) => {
+      if (!event || typeof event !== 'object' || Array.isArray(event)) return event;
+      const { image, wants, ...rest } = event as Record<string, unknown>;
+      return {
+        ...rest,
+        ...(wants !== undefined ? { wants: asWant(wants) } : {}),
+        ...(typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { image: image.trim() } : {}),
+      };
+    });
+  }
   // A person's picture is one of the teacher's, by id, or none.
   if (Array.isArray(slide.people)) {
     slide.people = slide.people.map((person) => {
@@ -965,6 +995,7 @@ export function deckPictureIds(deck: Pick<SlideDeck, 'slides'>): string[] {
       deck.slides.flatMap((slide) => [
         ...(slide.image ? [slide.image] : []),
         ...(slide.people ?? []).flatMap((person) => (person.image ? [person.image] : [])),
+        ...(slide.events ?? []).flatMap((event) => (event.image ? [event.image] : [])),
       ])
     ),
   ];
