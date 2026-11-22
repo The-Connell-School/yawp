@@ -89,26 +89,31 @@ describe('a context lesson thinks like an English teacher (Kevin, Nov 21)', () =
   });
 });
 
-describe('pictures that belong (Nov 21, phase 2)', () => {
-  test('with found pictures on, the planner looks for real pictures and never writes a credit', () => {
+describe('a picture beside the words (Nov 22, dual coding)', () => {
+  test('with found pictures on, every teaching slide says what picture it wants, by its subject’s name', () => {
     const on = buildContextToolsSection({ foundPictures: true }).join('\n');
-    expect(on).toContain('call find_pictures');
-    expect(on).toContain('Yawp! shows each picture’s credit');
+    expect(on).toContain('Every slide that teaches content says what picture belongs beside its words');
+    expect(on).toContain('"wants": { "subject"');
+    expect(on).toContain('the exact title of its English Wikipedia article');
+    expect(on).toContain('never a search phrase');
+    expect(on).toContain('each event of a timeline');
+    expect(on).toContain('Never write `image`, an address or a credit');
     expect(on).toContain('a still from the film');
+    expect(on).not.toContain('find_pictures');
     expect(on).not.toContain('Yawp! has no photographs of its own yet');
   });
 
   test('off, the planner asks the teacher for every picture', () => {
     const off = buildContextToolsSection().join('\n');
     expect(off).toContain('Yawp! has no photographs of its own yet');
-    expect(off).not.toContain('find_pictures');
+    expect(off).not.toContain('"wants"');
   });
 
   test('the flag reaches the prompt', () => {
     const text = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4: true, deckKitV41: true, contextTools: true, foundPictures: true })
       .map((block) => block.text)
       .join('\n');
-    expect(text).toContain('call find_pictures');
+    expect(text).toContain('"wants": { "subject"');
   });
 });
 

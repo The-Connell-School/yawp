@@ -104,11 +104,9 @@ mock.module('~/domain/assignment-types/exit-ticket-builder-v3-gate.server', () =
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));
-const findPicturesForLesson = mock();
-mock.module('~/domain/lesson-planner/found-pictures.server', () => ({
-  FIND_PICTURES_TOOL: { name: 'find_pictures' },
-  findPicturesForLesson,
-}));
+const withResolvedPictures = mock();
+mock.module('~/domain/lesson-planner/picture-lookup.server', () => ({ withResolvedPictures }));
+mock.module('~/domain/lesson-planner/picture-shelf.server', () => ({ pictureShelf: {} }));
 mock.module('~/domain/lesson-planner/lesson-planner-tools.server', () => ({
   handleLessonPlannerToolCall,
   LESSON_PLANNER_TOOLS: [{ name: 'list_classes' }],
@@ -275,57 +273,46 @@ describe('api.domain.lesson-planner action', () => {
     expect(jsonResult(response).data.messageId).toBe('msg-assistant');
   });
 
-  test('pictures that belong (Nov 21): find_pictures only with the flag, kept pictures attached to the new lesson', async () => {
+  test('a picture beside the words (Nov 22): after the reply, the deck’s pictures are found and attached to the new lesson', async () => {
     getLessonPlannerReviewFlags.mockResolvedValue({ foundPictures: true });
-    findPicturesForLesson.mockReset().mockResolvedValue({ pictures: [{ id: 'ckfound00001', shows: 'Garibaldi', credit: 'c', license: 'Public domain' }], note: 'n' });
+    withResolvedPictures.mockReset().mockResolvedValue({ reply: 'The deck, with pictures.', ids: ['ckfound00001'], counts: { wanted: 2, filled: 1, reused: 0, empty: 1 }, empty: [{ subject: 'x', why: 'none' }] });
     prisma.lessonPlanUploadPicture.updateMany.mockClear();
-    let answer = '';
-    getLLMCompletion.mockImplementation(async (args: { handleToolCall: (name: string, input: Record<string, unknown>) => Promise<string> }) => {
-      answer = await args.handleToolCall('find_pictures', { query: 'Giuseppe Garibaldi photograph' });
-      return 'ok';
-    });
+    getLLMCompletion.mockResolvedValue('The deck.');
     prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
     prisma.lessonPlanConversation.update.mockResolvedValue({});
 
-    await action({ request: formRequest({ message: 'The Leopard, day 1' }) } as any);
+    await action({ request: formRequest({ message: 'America in 1955, day 1' }) } as any);
 
-    const llmArgs = getLLMCompletion.mock.calls[0][0];
-    expect(llmArgs.tools.map((tool: { name: string }) => tool.name)).toContain('find_pictures');
-    expect(findPicturesForLesson.mock.calls[0][0]).toEqual({ query: 'Giuseppe Garibaldi photograph' });
-    // The lesson is written after the reply: the picture is kept without one, then attached.
-    expect(findPicturesForLesson.mock.calls[0][1]).toEqual({ membershipId: 'teacher-1', conversationId: null });
-    expect(JSON.parse(answer).pictures[0].id).toBe('ckfound00001');
+    // No picture tool for the model: Yawp! fills what the deck asks for.
+    expect(getLLMCompletion.mock.calls[0][0].tools.map((tool: { name: string }) => tool.name)).not.toContain('find_pictures');
+    expect(withResolvedPictures.mock.calls[0][0]).toBe('The deck.');
+    expect(withResolvedPictures.mock.calls[0][1]).toEqual({ membershipId: 'teacher-1', conversationId: null });
+    // The lesson is written after the reply: the pictures are kept without one, then attached.
     expect(prisma.lessonPlanUploadPicture.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['ckfound00001'] }, membershipId: 'teacher-1', conversationId: null, uploadId: null },
       data: { conversationId: 'plan-1' },
     });
+    const stored = prisma.lessonPlanMessage.create.mock.calls.map((call: any[]) => call[0].data.content);
+    expect(stored).toContain('The deck, with pictures.');
   });
 
-  test('a picture search that fails never fails the lesson: the planner is told, and the turn goes on', async () => {
+  test('pictures that fail never fail the lesson', async () => {
     getLessonPlannerReviewFlags.mockResolvedValue({ foundPictures: true });
-    findPicturesForLesson.mockReset().mockRejectedValue(new Error('column "credit" does not exist'));
-    let answer = '';
-    getLLMCompletion.mockImplementation(async (args: { handleToolCall: (name: string, input: Record<string, unknown>) => Promise<string> }) => {
-      answer = await args.handleToolCall('find_pictures', { queries: ['Dust Bowl farm 1936'] });
-      return 'Here is the lesson.';
-    });
+    withResolvedPictures.mockReset().mockRejectedValue(new Error('column "subject" does not exist'));
+    getLLMCompletion.mockResolvedValue('The deck.');
     prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
     prisma.lessonPlanConversation.update.mockResolvedValue({});
-
-    const response = await action({ request: formRequest({ message: 'Of Mice and Men, day 1' }) } as any);
-
-    expect(JSON.parse(answer).pictures).toEqual([]);
-    expect(JSON.parse(answer).note).toContain('ask the teacher');
+    const response = await action({ request: formRequest({ message: 'America in 1955, day 1' }) } as any);
     expect(jsonResult(response).data.messageId).toBe('msg-assistant');
   });
 
-  test('without the flag, no picture search', async () => {
+  test('without the flag, no pictures are looked for', async () => {
+    withResolvedPictures.mockReset();
     getLLMCompletion.mockResolvedValue('ok');
     prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
     prisma.lessonPlanConversation.update.mockResolvedValue({});
     await action({ request: formRequest({ message: 'hi' }) } as any);
-    const llmArgs = getLLMCompletion.mock.calls[0][0];
-    expect(llmArgs.tools.map((tool: { name: string }) => tool.name)).not.toContain('find_pictures');
+    expect(withResolvedPictures).not.toHaveBeenCalled();
   });
 
   test('passes the planner tool allowlist and a teacher-scoped context to the LLM', async () => {

@@ -9,7 +9,7 @@ import { layoutKitV4Slide, type KitV4Element } from './deck-kit-v4';
 import { withSlideFocus } from './context-slides';
 import { withoutSlidePicture, withSlidePicture } from './deck-edit';
 import { deckPictureIds, fenceSlideDeck, parseSlideDeck, type Slide, type SlideDeck } from './slide-deck';
-import { pictureKey, wantedPictures, withFoundPictures } from './picture-wants';
+import { pictureKey, wantedPictures, withFoundPictures, withoutEmptyPictureSlides } from './picture-wants';
 
 const BOOM: Slide = {
   layout: 'notes',
@@ -126,5 +126,28 @@ describe('the studio: a teaching slide keeps its kind when its picture changes',
     expect(without.layout).toBe('notes');
     expect(without.image).toBeUndefined();
     expect(without.facts).toEqual(BOOM.facts);
+  });
+});
+
+describe('people and picture slides ask the same way', () => {
+  const CAST: Slide = { layout: 'person', title: 'The Beats', people: [{ name: 'Allen Ginsberg', role: 'Poet', wants: { subject: 'Allen Ginsberg' } }, { name: 'Jack Kerouac', role: 'Novelist', wants: 'Jack Kerouac' }], speakerNotes: 'n' } as unknown as Slide;
+  const LOOK: Slide = { layout: 'picture', title: 'A dust storm, 1935', question: 'What would you do if you saw this coming?', wants: { subject: 'Black Sunday (storm)' }, speakerNotes: 'n' } as Slide;
+
+  test('a person’s picture is wanted by their name, and a picture slide may want its picture instead of having it', () => {
+    const deck = read([CAST, LOOK]);
+    expect(deck.slides[2]!.layout).toBe('picture');
+    expect(wantedPictures(deck).map((want) => want.subject)).toEqual(['Allen Ginsberg', 'Jack Kerouac', 'Black Sunday (storm)']);
+    const filled = withFoundPictures(deck, new Map([[pictureKey('Allen Ginsberg'), 'ckginsberg001'], [pictureKey('Black Sunday (storm)'), 'ckstorm000001']]));
+    expect(filled.slides[1]!.people!.map((person) => person.image)).toEqual(['ckginsberg001', undefined]);
+    expect(filled.slides[2]!.image).toBe('ckstorm000001');
+  });
+
+  test('a picture slide whose picture was not found becomes its question, never an empty frame', () => {
+    const settled = withoutEmptyPictureSlides(read([LOOK, { ...LOOK, question: undefined, title: 'Levittown from the air', wants: { subject: 'Levittown, New York' } } as Slide]));
+    expect(settled.slides[1]).toMatchObject({ layout: 'discuss', question: 'What would you do if you saw this coming?' });
+    expect(settled.slides[2]).toMatchObject({ layout: 'big_idea', body: 'Levittown from the air' });
+    // One that has its picture is left alone.
+    const kept = withoutEmptyPictureSlides(deckOf([{ ...LOOK, image: 'ckstorm000001' } as Slide]));
+    expect(kept.slides[1]!.layout).toBe('picture');
   });
 });

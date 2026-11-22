@@ -54,7 +54,8 @@ import {
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
-import { FIND_PICTURES_TOOL, findPicturesForLesson } from '~/domain/lesson-planner/found-pictures.server';
+import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
+import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
 import { readLessonLength } from '~/domain/lesson-planner/lesson-length';
@@ -88,17 +89,6 @@ import {
   type PlanningProgress,
 } from '~/domain/lesson-planner/planning-progress';
 
-/** Picture calls a turn may make (Nov 21): one asks for every picture a deck needs. */
-const MAX_PICTURE_SEARCHES = 2;
-/**
- * The most of a turn's two minutes pictures may take, all calls together. A
- * unit day on the preview timed out while pictures were searched (Nov 21).
- */
-const PICTURE_BUDGET_MS = 25_000;
-const PICTURES_UNAVAILABLE = JSON.stringify({
-  pictures: [],
-  note: 'Pictures are not available right now. Make the slides anyway, say in each one’s speakerNotes which picture belongs there, and ask the teacher in one line under the deck to add them.',
-});
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
 /**
@@ -684,8 +674,6 @@ export async function action({ request }: ActionFunctionArgs) {
     // Pictures the planner found this turn (Nov 21): kept with the lesson, or
     // attached to it when this turn writes it.
     const foundPictureIds: string[] = [];
-    let pictureSearches = 0;
-    let pictureMs = 0;
 
     /**
      * Everything from the model call onwards, as one closure over the setup
@@ -717,7 +705,7 @@ export async function action({ request }: ActionFunctionArgs) {
             ipHash: computeIpHash(request),
           },
           maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-          tools: [...LESSON_PLANNER_TOOLS, ...(sources.length ? [UPLOAD_TOOL] : []), ...(foundPictures ? [FIND_PICTURES_TOOL] : [])],
+          tools: sources.length ? [...LESSON_PLANNER_TOOLS, UPLOAD_TOOL] : LESSON_PLANNER_TOOLS,
           handleToolCall: async (name, input) => {
             // Reported before the call, not after: the teacher should see what is
             // being looked up while it is being looked up.
@@ -726,36 +714,6 @@ export async function action({ request }: ActionFunctionArgs) {
             try {
               // Read from this turn's own documents: never another lesson's.
               if (name === UPLOAD_TOOL.name) return JSON.stringify(readUploadPart(sources, input));
-              if (name === FIND_PICTURES_TOOL.name) {
-                if (!foundPictures) return JSON.stringify({ error: 'Picture search is not on for this school.' });
-                // A call or two a turn, inside a budget: a picture is never worth the lesson.
-                pictureSearches += 1;
-                if (pictureSearches > MAX_PICTURE_SEARCHES || pictureMs > PICTURE_BUDGET_MS) {
-                  return JSON.stringify({ pictures: [], note: 'That is enough searching for one deck. Use the pictures you have, and ask the teacher for any others.' });
-                }
-                const started = Date.now();
-                try {
-                  const found = await findPicturesForLesson(
-                    input,
-                    { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
-                    {
-                      store: {
-                        create: (data) =>
-                          prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
-                      },
-                    }
-                  );
-                  foundPictureIds.push(...found.pictures.map((picture) => picture.id));
-                  return JSON.stringify(found);
-                } catch (error) {
-                  // Never the lesson's failure: the planner is told and carries on.
-                  // eslint-disable-next-line no-console
-                  console.error('[lesson-planner] find_pictures failed:', error instanceof Error ? error.name : 'error');
-                  return PICTURES_UNAVAILABLE;
-                } finally {
-                  pictureMs += Date.now() - started;
-                }
-              }
               const result = await handleLessonPlannerToolCall(name, input, ctx);
               for (const link of collectToolLinks(result)) toolLinks.add(link);
               return result;
@@ -844,6 +802,31 @@ export async function action({ request }: ActionFunctionArgs) {
       // A map slide's places are found in Yawp!'s own place list (Nov 19): a
       // pin is never where the model guessed.
       reply = withResolvedPlaces(reply);
+      // A picture beside the words (Nov 22, dual coding): what each slide asked
+      // for is found by its subject and kept with the lesson. After the reply is
+      // in hand and inside its own short limit, so a picture never costs the
+      // lesson; a failure leaves the deck as the planner wrote it.
+      if (foundPictures) {
+        const lookedAt = Date.now();
+        try {
+          const pictured = await withResolvedPictures(reply, { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null }, { shelf: pictureShelf });
+          reply = pictured.reply;
+          foundPictureIds.push(...pictured.ids);
+          if (pictured.counts.wanted) {
+            const reasons = pictured.empty.reduce<Record<string, number>>((tally, miss) => ({ ...tally, [miss.why]: (tally[miss.why] ?? 0) + 1 }), {});
+            // Counts only, never what the lesson is about.
+            // eslint-disable-next-line no-console
+            console.info(
+              `[lesson-planner] pictures: wanted ${pictured.counts.wanted} · filled ${pictured.counts.filled} (${pictured.counts.reused} reused) · empty ${pictured.counts.empty}${
+                pictured.counts.empty ? ` (${Object.entries(reasons).map(([why, n]) => `${why}: ${n}`).join(', ')})` : ''
+              } · ${Date.now() - lookedAt}ms`
+            );
+          }
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('[lesson-planner] pictures failed:', error instanceof Error ? error.name : 'error');
+        }
+      }
 
       // A link the catalog never handed back goes nowhere, and a teacher finds that
       // out in front of a class. Strip the href and keep the words. Done before the

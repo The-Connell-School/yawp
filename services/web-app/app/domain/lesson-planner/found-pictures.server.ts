@@ -17,7 +17,17 @@ import { cleanAltText, MAX_DECK_PICTURE_BYTES } from '~/domain/office/pptx-pictu
 import type { ReporterTool } from '~/domain/reporter/reporter-tools.server';
 
 /** Wikimedia asks every client to say who it is and how to reach it. */
-const USER_AGENT = process.env.PICTURE_FINDER_USER_AGENT ?? 'YawpLessonPlanner/1.0 (https://yawp.school; lesson pictures)';
+const USER_AGENT = process.env.PICTURE_FINDER_USER_AGENT ?? 'YawpLessonPlanner/1.0 (https://yawp.school; support@yawp.school)';
+
+/**
+ * What every request to Wikimedia carries: who is asking, and, when the
+ * deployment has one, its API token. Without a token a server is counted with
+ * every other anonymous client at its address and refused in bursts (Nov 22).
+ */
+export function wikimediaHeaders(): Record<string, string> {
+  const token = process.env.WIKIMEDIA_ACCESS_TOKEN;
+  return { 'user-agent': USER_AGENT, ...(token ? { authorization: `Bearer ${token}` } : {}) };
+}
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 /** Wide enough to fill half a projected slide. */
 const MIN_WIDTH = 480;
@@ -126,7 +136,7 @@ function cleanArtist(text: string): string {
   return /^unknown( author| artist| photographer)?\.?$/i.test(once.trim()) ? '' : once;
 }
 
-type CommonsPage = {
+export type CommonsPage = {
   index?: number;
   title?: string;
   imageinfo?: Array<{
@@ -163,7 +173,7 @@ export async function searchOpenPictures(
   });
   let response: Response;
   try {
-    response = await fetcher(`${COMMONS_API}?${params}`, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetcher(`${COMMONS_API}?${params}`, { headers: wikimediaHeaders(), signal: AbortSignal.timeout(timeoutMs) });
   } catch {
     // No answer in time, or no connection: the same as busy.
     throw new PictureSearchBusy('timeout');
@@ -173,36 +183,41 @@ export async function searchOpenPictures(
   const body = (await response.json()) as { query?: { pages?: Record<string, CommonsPage> } };
   const pages = Object.values(body.query?.pages ?? {}).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   return pages.flatMap((page) => {
-    const info = page.imageinfo?.[0];
-    if (!info) return [];
-    const meta = info.extmetadata ?? {};
-    const license = openLicense(meta.LicenseShortName?.value as string | undefined);
-    const width = info.thumbwidth ?? info.width ?? 0;
-    const height = info.thumbheight ?? info.height ?? 0;
-    const imageUrl = info.thumburl ?? info.url;
-    // Commons does not always say the type; the file's own name does.
-    const type = info.mime ?? (/\.(jpe?g)(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '');
-    if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(type)) return [];
-    const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');
-    // Who made it; for a collection's scan with no artist, the collection's credit line.
-    const artist = cleanArtist(plain(meta.Artist?.value, 80)) || cleanArtist(plain(meta.Credit?.value, 200));
-    return [
-      {
-        title,
-        description: plain(meta.ImageDescription?.value, 200) || title,
-        imageUrl,
-        width,
-        height,
-        license,
-        credit: [artist, title, license, 'via Wikimedia Commons'].filter(Boolean).join(', '),
-        sourceUrl: info.descriptionurl ?? `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title ?? '')}`,
-      },
-    ];
+    const candidate = candidateFromFile(page);
+    return candidate ? [candidate] : [];
   });
 }
 
-async function download(url: string, fetcher: Fetch, timeoutMs: number): Promise<Uint8Array | null> {
-  const response = await fetcher(url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(timeoutMs) });
+/** A file's record as a picture a school may show, or null: no open license, too small, or not a photograph a browser draws. */
+export function candidateFromFile(page: CommonsPage): FoundCandidate | null {
+  const info = page.imageinfo?.[0];
+  if (!info) return null;
+  const meta = info.extmetadata ?? {};
+  const license = openLicense(meta.LicenseShortName?.value as string | undefined);
+  const width = info.thumbwidth ?? info.width ?? 0;
+  const height = info.thumbheight ?? info.height ?? 0;
+  const imageUrl = info.thumburl ?? info.url;
+  // What will be downloaded: a rendering says its type in its name (a TIFF's is a JPEG); else the file's own type.
+  const named = /\.jpe?g(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '';
+  const type = info.thumburl ? named : (info.mime ?? named);
+  if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(type)) return null;
+  const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');
+  // Who made it; for a collection's scan with no artist, the collection's credit line.
+  const artist = cleanArtist(plain(meta.Artist?.value, 80)) || cleanArtist(plain(meta.Credit?.value, 200));
+  return {
+    title,
+    description: plain(meta.ImageDescription?.value, 200) || title,
+    imageUrl,
+    width,
+    height,
+    license,
+    credit: [artist, title, license, 'via Wikimedia Commons'].filter(Boolean).join(', '),
+    sourceUrl: info.descriptionurl ?? `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title ?? '')}`,
+  };
+}
+
+export async function downloadPicture(url: string, fetcher: Fetch, timeoutMs: number): Promise<Uint8Array | null> {
+  const response = await fetcher(url, { headers: wikimediaHeaders(), signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) return null;
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > MAX_DECK_PICTURE_BYTES) return null;
@@ -220,7 +235,7 @@ async function keep(
   owner: { membershipId: string; conversationId: string | null },
   deps: { fetch: Fetch; store: PictureStore; timeoutMs: number }
 ): Promise<KeptPicture | null> {
-  const bytes = await download(candidate.imageUrl, deps.fetch, deps.timeoutMs).catch(() => null);
+  const bytes = await downloadPicture(candidate.imageUrl, deps.fetch, deps.timeoutMs).catch(() => null);
   if (!bytes) return null;
   const contentType = sniffPictureType(bytes);
   if (!contentType) return null;

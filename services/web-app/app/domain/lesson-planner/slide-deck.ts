@@ -250,6 +250,8 @@ const slideSchema = z
           role: z.string().trim().min(1).max(80),
           note: z.string().trim().min(1).max(200).optional(),
           image: z.string().regex(PICTURE_ID).optional(),
+          // Their picture, by the name of their own article (Nov 22).
+          wants: pictureWant.optional(),
         })
       )
       .min(1)
@@ -289,7 +291,7 @@ const slideSchema = z
     if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
     if (slide.layout === 'define') needs('terms', 'at least one word', Boolean(slide.terms?.length));
     if (slide.layout === 'person') needs('people', 'at least one person', Boolean(slide.people?.length));
-    if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures', Boolean(slide.image));
+    if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures, or `wants`', Boolean(slide.image || slide.wants));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -619,8 +621,9 @@ function normalizeSlide(raw: unknown): unknown {
   if (Array.isArray(slide.people)) {
     slide.people = slide.people.map((person) => {
       if (!person || typeof person !== 'object' || Array.isArray(person)) return person;
-      const { image, ...rest } = person as Record<string, unknown>;
-      return typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { ...rest, image: image.trim() } : rest;
+      const { image, wants, ...rest } = person as Record<string, unknown>;
+      const withWant = wants !== undefined ? { ...rest, wants: asWant(wants) } : rest;
+      return typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { ...withWant, image: image.trim() } : withWant;
     });
   }
   // The exit slide sets "<button>: open it in Yawp!" and "Next time: <next>"

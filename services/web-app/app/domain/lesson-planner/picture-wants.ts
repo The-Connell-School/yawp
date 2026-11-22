@@ -31,6 +31,7 @@ export function wantedPictures(deck: Pick<SlideDeck, 'slides'>): WantedPicture[]
   for (const slide of deck.slides) {
     ask(slide.wants, slide.image);
     for (const event of slide.events ?? []) ask(event.wants, event.image);
+    for (const person of slide.people ?? []) ask(person.wants, person.image);
   }
   return wanted;
 }
@@ -47,7 +48,28 @@ export function withFoundPictures<T extends SlideDeck>(deck: T, found: Map<strin
         const eventImage = idFor(event.wants, event.image);
         return eventImage ? { ...event, image: eventImage } : event;
       });
-      return { ...slide, ...(image ? { image } : {}), ...(events ? { events } : {}) };
+      const people = slide.people?.map((person) => {
+        const personImage = idFor(person.wants, person.image);
+        return personImage ? { ...person, image: personImage } : person;
+      });
+      return { ...slide, ...(image ? { image } : {}), ...(events ? { events } : {}), ...(people ? { people } : {}) };
+    }),
+  };
+}
+
+/**
+ * A picture slide is nothing without its picture. One whose picture was not
+ * found becomes its own question for the class (or its title as a statement),
+ * still wanting the picture, so no one projects an empty frame.
+ */
+export function withoutEmptyPictureSlides<T extends SlideDeck>(deck: T): T {
+  if (!deck.slides.some((slide) => slide.layout === 'picture' && !slide.image)) return deck;
+  return {
+    ...deck,
+    slides: deck.slides.map((slide): Slide => {
+      if (slide.layout !== 'picture' || slide.image) return slide;
+      const asked = slide.question ?? slide.body;
+      return asked ? { ...slide, layout: 'discuss', question: asked } : { ...slide, layout: 'big_idea', body: slide.title };
     }),
   };
 }
