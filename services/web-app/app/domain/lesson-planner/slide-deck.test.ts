@@ -1025,3 +1025,26 @@ describe('the phrases an excerpt slide marks (Nov 22)', () => {
     expect(result.ok && result.deck.slides[0]!.highlight).toEqual(['ruined choirs']);
   });
 });
+
+describe('too much is not a reason to lose a deck (Nov 22)', () => {
+  test('a sixth timeline entry, a fifth task and an over-long subtitle are cut, and the deck is kept', () => {
+    const json = JSON.stringify({
+      title: 'Dulce',
+      slides: [
+        { layout: 'title', title: 'Dulce et Decorum Est', subtitle: 'word '.repeat(60), speakerNotes: 'n' },
+        { layout: 'notes', title: 'Owen', timeline: [1893, 1915, 1916, 1917, 1918, 1920].map((year) => ({ year: String(year), caption: 'An event' })), speakerNotes: 'n' },
+        { layout: 'read', title: 'Read', tasks: [1, 2, 3, 4, 5].map((n) => ({ verb: 'Mark', text: `thing ${n}` })), speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deck.slides[1]!.timeline).toHaveLength(5);
+    expect(result.deck.slides[2]!.tasks).toHaveLength(4);
+    expect(result.deck.slides[0]!.subtitle!.endsWith('…')).toBe(true);
+  });
+
+  test('a deck that is wrong in another way is still refused', () => {
+    expect(validateSlideDeck(JSON.stringify({ title: 'x', slides: [{ layout: 'title', speakerNotes: 'n' }] })).ok).toBe(false);
+  });
+});

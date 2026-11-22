@@ -596,15 +596,18 @@ describe('layoutKitV4Slide: the phrases an excerpt marks (Nov 22)', () => {
     const panel = layout.elements.find((element) => element.kind === 'rect' && element.role === 'panel')!;
     const tasks = layout.elements.find((element) => element.kind === 'text' && element.paras.some((para) => para.runs.some((run) => run.text === 'Circle ')))!;
     const rows = tasks.kind === 'text' ? tasks.paras.filter((para) => para.runs.some((run) => run.source?.field === 'tasks')) : [];
-    expect(rows.map((para) => para.runs[0]!.text)).toEqual(['● ', 'Underline ', '● ']);
-    const dots = rows.flatMap((para) => para.runs.filter((run) => run.text === '● '));
-    expect(new Set(dots.map((dot) => dot.color)).size).toBe(2);
-    for (const dot of dots) {
-      expect(dot.source).toBeUndefined();
-      expect(panel.kind === 'rect' && contrastRatio(dot.color, panel.fill)).toBeGreaterThanOrEqual(3);
+    // The verb itself takes its phrase's color (a separate dot overlapped the
+    // next task in the PDF when a task wrapped: preview, Nov 22).
+    expect(rows.map((para) => para.runs[0]!.text)).toEqual(['Circle ', 'Underline ', 'Star ']);
+    const verbs = rows.map((para) => para.runs[0]!);
+    expect(verbs[1]!.color).toBe(KIT_V4.white);
+    expect(new Set([verbs[0]!.color, verbs[2]!.color]).size).toBe(2);
+    for (const verb of [verbs[0]!, verbs[2]!]) {
+      expect(verb.color).not.toBe(KIT_V4.white);
+      expect(panel.kind === 'rect' && contrastRatio(verb.color, panel.fill)).toBeGreaterThanOrEqual(3);
     }
     // The verb is still typed on the slide, as before.
-    expect(rows[0]!.runs[1]).toMatchObject({ text: 'Circle ', source: { field: 'tasks', index: 0, key: 'verb' } });
+    expect(rows[0]!.runs[0]).toMatchObject({ text: 'Circle ', source: { field: 'tasks', index: 0, key: 'verb' } });
   });
 
   test('marked, the passage is not typed on the slide; unmarked, it is as it always was', () => {

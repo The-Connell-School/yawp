@@ -1138,11 +1138,60 @@ export function validateSlideDeck(json: string): SlideDeckValidation {
       return { ok: false, reason: describeBadJson(json, error) };
     }
   }
-  const parsed = deckSchema.safeParse(normalizeDeck(raw));
+  const normal = normalizeDeck(raw);
+  let parsed = deckSchema.safeParse(normal);
+  if (!parsed.success) {
+    // Too much is not a reason to lose a deck (Nov 22: decks were lost to a
+    // seventh agenda line, a sixth timeline entry, a long page note, each
+    // found one at a time). A list past its limit keeps its first items and
+    // a line past its limit is cut at a word; then the deck is read again.
+    const fitted = fittedToLimits(normal, parsed.error.issues);
+    if (fitted) parsed = deckSchema.safeParse(fitted);
+  }
   if (!parsed.success) {
     return { ok: false, reason: describeIssues(parsed.error) };
   }
   return { ok: true, deck: parsed.data };
+}
+
+const TRIMMED_LISTS = new Set(['timeline', 'tasks', 'events', 'places', 'terms', 'people', 'shade', 'highlight', 'agenda']);
+const CUT_LINES = new Set([
+  'subtitle', 'caption', 'year', 'date', 'label', 'where', 'note', 'detail', 'verb', 'stem', 'grouping', 'routine', 'followUp',
+  'course', 'teacher', 'button', 'nextLesson', 'work', 'author', 'attribution', 'page', 'part', 'mode', 'shadeLabel', 'role', 'name', 'shows',
+]);
+
+/** The deck with every list and line that was over its limit cut to it; null when nothing was over. */
+function fittedToLimits(deck: unknown, issues: z.ZodIssue[]): unknown | null {
+  const over = issues.filter(
+    (issue): issue is z.ZodIssue & { code: 'too_big'; maximum: number | bigint; type: string } =>
+      issue.code === z.ZodIssueCode.too_big && (issue.type === 'array' || issue.type === 'string')
+  );
+  if (!over.length) return null;
+  const copy = structuredClone(deck) as Record<string, unknown>;
+  let changed = false;
+  for (const issue of over) {
+    const path = issue.path;
+    if (!path.length) continue;
+    // Only where a cut loses nothing a class reads from: a wordy body, too
+    // many bullets or facts and a long question are still refused, so the
+    // planner rewrites them shorter.
+    const field = [...path].reverse().find((key): key is string => typeof key === 'string') ?? '';
+    if (!(issue.type === 'array' ? TRIMMED_LISTS : CUT_LINES).has(field)) continue;
+    let holder: any = copy;
+    for (const key of path.slice(0, -1)) holder = holder?.[key as never];
+    const last = path[path.length - 1] as never;
+    const value = holder?.[last];
+    const max = Number(issue.maximum);
+    if (issue.type === 'array' && Array.isArray(value) && value.length > max) {
+      holder[last] = value.slice(0, max);
+      changed = true;
+    } else if (issue.type === 'string' && typeof value === 'string' && value.trim().length > max && max >= 12) {
+      const cut = value.trim().slice(0, max - 1).replace(/\s+\S*$/, '');
+      holder[last] = `${cut || value.trim().slice(0, max - 1)}…`;
+      changed = true;
+    }
+  }
+  return changed ? copy : null;
 }
 
 /** A validated deck written back out as the block the renderer reads. */

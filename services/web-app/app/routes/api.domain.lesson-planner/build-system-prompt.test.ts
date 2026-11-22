@@ -2381,7 +2381,8 @@ describe('buildLessonPlannerSystemPrompt — how a text is built (Nov 22)', () =
     expect(on).toContain('- diagram — boxes and words');
     for (const kind of ['parts', 'frames', 'cast']) expect(on).toContain(`\`"kind": "${kind}"\``);
     expect(on).toContain('when a slide teaches how a text is built or who is in it');
-    expect(on).toContain('One diagram in a close-reading lesson is usually right; never a diagram of something the lesson does not teach.');
+    expect(on).toContain('has one diagram, before its first passage');
+    expect(on).toContain('Never a diagram of something the lesson does not teach, and never more than two.');
   });
 
   test('each example is a diagram the deck takes exactly as written', () => {

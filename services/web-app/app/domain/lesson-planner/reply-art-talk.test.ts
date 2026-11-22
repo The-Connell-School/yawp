@@ -20,7 +20,20 @@ describe('withoutArtTalk (round 4, Nov 22)', () => {
   });
 
   test('a reply that says nothing of paintings is returned as it was', () => {
-    const reply = `## Plan\n\nRead.\n\n${deck()}`;
+    const reply = `## Plan\n\nRead.\n\n${deck('degas-dance-class')}`;
     expect(withoutArtTalk(reply)).toBe(reply);
+  });
+});
+
+describe('speaker notes about a painting the deck does not have (preview, Nov 22)', () => {
+  test('the sentences about it are taken out; the rest of the note stays', () => {
+    const fence = '```yawp-slides\n' + JSON.stringify({ title: 'R', slides: [
+      { layout: 'title', title: 'What the Youngers Want', speakerNotes: "Let students settle. The painting beside the title is Bruegel's Children's Games — dozens of people, none agreeing. That is the Younger apartment." },
+      { layout: 'big_idea', title: 'Idea', body: 'Five wants.', speakerNotes: 'Say it plainly.' },
+    ] }) + '\n```';
+    const out = withoutArtTalk(`## Plan\n\nRead.\n\n${fence}`);
+    expect(out).not.toContain('Bruegel');
+    expect(out).toContain('Let students settle.');
+    expect(out).toContain('Say it plainly.');
   });
 });

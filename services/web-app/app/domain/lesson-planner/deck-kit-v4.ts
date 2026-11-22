@@ -1377,7 +1377,12 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       const passageParas = marks.length
         ? markedPassage(passage, marks, size, toneOf)
         : [para([from(serif(passage, size, KIT_V4.ink), on('body'))], 26, PASSAGE_LEADING)];
-      const dot = (i: number) => (marks.some((mark) => mark.phrase === i) ? sans('● ', 24, kitV4OnPanel(toneOf(i), plan.panel!.color)) : null);
+      // A task's verb takes its phrase's color ("Underline" in the color of
+      // what is underlined); a task with no verb gets a dot of that color. A
+      // third run in a wrapped line overlapped the next task in the PDF
+      // (preview, Nov 22), so the dot is only for a task with no verb.
+      const toneOnPanel = (i: number) => (marks.some((mark) => mark.phrase === i) ? kitV4OnPanel(toneOf(i), plan.panel!.color) : null);
+      const dot = (i: number) => (toneOnPanel(i) && !tasks[i]?.verb ? sans('● ', 24, toneOnPanel(i)!) : null);
       split(
         [
           para([panelLabel], 22),
@@ -1385,7 +1390,7 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
             para(
               [
                 dot(i),
-                task.verb ? from(sans(`${task.verb} `, 24, KIT_V4.white, true), tasksFrom(i, 'verb')) : null,
+                task.verb ? from(sans(`${task.verb} `, 24, toneOnPanel(i) ?? KIT_V4.white, true), tasksFrom(i, 'verb')) : null,
                 from(sans(task.text, 24, KIT_V4.white), tasksFrom(i, 'text')),
               ],
               18,
