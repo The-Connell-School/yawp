@@ -36,6 +36,8 @@ For each picture decide "keep": true only if all of these hold:
 - A character in a novel, play or film has no photograph: never keep a book cover, a film still, a poster or an illustration for a fictional character, even when the slide is about the book.
 - It is fit for school: no graphic violence, gore, corpses or nudity. Never keep a photograph of an atrocity or its victims; a teacher chooses those.
 
+What the slide says it "should show" is a preference, not a test: keep a true picture of the subject even when it shows another side of it (a farm buried in dust for "a dust storm rolling over a town").
+
 For each picture also write "alt": one plain sentence saying what is actually in the picture, for a student who cannot see it. When you do not keep it, write "why": a few words.
 
 Answer with JSON only, no other text:
