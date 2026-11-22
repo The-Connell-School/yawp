@@ -106,6 +106,8 @@ mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
 }));
 const withResolvedPictures = mock();
 mock.module('~/domain/lesson-planner/picture-lookup.server', () => ({ withResolvedPictures }));
+// The fact check is a model call of its own, tested on its own; here it is off.
+mock.module('~/domain/lesson-planner/fact-check-model.server', () => ({ factCheckCall: () => undefined }));
 mock.module('~/domain/lesson-planner/picture-shelf.server', () => ({ pictureShelf: {} }));
 mock.module('~/domain/lesson-planner/lesson-planner-tools.server', () => ({
   handleLessonPlannerToolCall,

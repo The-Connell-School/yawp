@@ -58,6 +58,11 @@ import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.ser
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
+import { withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
+import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
+import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
+import { fetchWorkText, workForText } from '~/domain/lesson-planner/source-texts.server';
+import { withCheckNote } from '~/domain/lesson-planner/check-note';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -709,6 +714,10 @@ export async function action({ request }: ActionFunctionArgs) {
       const clock = planningProgressClock(report);
       const deadline = AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS);
       const startedAt = Date.now();
+      // The text a lesson is about, fetched while the planner writes, for the
+      // quotation check after it (Nov 22). Never waited on here.
+      const workAsked = workForText(turn.message);
+      if (workAsked) void fetchWorkText(workAsked).catch(() => null);
       const ask = () => getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
           system,
@@ -828,6 +837,36 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
       reply = repaired.reply;
+      // Exactly right (13-lesson review, Nov 22: every lesson had an error of
+      // fact or quotation). A quotation of a public-domain work is checked
+      // against the work itself and corrected; then a second model checks the
+      // facts. What neither can fix safely is a note for the teacher. A
+      // failure leaves the reply as the planner wrote it.
+      try {
+        const checkedAt = Date.now();
+        const quoted = await withQuotationCheck(reply);
+        reply = quoted.reply;
+        const askFacts = factCheckCall(() => ({
+          organizationId: ctx.organizationId,
+          membershipId: ctx.membershipId,
+          route: 'routes/api.domain.lesson-planner',
+          requestId: crypto.randomUUID(),
+          ipHash: computeIpHash(request),
+        }));
+        const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: quoted.verified }) : { reply, applied: [], flagged: [] };
+        reply = withCheckNote(facts.reply, [
+          ...quoted.misplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
+          ...facts.flagged.map((error) => `“${error.wrong.slice(0, 80)}${error.wrong.length > 80 ? '…' : ''}”: ${error.why}`),
+        ]);
+        // Counts only, never the lesson.
+        // eslint-disable-next-line no-console
+        console.info(
+          `[lesson-planner] accuracy: work ${quoted.work?.id ?? 'none'} · quotations corrected ${quoted.corrections.length}, verified ${quoted.verified.length}, unverified ${quoted.unverified.length}, misplaced ${quoted.misplaced.length} · facts corrected ${facts.applied.length}, flagged ${facts.flagged.length} · ${Date.now() - checkedAt}ms`
+        );
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[lesson-planner] accuracy check failed:', error instanceof Error ? error.name : 'error');
+      }
       // Minutes that agree (Nov 22): the deck's agenda and slide minutes come
       // from the plan's steps, never written separately.
       reply = withDeckMatchingPlan(reply);
