@@ -305,7 +305,8 @@ describe('every renderer draws a diagram and a marked passage (Nov 22)', () => {
     const excerpt = await zip.file('ppt/slides/slide2.xml')!.async('string');
     expect(excerpt).toMatch(/<a:rPr[^>]* b="1"[^>]*>(?:(?!<\/a:r>).)*<a:t>yellow leaves<\/a:t>/s);
     expect(excerpt).toContain('When ');
-    expect(excerpt).toContain('●');
+    // The task's verb is in its phrase's color (lightened to read on the panel), not white.
+    expect(excerpt).toMatch(/<a:srgbClr val="(?!FFFFFF)[0-9A-F]{6}"\/><\/a:solidFill>(?:(?!<\/a:r>).)*<a:t>Circle <\/a:t>/s);
   });
 
   test('the spec v3 look draws the diagram as a list', () => {
