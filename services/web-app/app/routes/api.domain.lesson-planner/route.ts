@@ -59,11 +59,12 @@ import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server'
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
-import { withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
+import { preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
 import { fetchWorkText, sourceTextFailure, workForText } from '~/domain/lesson-planner/source-texts.server';
 import { aboutSettledQuotation, checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
+import { withExcerptsFromSource } from '~/domain/lesson-planner/excerpt-source';
 import { LESSON_REPAIR_SCHEMA, withLessonRepair, type Problem } from '~/domain/lesson-planner/lesson-repair.server';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
@@ -977,6 +978,10 @@ async function turnAction({ request }: ActionFunctionArgs) {
           reply = requoted.reply;
         }
         const stillMisplaced = (requoted?.misplaced ?? []).filter((miss) => !quoted.misplaced.some((was) => was.quote === miss.quote));
+        // The true lines on the excerpt slides, one to a line, with any lines
+        // left out marked (plan item 2, Nov 22), from the text just checked.
+        const excerpts = checkedWork ? withExcerptsFromSource(reply, preparedSourceOf(checkedWork)) : { reply, rewritten: 0 };
+        reply = excerpts.reply;
         reply = withCheckNote(reply, [
           ...(repair.left as Array<Problem & { note?: string }>).map((problem) => problem.note ?? problem.what),
           ...stillMisplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
@@ -993,6 +998,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
           factsCorrected: facts.applied.length,
           factsFlagged: facts.flagged.length,
           repaired: repair.repaired.length,
+          excerptsFromSource: excerpts.rewritten,
           leftForTeacher: repair.left.length + stillMisplaced.length,
           ms: Date.now() - checkedAt,
         };

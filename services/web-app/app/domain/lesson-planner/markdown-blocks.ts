@@ -30,7 +30,9 @@ export type Block =
   /** `marker` is "•" or "3." — already resolved, so drawing stays dumb. */
   | { kind: 'listItem'; depth: number; marker: string; runs: TextRun[] }
   | { kind: 'rule' }
-  | { kind: 'tableRow'; header: boolean; cells: TextRun[][] };
+  | { kind: 'tableRow'; header: boolean; cells: TextRun[][] }
+  /** A poem or speech, a line to a line, numbered from `start` (plan item 2, Nov 22). */
+  | { kind: 'verse'; lines: TextRun[][]; start: number; quoted?: boolean };
 
 type InlineToken = {
   type: string;
@@ -296,7 +298,47 @@ function blocksFromTokens(tokens: any[]): Block[] {
 
 /** The whole document, as blocks to lay out in order. */
 export function markdownBlocks(markdown: string): Block[] {
-  return blocksFromTokens(marked.lexer(withVerseLineBreaks(markdown ?? '')));
+  return withVerseBlocks(blocksFromTokens(marked.lexer(withVerseLineBreaks(markdown ?? ''))));
+}
+
+const CITED_LINES = /\blines?\s+(\d{1,4})\s*(?:[–—-]\s*(\d{1,4}))?/i;
+
+/**
+ * A paragraph of four or more broken lines is verse: drawn a line to a line
+ * and numbered, so students find the line the teacher names (round 3, Nov 22:
+ * Hamlet's and Romeo and Juliet's handouts had none). The numbers count from
+ * the lines the passage's citation gives just before or after it ("lines
+ * 56–88"), when they agree with its length within two; otherwise from 1.
+ */
+function withVerseBlocks(blocks: Block[]): Block[] {
+  return blocks.map((block, index) => {
+    if (block.kind !== 'paragraph' && block.kind !== 'quote') return block;
+    const lines: TextRun[][] = [[]];
+    for (const run of block.runs) {
+      const parts = run.text.split('\n');
+      parts.forEach((part, i) => {
+        if (i > 0) lines.push([]);
+        if (part) lines[lines.length - 1]!.push({ ...run, text: part });
+      });
+    }
+    if (lines.length < 4) return block;
+    // Verse only: short lines. A quoted prompt of several sentences on lines of their own is not a poem.
+    if (lines.some((line) => line.map((run) => run.text).join('').trim().length > 90)) return block;
+    let start = 1;
+    for (const near of [blocks[index + 1], blocks[index - 1]]) {
+      if (!near || near.kind === 'verse' || near.kind === 'rule' || near.kind === 'tableRow') continue;
+      const cited = near.runs.map((run) => run.text).join('').match(CITED_LINES);
+      if (!cited) continue;
+      const first = Number(cited[1]);
+      const last = cited[2] ? Number(cited[2]) : null;
+      // A citation a line or two out (a half line counted, or not) still says where the passage starts.
+      if (last === null || Math.abs(last - first + 1 - lines.length) <= 2) {
+        start = first;
+        break;
+      }
+    }
+    return { kind: 'verse', lines, start, ...(block.kind === 'quote' ? { quoted: true } : {}) };
+  });
 }
 
 const NOT_VERSE_LINE = /^\s*(?:[-*+]\s|\d+[.)]\s|#|>|\||```|~~~|---|___|\*\*\*\s*$)/;
@@ -336,6 +378,7 @@ export function withVerseLineBreaks(markdown: string): string {
 /** Every word in a block, for tests and for measuring. */
 export function blockText(block: Block): string {
   if (block.kind === 'rule') return '';
+  if (block.kind === 'verse') return block.lines.map((line) => line.map((run) => run.text).join('')).join('\n');
   if (block.kind === 'tableRow') {
     return block.cells
       .map((cell) => cell.map((run) => run.text).join(''))

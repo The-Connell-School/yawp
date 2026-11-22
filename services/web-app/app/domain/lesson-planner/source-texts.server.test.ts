@@ -138,10 +138,10 @@ describe('the text', () => {
       },
     });
     expect(text).toContain('My friend, you would not tell with such high zest');
-    expect(asked.length).toBe(2);
+    expect(asked.length).toBe(3); // both gutenberg.org addresses, then the first mirror
     clearSourceTextCache();
     expect(await fetchWorkText(work, { fetch: async () => new Response('', { status: 403 }) })).toBeNull();
-    expect(sourceTextFailure(work)).toBe('www.gutenberg.org 403, gutenberg.pglaf.org 403, aleph.pglaf.org 403');
+    expect(sourceTextFailure(work)).toBe('www.gutenberg.org 403, www.gutenberg.org 403, gutenberg.pglaf.org 403, aleph.pglaf.org 403');
   });
 
   test('a text that is not the work (a wrong ebook number) is no text', async () => {
@@ -176,7 +176,7 @@ describe('the text', () => {
     expect(
       await fetchWorkText(work, { fetch: async () => new Response(OWEN) })
     ).toContain('Bent double');
-    expect(calls).toBe(3); // gutenberg.org and its two mirrors
+    expect(calls).toBe(4); // gutenberg.org's two addresses and its two mirrors
   });
 });
 

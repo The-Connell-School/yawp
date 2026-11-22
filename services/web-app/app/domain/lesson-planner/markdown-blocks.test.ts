@@ -183,11 +183,22 @@ describe('verse keeps its lines (re-test, Nov 22)', () => {
 
   test('a speech printed line by line is drawn line by line', () => {
     const blocks = markdownBlocks(`Read the soliloquy.\n\n${soliloquy}\n\n*(Hamlet, 3.1)*`);
-    const verse = blocks.find((block) => block.kind === 'paragraph' && block.runs.some((run) => run.text.includes('To be')))!;
-    if (verse.kind !== 'paragraph') throw new Error('not a paragraph');
-    const text = verse.runs.map((run) => run.text).join('');
-    expect(text.split('\n')).toHaveLength(5);
-    expect(text.split('\n')[1]).toBe("Whether 'tis nobler in the mind to suffer");
+    const verse = blocks.find((block) => block.kind === 'verse')!;
+    if (verse.kind !== 'verse') throw new Error('not verse');
+    const lines = verse.lines.map((line) => line.map((run) => run.text).join(''));
+    expect(lines).toHaveLength(5);
+    expect(lines[1]).toBe("Whether 'tis nobler in the mind to suffer");
+    expect(verse.start).toBe(1);
+  });
+
+  test('numbered from the lines the citation gives, when they agree with its length', () => {
+    const blocks = markdownBlocks(`${soliloquy}\n\n*(Hamlet, Act 3, Scene 1, lines 56–60)*`);
+    const verse = blocks.find((block) => block.kind === 'verse')!;
+    if (verse.kind !== 'verse') throw new Error('not verse');
+    expect(verse.start).toBe(56);
+    const wrong = markdownBlocks(`${soliloquy}\n\n*(Hamlet, Act 3, Scene 1, lines 56–89)*`).find((block) => block.kind === 'verse')!;
+    if (wrong.kind !== 'verse') throw new Error('not verse');
+    expect(wrong.start).toBe(1);
   });
 
   test('prose and lists are left as they are', () => {
@@ -195,5 +206,32 @@ describe('verse keeps its lines (re-test, Nov 22)', () => {
     expect(withVerseLineBreaks(prose)).toBe(prose);
     const list = '- One\n- Two\n- Three\n- Four';
     expect(withVerseLineBreaks(list)).toBe(list);
+  });
+});
+
+describe('a quoted speech is verse too (round 3: Hamlet’s handout quoted the soliloquy)', () => {
+  test('a blockquote of short lines is numbered from its heading’s lines, and keeps its quote', () => {
+    const blocks = markdownBlocks(
+      [
+        '### Movement 1 — The question (lines 56–61)',
+        '> To be, or not to be — that is the question:',
+        "> Whether 'tis nobler in the mind to suffer",
+        '> The slings and arrows of outrageous fortune,',
+        '> Or to take arms against a sea of troubles',
+        '> And by opposing end them. To die — to sleep,',
+        '> No more; and by a sleep to say we end',
+      ].join('\n')
+    );
+    const verse = blocks.find((block) => block.kind === 'verse')!;
+    if (verse.kind !== 'verse') throw new Error('not verse');
+    expect(verse.quoted).toBe(true);
+    expect(verse.start).toBe(56);
+    expect(verse.lines).toHaveLength(6);
+  });
+
+  test('a quoted prompt of long sentences is still a quote', () => {
+    const long = 'This is a long sentence of a prompt that goes on well past the length of any line of verse that a poet would write.';
+    const blocks = markdownBlocks([long, long, long, long].map((line) => `> ${line}`).join('\n'));
+    expect(blocks.some((block) => block.kind === 'verse')).toBe(false);
   });
 });

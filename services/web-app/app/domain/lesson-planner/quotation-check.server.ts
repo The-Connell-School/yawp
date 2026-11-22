@@ -32,7 +32,7 @@ import {
 const WORD = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
 
 /** A word as it is compared: lower case, no accents, letters and digits only. */
-function normalWord(word: string): string {
+export function normalWord(word: string): string {
   return word
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
@@ -43,7 +43,7 @@ function normalWord(word: string): string {
 type Word = { word: string; start: number; end: number };
 
 /** The words of a text with where each is, `[stage directions]` left out. */
-function wordsOf(text: string, offset = 0): Word[] {
+export function wordsOf(text: string, offset = 0): Word[] {
   const out: Word[] = [];
   const cleaned = text.replace(/\[[^\]\n]{0,200}\]/g, (m) =>
     ' '.repeat(m.length)
@@ -256,7 +256,7 @@ function wordAtLetter(source: PreparedSource, letter: number): number {
   return -1;
 }
 
-type Span = { start: number; end: number };
+export type Span = { start: number; end: number };
 
 /**
  * Where the words are in the source, as a run of its words (end exclusive),
@@ -309,9 +309,9 @@ const MAX_CLOSE_WORDS = 80;
  * common, in order; `close` is the larger of that and the share of letters
  * ("I'm" and "I am" differ by a word, not by much).
  */
-type Near = Span & { score: number; close: number };
+export type Near = Span & { score: number; close: number };
 
-function closest(source: PreparedSource, quote: string[]): Near | null {
+export function closest(source: PreparedSource, quote: string[]): Near | null {
   const n = quote.length;
   if (n < 4 || n > MAX_CLOSE_WORDS) return null;
   const anchors = quote
@@ -1525,6 +1525,11 @@ async function preparedWork(
     prepared.delete(oldest);
   }
   return source;
+}
+
+/** The work's text as the last check prepared it, if it is still kept. */
+export function preparedSourceOf(work: RegisteredWork): PreparedSource | null {
+  return prepared.get(work.id) ?? null;
 }
 
 /** Forget every prepared text (tests). */

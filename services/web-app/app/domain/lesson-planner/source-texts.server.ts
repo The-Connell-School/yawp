@@ -21,6 +21,8 @@ export const gutenbergTextUrl = (id: number) =>
  */
 export const gutenbergTextUrls = (id: number) => [
   gutenbergTextUrl(id),
+  // The same file by its other address (round 3: gutenberg.org answered 503 for Owen's poems).
+  `https://www.gutenberg.org/ebooks/${id}.txt.utf-8`,
   `https://gutenberg.pglaf.org/cache/epub/${id}/pg${id}.txt`,
   `https://aleph.pglaf.org/cache/epub/${id}/pg${id}.txt`,
 ];

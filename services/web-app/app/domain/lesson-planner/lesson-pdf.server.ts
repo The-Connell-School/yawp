@@ -45,6 +45,8 @@ const LINE_GAP = 2.5;
 const INDENT_STEP = 16;
 /** Room for the quote's rule plus a breath of space. */
 const QUOTE_INDENT = 14;
+/** Room in the margin for a verse line's number. */
+const VERSE_GUTTER = 30;
 
 type Font = 'body' | 'bold' | 'italic' | 'boldItalic' | 'mono' | 'monoBold';
 
@@ -209,6 +211,48 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
       doc.moveDown(0.35);
       writeRuns(doc, block.runs, { size: BODY_SIZE });
       break;
+
+    case 'verse': {
+      // A line to a line, every fifth numbered in the margin (plan item 2, Nov 22).
+      doc.moveDown(block.quoted ? 0.5 : 0.35);
+      const top = doc.y;
+      const topPage = doc.page;
+      block.lines.forEach((line, i) => {
+        ensureRoom(doc, BODY_SIZE * 1.6);
+        const n = block.start + i;
+        const y = doc.y;
+        if (n % 5 === 0) {
+          doc
+            .save()
+            .font(styleOf(doc).fonts.body)
+            .fontSize(BODY_SIZE - 2.5)
+            .fillColor(styleOf(doc).muted)
+            .text(String(n), left, y + 1.5, { width: VERSE_GUTTER - 8, align: 'right', lineBreak: false })
+            .restore();
+          doc.y = y;
+        }
+        writeRuns(doc, line.length ? line : [{ text: ' ' }], {
+          size: BODY_SIZE,
+          x: left + VERSE_GUTTER,
+          width: contentWidth - VERSE_GUTTER,
+          ...(block.quoted ? { color: '#4b5563' } : {}),
+        });
+      });
+      // A quoted passage keeps the quote's rule, beside the lines, on the page it began.
+      if (block.quoted && doc.page === topPage && doc.y > top) {
+        doc
+          .save()
+          .lineWidth(2)
+          .strokeColor(styleOf(doc).serif ? '#D8D0C1' : `${styleOf(doc).brand}66`)
+          .moveTo(left + VERSE_GUTTER - 6, top)
+          .lineTo(left + VERSE_GUTTER - 6, doc.y)
+          .stroke()
+          .restore();
+      }
+      doc.x = left;
+      doc.moveDown(0.35);
+      break;
+    }
 
     case 'quote': {
       doc.moveDown(0.5);
