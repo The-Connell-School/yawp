@@ -765,3 +765,4 @@ describe('renderSlidesPdf — a deck drawn in spec v4.1', () => {
     expect(text).toContain('Exit ticket: open it in Yawp!');
   });
 });
+

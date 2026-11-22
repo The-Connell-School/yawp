@@ -56,6 +56,7 @@ import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
+import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
@@ -898,6 +899,8 @@ async function turnAction({ request }: ActionFunctionArgs) {
       // few seconds after the last lookup; this is for a reply that came
       // back sooner than that.
       clock.writing();
+      // A blank the planner ran on for pages is a short blank (Nov 22).
+      reply = withoutRunawayBlanks(reply);
 
       // The model writes its deck blind — nothing in the reply tells it whether the
       // JSON validated. Give a rejected deck the errors and one more pass before

@@ -214,11 +214,15 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
       // write here") is a line to write on, not a sliver of nothing (round 4,
       // Nov 22: handout after handout printed its questions with no room).
       if (!block.runs.map((run) => run.text).join('').trim()) {
-        ensureRoom(doc, WRITING_LINE_GAP + 4);
-        const y = doc.y + WRITING_LINE_GAP;
-        doc.save().lineWidth(0.6).strokeColor('#BDBDBD').moveTo(left, y).lineTo(left + contentWidth, y).stroke().restore();
-        doc.x = left;
-        doc.y = y + 2;
+        // One ruled line for each line the planner left blank.
+        const count = Math.min(12, block.runs.map((run) => run.text).join('').split('\n').length);
+        for (let i = 0; i < count; i += 1) {
+          ensureRoom(doc, WRITING_LINE_GAP + 4);
+          const y = doc.y + WRITING_LINE_GAP;
+          doc.save().lineWidth(0.6).strokeColor('#BDBDBD').moveTo(left, y).lineTo(left + contentWidth, y).stroke().restore();
+          doc.x = left;
+          doc.y = y + 2;
+        }
         break;
       }
       doc.moveDown(0.35);
@@ -1029,7 +1033,12 @@ export async function renderStepHandoutPdf({
   // "&nbsp;" (the planner's blank answer space) became a no-break space that
   // the kit's font cannot measure, and the whole handout failed (HTTP 500 on
   // the preview, Nov 22): a plain space leaves the same blank line.
-  parts = parts.map((part) => ({ ...part, content: part.content.replace(/&nbsp;|\u00a0/g, ' ') }));
+  parts = parts.map((part) => ({ ...part, content: part.content
+      // A line of nothing but a non-breaking space is room to write: kept as
+      // the entity, which reads as a ruled line; any other is a plain space
+      // (round 4: turned into a blank line, the room to write vanished).
+      .replace(/^[ \t]*(?:&nbsp;|\u00a0)[ \t\u00a0]*$/gm, '&nbsp;\n')
+      .replace(/\u00a0/g, ' ') }));
   const single = parts.length === 1;
   const heading = single ? parts[0]!.title : title;
   const doc = newDocument(heading, kit);

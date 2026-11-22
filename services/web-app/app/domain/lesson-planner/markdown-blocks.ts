@@ -325,7 +325,8 @@ function withVerseBlocks(blocks: Block[]): Block[] {
         if (part) lines[lines.length - 1]!.push({ ...run, text: part });
       });
     }
-    if (lines.length < 4) return block;
+    // Verse has words: lines left blank for writing are not a poem.
+    if (lines.filter((line) => line.map((run) => run.text).join('').trim()).length < 4) return block;
     // Verse only: short lines. A quoted prompt of several sentences on lines of their own is not a poem.
     if (lines.some((line) => line.map((run) => run.text).join('').trim().length > 90)) return block;
     let start = 1;
