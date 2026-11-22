@@ -95,6 +95,19 @@ describe('getLLMCompletion', () => {
     expect(request).not.toHaveProperty('temperature');
   });
 
+  test('passes an output config through to Anthropic as output_config', async () => {
+    await getLLMCompletion({
+      model: 'claude-haiku-5-5',
+      messages: [{ role: 'user', content: 'Hi' }],
+      attribution: testAttribution,
+      outputConfig: { effort: 'low' },
+    });
+    expect(anthropicCreate.mock.calls[0][0]).toMatchObject({ output_config: { effort: 'low' } });
+    anthropicCreate.mockClear();
+    await getLLMCompletion({ model: 'claude-haiku-5-5', messages: [{ role: 'user', content: 'Hi' }], attribution: testAttribution });
+    expect(anthropicCreate.mock.calls[0][0]).not.toHaveProperty('output_config');
+  });
+
   test('sends default temperature 0.6 for Claude 4.6', async () => {
     await getLLMCompletion({
       model: 'claude-sonnet-4-6',

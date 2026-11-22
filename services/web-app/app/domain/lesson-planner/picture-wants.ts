@@ -83,6 +83,49 @@ export function wantedPictures(
 }
 
 /**
+ * What the slide says beside each subject it asks for (the first slide,
+ * event or person to ask), for the second look to judge the picture against.
+ */
+export function pictureWords(
+  deck: Pick<SlideDeck, 'slides'>
+): Map<string, string> {
+  const words = new Map<string, string>();
+  const note = (want: Want | undefined, text: Array<string | undefined>) => {
+    if (!want) return;
+    const key = pictureKey(want.subject);
+    if (!key || words.has(key)) return;
+    const said = text
+      .filter(
+        (part): part is string =>
+          typeof part === 'string' && Boolean(part.trim())
+      )
+      .join(' ');
+    words.set(key, said.length > 300 ? `${said.slice(0, 299)}…` : said);
+  };
+  for (const slide of deck.slides) {
+    note(slide.wants, [
+      slide.title,
+      slide.body,
+      ...(slide.facts ?? []),
+      slide.question,
+    ]);
+    for (const event of slide.events ?? [])
+      note(eventWant(event), [
+        slide.title,
+        `${event.date}: ${event.title}.`,
+        event.detail,
+      ]);
+    for (const person of slide.people ?? [])
+      note(personWant(person), [
+        slide.title,
+        `${person.name}${person.role ? `, ${person.role}` : ''}.`,
+        person.note,
+      ]);
+  }
+  return words;
+}
+
+/**
  * The deck with each found picture where it was asked for: on the slide, the
  * event or the person. A person slide shows only its people's pictures, so a
  * picture asked for on the slide itself goes to the person it names (or the

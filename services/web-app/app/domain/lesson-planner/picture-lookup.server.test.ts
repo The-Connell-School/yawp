@@ -676,6 +676,88 @@ describe('what the planner did not ask for (live preview, Nov 22)', () => {
   });
 });
 
+/** A fake second look: turns down the subjects named, keeps the rest with an alt text, and records what it saw. */
+function looker(turnDown: string[] = []) {
+  const seen: string[] = [];
+  const look = async (
+    _system: string,
+    content: Array<Record<string, unknown>>
+  ) => {
+    const pictures: Array<Record<string, unknown>> = [];
+    for (const block of content) {
+      const text = typeof block.text === 'string' ? block.text : '';
+      const match = /^Picture (\d+)\. Subject: ([^.]+)\./.exec(text);
+      if (!match) continue;
+      seen.push(match[2]!);
+      const keep = !turnDown.includes(match[2]!);
+      pictures.push({
+        n: Number(match[1]),
+        keep,
+        ...(keep
+          ? { alt: `A picture of ${match[2]}.` }
+          : { why: 'not the thing' }),
+      });
+    }
+    return JSON.stringify({ pictures });
+  };
+  return { look, seen };
+}
+
+describe('the second look (Nov 22, night)', () => {
+  test('it sees every new picture once; what it turns down is never kept; what it keeps carries its alt text', async () => {
+    const db = shelf();
+    const { look, seen } = looker(['Giuseppe Garibaldi']);
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: db,
+      look,
+    });
+    // Each as the slide asked for it (Risorgimento, not the article it redirects to).
+    expect(seen.sort()).toEqual(
+      [
+        'Giuseppe Garibaldi',
+        'Mary Shelley',
+        'Risorgimento',
+        'allen ginsberg',
+      ].sort()
+    );
+    expect(result.deck.slides[0]!.image).toBeUndefined();
+    expect(result.empty).toContainEqual({
+      subject: 'Giuseppe Garibaldi',
+      why: 'not the thing',
+    });
+    expect(result.look).toEqual({ seen: 4, turnedDown: 1, checked: true });
+    expect(db.created.map((row) => row.subject)).not.toContain(
+      'giuseppe garibaldi'
+    );
+    expect(
+      db.created.find((row) => row.subject === 'mary shelley')?.altText
+    ).toBe('A picture of Mary Shelley.');
+  });
+
+  test('a look that fails keeps what the rules kept, and says it was unchecked', async () => {
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+      look: async () => Promise.reject(new Error('overloaded')),
+    });
+    expect(result.deck.slides[0]!.image).toBeTruthy();
+    expect(result.counts.filled).toBe(4);
+    expect(result.look).toEqual({ seen: 4, turnedDown: 0, checked: false });
+  });
+
+  test('a picture kept before is not looked at again', async () => {
+    const { look, seen } = looker();
+    await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf([{ key: 'giuseppe garibaldi', id: 'ckkept0000001' }]),
+      look,
+    });
+    expect(seen).not.toContain('Giuseppe Garibaldi');
+    expect(seen.length).toBe(3);
+  });
+});
+
 describe('withResolvedPictures', () => {
   test('a day about a text’s world drops the gallery painting: a mood, not the thing', async () => {
     const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
@@ -713,6 +795,44 @@ describe('withResolvedPictures', () => {
     );
     expect(result.ids.length).toBe(4);
     expect(result.counts.wanted).toBe(7);
+  });
+
+  test('the picture editor names a subject for a slide that asked for none, and the lookup finds it', async () => {
+    const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
+    const { withResolvedPictures } = await import('./picture-lookup.server');
+    const bare = {
+      title: 'Italy',
+      slides: [
+        { layout: 'title', title: 'Italy', speakerNotes: 'n' },
+        {
+          layout: 'big_idea',
+          title: 'The general',
+          body: 'A thousand volunteers in red shirts took Sicily in 1860.',
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    let prompt = '';
+    const result = await withResolvedPictures(
+      `Deck.\n\n${fenceSlideDeck(bare)}`,
+      owner,
+      {
+        fetch: wikipedia().fetcher,
+        shelf: shelf(),
+        name: async (_system, text) => {
+          prompt = text;
+          return '{"slides": [{"slide": 2, "subject": "Giuseppe Garibaldi", "shows": "his portrait"}]}';
+        },
+      }
+    );
+    expect(prompt).toContain('A thousand volunteers in red shirts');
+    expect(result.named).toBe(1);
+    const deck = parseSlideDeck(result.reply)!.deck!;
+    expect(deck.slides[1]!.wants).toEqual({
+      subject: 'Giuseppe Garibaldi',
+      shows: 'his portrait',
+    });
+    expect(deck.slides[1]!.image).toBe(result.ids[0]);
   });
 
   test('a reply with no deck is untouched', async () => {

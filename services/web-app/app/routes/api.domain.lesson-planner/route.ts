@@ -55,6 +55,7 @@ import {
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
+import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -809,16 +810,32 @@ export async function action({ request }: ActionFunctionArgs) {
       if (foundPictures) {
         const lookedAt = Date.now();
         try {
-          const pictured = await withResolvedPictures(reply, { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null }, { shelf: pictureShelf });
+          // The picture editor names a subject for each teaching slide that asks
+          // for none, and the second look checks each picture before it is kept
+          // (Nov 22, night): the whole step inside sixteen seconds.
+          const pictureModel = pictureModelCalls(() => ({
+            organizationId: ctx.organizationId,
+            membershipId: ctx.membershipId,
+            route: 'routes/api.domain.lesson-planner',
+            requestId: crypto.randomUUID(),
+            ipHash: computeIpHash(request),
+          }));
+          const pictured = await withResolvedPictures(
+            reply,
+            { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
+            { shelf: pictureShelf, deadlineMs: 16_000, ...pictureModel }
+          );
           reply = pictured.reply;
           foundPictureIds.push(...pictured.ids);
-          if (pictured.counts.wanted) {
+          if (pictured.counts.wanted || pictured.named) {
             const reasons = pictured.empty.reduce<Record<string, number>>((tally, miss) => ({ ...tally, [miss.why]: (tally[miss.why] ?? 0) + 1 }), {});
             // Counts only, never what the lesson is about.
             // eslint-disable-next-line no-console
             console.info(
               `[lesson-planner] pictures: wanted ${pictured.counts.wanted} · filled ${pictured.counts.filled} (${pictured.counts.reused} reused) · empty ${pictured.counts.empty}${
                 pictured.counts.empty ? ` (${Object.entries(reasons).map(([why, n]) => `${why}: ${n}`).join(', ')})` : ''
+              } · named ${pictured.named}${
+                pictured.look ? ` · looked at ${pictured.look.seen}, turned down ${pictured.look.turnedDown}${pictured.look.checked ? '' : ' (unchecked)'}` : ''
               } · ${Date.now() - lookedAt}ms`
             );
           }

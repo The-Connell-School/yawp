@@ -1350,6 +1350,9 @@ jobs:
             app/domain/lesson-planner/found-pictures.server.test.ts \
             app/domain/lesson-planner/picture-wants.test.ts \
             app/domain/lesson-planner/picture-lookup.server.test.ts \
+            app/domain/lesson-planner/picture-subjects.server.test.ts \
+            app/domain/lesson-planner/picture-check.server.test.ts \
+            app/domain/lesson-planner/picture-model.server.test.ts \
             app/components/lesson-planner/slide-picture.test.tsx \
             app/routes/api.domain.lesson-planner.places/route.test.ts \
             'app/routes/api.lesson-planner-map[.]svg/route.test.ts' \

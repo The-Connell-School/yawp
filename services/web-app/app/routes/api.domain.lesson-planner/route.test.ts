@@ -287,6 +287,11 @@ describe('api.domain.lesson-planner action', () => {
     expect(getLLMCompletion.mock.calls[0][0].tools.map((tool: { name: string }) => tool.name)).not.toContain('find_pictures');
     expect(withResolvedPictures.mock.calls[0][0]).toBe('The deck.');
     expect(withResolvedPictures.mock.calls[0][1]).toEqual({ membershipId: 'teacher-1', conversationId: null });
+    // The picture editor and the second look go with it (Nov 22, night), the whole step inside sixteen seconds.
+    const deps = withResolvedPictures.mock.calls[0][2];
+    expect(typeof deps.name).toBe('function');
+    expect(typeof deps.look).toBe('function');
+    expect(deps.deadlineMs).toBe(16_000);
     // The lesson is written after the reply: the pictures are kept without one, then attached.
     expect(prisma.lessonPlanUploadPicture.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['ckfound00001'] }, membershipId: 'teacher-1', conversationId: null, uploadId: null },

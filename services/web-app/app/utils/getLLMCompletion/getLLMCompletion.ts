@@ -84,6 +84,8 @@ interface Params {
   logPayload?: 'full' | 'metadata-only' | 'audit-only';
   /** Known names or direct identifiers that must be scrubbed from LlmLog text. */
   deidentificationPhrases?: unknown;
+  /** Anthropic only: sent as `output_config` (e.g. `{ effort: 'low' }` for a small, fast call). */
+  outputConfig?: Record<string, unknown>;
 }
 
 async function logLlmCall(data: {
@@ -266,6 +268,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         messages: messages as any,
         ...anthropicSamplingParams(params.model, params.temperature),
         ...(params.tools?.length ? { tools: params.tools as any } : {}),
+        ...(params.outputConfig ? { output_config: params.outputConfig } : {}),
       };
       const message = params.signal
         ? await anthropic.messages.create(request, { signal: params.signal })

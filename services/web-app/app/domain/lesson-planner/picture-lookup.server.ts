@@ -29,7 +29,14 @@ import {
   type PictureStore,
 } from './found-pictures.server';
 import {
+  secondLook,
+  type LookAt,
+  type LookVerdict,
+} from './picture-check.server';
+import { withNamedSubjects, type AskEditor } from './picture-subjects.server';
+import {
   pictureKey,
+  pictureWords,
   wantedPictures,
   withFoundPictures,
   withoutEmptyPictureSlides,
@@ -94,8 +101,10 @@ export type ResolvedPictures<T> = {
   counts: PictureCounts;
   empty: Array<{
     subject: string;
-    why: 'none' | 'not a picture' | 'unavailable';
+    why: 'none' | 'not a picture' | 'unavailable' | 'not the thing';
   }>;
+  /** The second look: pictures it saw and turned down; `checked` false when it could not be had. Null when there was none. */
+  look: { seen: number; turnedDown: number; checked: boolean } | null;
 };
 
 const sleep = (ms: number) =>
@@ -318,6 +327,8 @@ export async function resolveDeckPictures<T extends SlideDeck>(
     timeoutMs?: number;
     deadlineMs?: number;
     retryMs?: number;
+    /** The second look at each new picture before it is kept. */
+    look?: LookAt;
   }
 ): Promise<ResolvedPictures<T>> {
   const wanted = wantedPictures(deck).slice(0, MAX_PICTURES);
@@ -327,12 +338,17 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       ids: [],
       counts: { wanted: 0, filled: 0, reused: 0, empty: 0 },
       empty: [],
+      look: null,
     };
   const fetcher = deps.fetch ?? fetch;
   const timeoutMs = deps.timeoutMs ?? 5_000;
   const ids = new Map<string, string>();
-  const why = new Map<string, 'none' | 'not a picture' | 'unavailable'>();
+  const why = new Map<
+    string,
+    'none' | 'not a picture' | 'unavailable' | 'not the thing'
+  >();
   let reused = 0;
+  let lookOutcome: ResolvedPictures<T>['look'] = null;
 
   const work = (async () => {
     const keys = wanted.map((want) => pictureKey(want.subject));
@@ -357,16 +373,60 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       retryMs: deps.retryMs ?? 1_200,
     });
     for (const [key, reason] of looked.why) why.set(key, reason);
+    // Every picture downloaded first, so the second look sees them together.
+    const downloaded = (
+      await Promise.all(
+        [...looked.found].map(async ([key, candidate]) => {
+          const bytes = await downloadPicture(
+            candidate.imageUrl,
+            fetcher,
+            timeoutMs
+          ).catch(() => null);
+          const contentType = bytes ? sniffPictureType(bytes) : null;
+          if (!bytes || !contentType) {
+            why.set(key, 'unavailable');
+            return null;
+          }
+          return { key, candidate, bytes, contentType };
+        })
+      )
+    ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+    let verdicts: Map<number, LookVerdict> | null = null;
+    if (deps.look && downloaded.length) {
+      const words = pictureWords(deck);
+      const asked = new Map(
+        wanted.map((want) => [pictureKey(want.subject), want])
+      );
+      verdicts = await secondLook(
+        downloaded.flatMap((item, i) =>
+          item.contentType === 'image/jpeg' || item.contentType === 'image/png'
+            ? [
+                {
+                  n: i + 1,
+                  subject: asked.get(item.key)?.subject ?? item.key,
+                  shows: asked.get(item.key)?.shows,
+                  words: words.get(item.key),
+                  bytes: item.bytes,
+                  contentType: item.contentType,
+                },
+              ]
+            : []
+        ),
+        deps.look
+      );
+      lookOutcome = {
+        seen: downloaded.length,
+        turnedDown: verdicts
+          ? [...verdicts.values()].filter((verdict) => !verdict.keep).length
+          : 0,
+        checked: Boolean(verdicts),
+      };
+    }
     await Promise.all(
-      [...looked.found].map(async ([key, candidate]) => {
-        const bytes = await downloadPicture(
-          candidate.imageUrl,
-          fetcher,
-          timeoutMs
-        ).catch(() => null);
-        const contentType = bytes ? sniffPictureType(bytes) : null;
-        if (!bytes || !contentType) {
-          why.set(key, 'unavailable');
+      downloaded.map(async ({ key, candidate, bytes, contentType }, i) => {
+        const verdict = verdicts?.get(i + 1);
+        if (verdict && !verdict.keep) {
+          why.set(key, 'not the thing');
           return;
         }
         const size = imageDimensions(bytes);
@@ -376,7 +436,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
             conversationId: owner.conversationId,
             position: 0,
             slideNumbers: [],
-            altText: cleanAltText(candidate.description),
+            altText: cleanAltText(verdict?.alt || candidate.description),
             contentType,
             byteSize: bytes.byteLength,
             width: size?.width ?? null,
@@ -414,6 +474,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       empty: empty.length,
     },
     empty,
+    look: lookOutcome,
   };
 }
 
@@ -425,22 +486,33 @@ export async function resolveDeckPictures<T extends SlideDeck>(
 export async function withResolvedPictures(
   reply: string,
   owner: Owner,
-  deps: Parameters<typeof resolveDeckPictures>[2]
+  deps: Parameters<typeof resolveDeckPictures>[2] & {
+    /** The picture editor: names a subject for each teaching slide that asks for none. */
+    name?: AskEditor;
+  }
 ): Promise<{
   reply: string;
   ids: string[];
   counts: PictureCounts;
   empty: ResolvedPictures<SlideDeck>['empty'];
+  /** Subjects the picture editor named. */
+  named: number;
+  look: ResolvedPictures<SlideDeck>['look'];
 }> {
   const nothing = {
     reply,
     ids: [],
     counts: { wanted: 0, filled: 0, reused: 0, empty: 0 },
     empty: [],
+    named: 0,
+    look: null,
   };
   const outcome = readSlideDeck(reply);
   if (outcome.kind !== 'deck') return nothing;
-  const resolved = await resolveDeckPictures(outcome.deck, owner, deps);
+  const edited = deps.name
+    ? await withNamedSubjects(outcome.deck, deps.name)
+    : { deck: outcome.deck, named: 0 };
+  const resolved = await resolveDeckPictures(edited.deck, owner, deps);
   let settled = withoutEmptyPictureSlides(resolved.deck);
   // A day about a text's world shows that world: the gallery painting's strip
   // is a mood, not the thing (Kevin on the Leopard deck; the Howl deck, Nov 22).
@@ -457,5 +529,7 @@ export async function withResolvedPictures(
     ids: resolved.ids,
     counts: resolved.counts,
     empty: resolved.empty,
+    named: edited.named,
+    look: resolved.look,
   };
 }
