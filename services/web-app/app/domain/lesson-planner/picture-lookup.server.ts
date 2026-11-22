@@ -29,7 +29,7 @@ const MIN_WIDTH = 480;
 const NOT_A_PICTURE = /\.svg$|(^|[\s_\-(])(map|maps|locator|location|flag|logo|seal|icon|diagram|chart|coat[\s_]of[\s_]arms|incorporated[\s_]and[\s_]unincorporated)([\s_\-).]|$)/i;
 
 /** Wikipedia's own one-line description of an article says when it is a place people live. */
-const A_PLACE = /\b(city|town|village|hamlet|suburb|borough|township|municipality|commune|census-designated place|neighbou?rhood|district|county|capital)\b/i;
+const A_PLACE = /\b(city|town|village|hamlet|suburb|borough|township|municipality|commune|community|settlement|census-designated place|neighbou?rhood|district|county|capital)\b/i;
 
 /**
  * A town's lead picture is often some landmark in it (for Levittown,

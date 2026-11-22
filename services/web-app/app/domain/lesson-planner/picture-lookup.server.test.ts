@@ -22,7 +22,7 @@ const PAGES = {
       '4': { title: 'Unification of Italy', pageimage: 'Episodio_delle_cinque_giornate.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Episodio.jpg', width: 1280, height: 1827 } },
       '5': { title: 'Mary Shelley', pageimage: 'Mary_Wollstonecraft_Shelley_Rothwell.tif', thumbnail: { source: 'https://thumb.wikimedia.org/a/Shelley.tif.jpg', width: 1280, height: 1558 } },
       '6': { title: 'Allen ginsberg', pageimage: 'Allen_Ginsberg_1979.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Ginsberg.jpg', width: 1280, height: 1707 } },
-      '8': { title: 'Levittown, Pennsylvania', description: 'Census-designated place in Pennsylvania, United States', pageimage: 'BristolPA_PhineasPembertonHouse.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Pemberton.jpg', width: 1280, height: 850 } },
+      '8': { title: 'Levittown, Pennsylvania', description: 'Unincorporated community in Pennsylvania, US', pageimage: 'BristolPA_PhineasPembertonHouse.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Pemberton.jpg', width: 1280, height: 850 } },
       '9': { title: 'Palermo', description: 'City in Sicily, Italy', pageimage: 'Sicilia_Palermo5_tango7174.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Palermo.jpg', width: 1280, height: 900 } },
       '7': { title: 'Jack Kerouac', pageimage: 'Kerouac_by_Palumbo.png', thumbnail: { source: 'https://thumb.wikimedia.org/a/Kerouac.png', width: 388, height: 518 } },
     },
