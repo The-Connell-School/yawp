@@ -13,6 +13,9 @@ import {
 
 export const MIN_STEP_MINUTES = 1;
 export const MAX_STEP_MINUTES = 120;
+/** A step that is the class reading the text: never trimmed. */
+const READING_TITLE = /\b(close[-\s]?read\w*|read(ing)?\b|read[-\s]aloud|annotat\w*|first read|passage)/i;
+
 /** A fix never trims a step below this. */
 export const FIX_FLOOR_MINUTES = 3;
 
@@ -116,8 +119,12 @@ export function timeFixes(timing: StackTiming): TimeFix[] {
   if (over <= 0) return [];
   const fixes: TimeFix[] = [];
   const reading = timing.blocks.filter((block) => !block.isWriting);
+  // Nor the reading: cutting a close reading to 3 minutes is never the fix
+  // (13-lesson review, Nov 22: "Trim 'Close reading' to 3 min" while three
+  // duplicate starters stayed).
+  const trimmable = reading.filter((block) => block.type !== 'read_aloud' && !READING_TITLE.test(block.title));
 
-  const longest = [...reading].sort(
+  const longest = [...trimmable].sort(
     (a, b) => b.minutes - a.minutes || a.startsAt - b.startsAt
   )[0];
   if (longest && longest.minutes > FIX_FLOOR_MINUTES) {

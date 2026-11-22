@@ -8,7 +8,7 @@
  */
 import { prisma } from '~/utils/db.server';
 import { fileableMaterial, stepColumns, writtenAt } from './fileable-material';
-import { pieceKeysInReply } from './reply-pieces';
+import { keepAllPlan, pieceKeysInReply } from './reply-pieces';
 import { loadStackOrder, writeStackOrder } from './stack-order.server';
 
 export async function fileReplyPieces({
@@ -34,12 +34,20 @@ export async function fileReplyPieces({
   const skipped: string[] = [];
   const newKeys: string[] = [];
 
-  const keys = pieceKeysInReply(message.content).filter(
-    (key) => !onlyKeys || onlyKeys.includes(key)
-  );
+  // The whole reply: one lesson (one option per choice, one exit ticket).
+  // A segment the teacher picked: exactly its pieces.
+  const whole = onlyKeys ? null : keepAllPlan(message.content);
+  const keys = whole ? whole.keys : pieceKeysInReply(message.content).filter((key) => onlyKeys!.includes(key));
   for (const key of keys) {
-    const material = fileableMaterial(message.content, key);
-    if (!material) continue;
+    const filed = fileableMaterial(message.content, key);
+    if (!filed) continue;
+    const stepMinutes = whole?.minutes[key];
+    // The step's minutes, spent once (see keepAllPlan); a block's own
+    // "(N min)" in its title goes with them.
+    const material =
+      stepMinutes != null
+        ? { ...filed, minutes: stepMinutes, title: filed.title.replace(/\s*\(\s*\d+[^)]*min[^)]*\)\s*$/i, '') + (stepMinutes ? ` (${stepMinutes} min)` : '') }
+        : filed;
     const existing = await prisma.lessonPlanMaterial.findUnique({
       where: { conversationId_slot: { conversationId, slot: material.slot } },
       select: { sourceMessageId: true, blockKey: true, editedAt: true },

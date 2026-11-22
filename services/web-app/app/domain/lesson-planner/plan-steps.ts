@@ -103,7 +103,9 @@ export function withoutTrailingCommentary(text: string): string {
 export function readPlanSteps(content: string): PlanStep[] {
   // Headings inside a fence are not the plan's.
   const masked = content.replace(FENCE, (fence) => fence.replace(/[^\n]/g, ' '));
-  const headings = [...masked.matchAll(/^\s{0,3}(#{2,3})\s+(.+)$/gm)].map((match) => ({
+  // A subtitle written as a heading ("### *Things Fall Apart* · English 10 ·
+  // 50 minutes") is not a step: it once filed as a 50-minute step (Nov 22).
+  const headings = [...masked.matchAll(/^\s{0,3}(#{2,3})\s+(.+)$/gm)].filter((match) => (match[2]!.match(/\s·\s/g) ?? []).length < 2).map((match) => ({
     level: match[1]!.length,
     text: match[2]!,
     start: match.index!,

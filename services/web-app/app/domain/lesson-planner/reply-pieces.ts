@@ -25,6 +25,60 @@ export function pieceKeysInReply(content: string): string[] {
 }
 
 /**
+ * What "Add everything to the lesson" files: one lesson, not every option
+ * (13-lesson review, Nov 22: stacks of 70 to 141 minutes for 50-minute
+ * lessons, three class starters in a row, two Short Responses, and the
+ * "wondering" exit ticket in place of the one that checks the objective).
+ *
+ * - A step offering a choice files its first option of each kind; the others
+ *   stay one click away in the chat.
+ * - One exit ticket: the first, which checks the lesson's objective.
+ * - A step's minutes are spent once. A step with its own directions keeps
+ *   its minutes, and what it holds (its prompt, its exit ticket, its lecture
+ *   frames) is filed at 0 minutes, inside it. A step that is nothing but its
+ *   blocks hands its minutes to them, shared out.
+ */
+export function keepAllPlan(content: string): { keys: string[]; minutes: Record<string, number> } {
+  const pieces = placedPieces(content);
+  const choices = stepsOfferingChoice(content);
+  const skip = new Set<string>();
+  const minutes: Record<string, number> = {};
+  pieces.forEach((piece, index) => {
+    if (!piece.step) return;
+    const held = blocksUnder(pieces, index).map((key) => pieces.find((other) => other.key === key)!);
+    const kept: Placed[] = [];
+    const seen = new Set<string>();
+    for (const block of held) {
+      const option = Boolean(block.block && OPTION_BLOCKS.has(block.block));
+      if (choices.has(piece.key) && option && seen.has(block.block!)) skip.add(block.key);
+      else {
+        if (option) seen.add(block.block!);
+        kept.push(block);
+      }
+    }
+    if (piece.minutes == null || !kept.length) return;
+    if (!piece.emptyStep) for (const block of kept) minutes[block.key] = 0;
+    else {
+      const share = Math.max(1, Math.floor(piece.minutes / kept.length));
+      kept.forEach((block, i) => {
+        minutes[block.key] = i === kept.length - 1 ? Math.max(1, piece.minutes! - share * (kept.length - 1)) : share;
+      });
+    }
+  });
+  let ticketKept = false;
+  const keys = pieces
+    .filter((piece) => !piece.emptyStep && !skip.has(piece.key))
+    .filter((piece) => {
+      if (piece.block !== 'yawp-exit-ticket') return true;
+      if (ticketKept) return false;
+      ticketKept = true;
+      return true;
+    })
+    .map((piece) => piece.key);
+  return { keys, minutes };
+}
+
+/**
  * Minutes for the blocks that stand for their step: under "## Exit ticket
  * (10 min)" with nothing but the ticket, the ticket is the step, and its 10
  * minutes should not be lost when it is filed (Brian's run 2, B2).

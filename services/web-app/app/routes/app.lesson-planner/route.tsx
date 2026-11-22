@@ -120,7 +120,7 @@ import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
 import { DayLessonsCard } from '~/components/lesson-planner/day-lessons-card';
 import { readPlanDays, readWeekFramework } from '~/domain/lesson-planner/plan-days';
-import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
+import { keepAllPlan, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -1941,7 +1941,8 @@ function MessageBubble({
   let stepCursor = 0;
   const framePlan = stackV2 && deliveredPlan && Boolean(message.id);
   const replyPieceKeys =
-    stackV2 && deliveredPlan && !multiDay ? pieceKeysInReply(message.content) : [];
+    // What "Add everything" files: one option per choice, one exit ticket (Nov 22).
+    stackV2 && deliveredPlan && !multiDay ? keepAllPlan(message.content).keys : [];
   const everythingIn =
     Boolean(message.id) &&
     replyPieceKeys.length > 0 &&
