@@ -183,8 +183,10 @@ describe('applySlideText: typing goes to the field it was drawn from', () => {
   test('emptied: an optional field is cleared, a required one keeps its words', () => {
     const talk = at('discuss');
     expect(applySlideText(base, talk, find(base, talk, 'stem').source, '  ').slides[talk]!.stem).toBeUndefined();
-    // A title is required: the deck would not save.
-    expect(applySlideText(base, talk, find(base, talk, 'title').source, '')).toBe(base);
+    // A title slide's title is the slide: the deck would not save. (Most other
+    // layouts take their own heading when theirs is left out.)
+    const cover = at('title');
+    expect(applySlideText(base, cover, find(base, cover, 'title').source, '')).toBe(base);
     // A big idea needs its body.
     const idea = at('big_idea');
     expect(applySlideText(base, idea, find(base, idea, 'body').source, '')).toBe(base);
