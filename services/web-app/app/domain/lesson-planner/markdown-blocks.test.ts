@@ -235,3 +235,12 @@ describe('a quoted speech is verse too (round 3: Hamlet’s handout quoted the s
     expect(blocks.some((block) => block.kind === 'verse')).toBe(false);
   });
 });
+
+describe('a poem in stanzas is counted through (round 4, Nov 22)', () => {
+  test('the second stanza goes on from the first', () => {
+    const stanza = (from: number) => [0, 1, 2, 3].map((i) => `A verse of the poem, number ${from + i},`).join("\n");
+    const blocks = markdownBlocks(`${stanza(1)}\n\n${stanza(5)}`);
+    const verses = blocks.filter((block) => block.kind === 'verse');
+    expect(verses.map((verse) => (verse.kind === 'verse' ? verse.start : 0))).toEqual([1, 5]);
+  });
+});

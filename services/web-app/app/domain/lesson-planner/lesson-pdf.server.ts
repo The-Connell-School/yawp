@@ -172,6 +172,8 @@ function ensureRoom(doc: Doc, needed: number): void {
  * handout arrives with no room to answer in.
  */
 const MIN_WRITABLE_ROW = 26;
+/** The height of one ruled line to write on. */
+const WRITING_LINE_GAP = 22;
 
 /**
  * Where a table row's bottom edge goes: below its text, or far enough down to
@@ -208,6 +210,17 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
     }
 
     case 'paragraph':
+      // A line left blank ("&nbsp;", the planner's way of saying "room to
+      // write here") is a line to write on, not a sliver of nothing (round 4,
+      // Nov 22: handout after handout printed its questions with no room).
+      if (!block.runs.map((run) => run.text).join('').trim()) {
+        ensureRoom(doc, WRITING_LINE_GAP + 4);
+        const y = doc.y + WRITING_LINE_GAP;
+        doc.save().lineWidth(0.6).strokeColor('#BDBDBD').moveTo(left, y).lineTo(left + contentWidth, y).stroke().restore();
+        doc.x = left;
+        doc.y = y + 2;
+        break;
+      }
       doc.moveDown(0.35);
       writeRuns(doc, block.runs, { size: BODY_SIZE });
       break;

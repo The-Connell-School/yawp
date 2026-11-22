@@ -55,6 +55,7 @@ import {
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
+import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
@@ -62,7 +63,7 @@ import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.ser
 import { preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
-import { fetchWorkText, sourceTextFailure, workForText } from '~/domain/lesson-planner/source-texts.server';
+import { fetchWorkText, sourceTextFailure, warmSourceTexts, workForText } from '~/domain/lesson-planner/source-texts.server';
 import { aboutSettledQuotation, checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
 import { withExcerptsFromSource } from '~/domain/lesson-planner/excerpt-source';
 import { LESSON_REPAIR_SCHEMA, withLessonRepair, type Problem } from '~/domain/lesson-planner/lesson-repair.server';
@@ -805,7 +806,20 @@ async function turnAction({ request }: ActionFunctionArgs) {
       // A teacher names the work once ("Hamlet's 'To be, or not to be'");
       // a reply is read with more care (re-test, Nov 22: Hamlet and Romeo
       // and Juliet went unchecked).
-      const workAsked = workForText(turn.message, { mentions: 1 });
+      const workAsked =
+        workForText(turn.message, { mentions: 1 }) ??
+        // A follow-up ("For English 11, 50 minutes") names no work: the
+        // teacher's earlier messages in the lesson do (round 4, Nov 22: the
+        // Gatsby lesson, built after its class question, went unchecked).
+        workForText(
+          (activeConversation?.messages ?? [])
+            .filter((message) => message.role === 'user')
+            .map((message) => message.content)
+            .join('\n'),
+          { mentions: 1 }
+        );
+      // Every registered text, fetched quietly while lessons are written.
+      void warmSourceTexts().catch(() => null);
       if (workAsked) void fetchWorkText(workAsked).catch(() => null);
       const ask = () => getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
@@ -1059,6 +1073,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
           console.error('[lesson-planner] pictures failed:', error instanceof Error ? error.name : 'error');
         }
       }
+      // What the reply says is what was made: no weighing of paintings
+      // against the teacher's other lessons, no painting the deck does not have.
+      reply = withoutArtTalk(reply);
 
       // A link the catalog never handed back goes nowhere, and a teacher finds that
       // out in front of a class. Strip the href and keep the words. Done before the

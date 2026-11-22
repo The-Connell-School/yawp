@@ -311,7 +311,11 @@ const CITED_LINES = /\blines?\s+(\d{1,4})\s*(?:[–—-]\s*(\d{1,4}))?/i;
  * 56–88"), when they agree with its length within two; otherwise from 1.
  */
 function withVerseBlocks(blocks: Block[]): Block[] {
-  return blocks.map((block, index) => {
+  const out: Block[] = [];
+  blocks.forEach((block, index) => out.push(asVerse(block, index, out[out.length - 1])));
+  return out;
+
+  function asVerse(block: Block, index: number, before: Block | undefined): Block {
     if (block.kind !== 'paragraph' && block.kind !== 'quote') return block;
     const lines: TextRun[][] = [[]];
     for (const run of block.runs) {
@@ -337,8 +341,19 @@ function withVerseBlocks(blocks: Block[]): Block[] {
         break;
       }
     }
+    // The next stanza of the same poem goes on counting (round 4, Nov 22:
+    // Dulce's handout began again at 1 in each stanza, and the tasks said
+    // "lines 9–16").
+    if (start === 1 && before?.kind === 'verse' && !citedNear(blocks, index)) start = before.start + before.lines.length;
     return { kind: 'verse', lines, start, ...(block.kind === 'quote' ? { quoted: true } : {}) };
-  });
+  }
+}
+
+/** Whether a block beside this one cites lines of its own. */
+function citedNear(blocks: Block[], index: number): boolean {
+  return [blocks[index + 1], blocks[index - 1]].some(
+    (near) => near && near.kind !== 'verse' && near.kind !== 'rule' && near.kind !== 'tableRow' && CITED_LINES.test(near.runs.map((run) => run.text).join(''))
+  );
 }
 
 const NOT_VERSE_LINE = /^\s*(?:[-*+]\s|\d+[.)]\s|#|>|\||```|~~~|---|___|\*\*\*\s*$)/;

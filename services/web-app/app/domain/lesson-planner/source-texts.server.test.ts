@@ -12,6 +12,8 @@ import {
   fetchWorkText,
   gutenbergTextUrl,
   sourceTextFailure,
+  warmSourceTexts,
+  resetWarming,
   registeredWork,
   stripGutenberg,
   workForText,
@@ -190,5 +192,30 @@ describe('the work a teacher names once (re-test, Nov 22)', () => {
   });
   test('a request about a work that is not registered names none', () => {
     expect(workForText('Build day 1 of a unit on Things Fall Apart for 10th grade: who Chinua Achebe was writing back to.', { mentions: 1 })).toBeNull();
+  });
+});
+
+describe('warmSourceTexts (round 4, Nov 22)', () => {
+  test('every registered work is fetched once, one at a time, and kept', async () => {
+    clearSourceTextCache();
+    resetWarming();
+    let open = 0;
+    let most = 0;
+    const asked: string[] = [];
+    const fetch = async (url: string) => {
+      open += 1;
+      most = Math.max(most, open);
+      asked.push(url);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      open -= 1;
+      return new Response('', { status: 404 });
+    };
+    await warmSourceTexts({ fetch, gapMs: 0 });
+    expect(most).toBe(1);
+    expect(asked.length).toBeGreaterThanOrEqual(SOURCE_TEXT_WORKS.length);
+    // Once per server.
+    await warmSourceTexts({ fetch, gapMs: 0 });
+    expect(asked.length).toBeLessThan(SOURCE_TEXT_WORKS.length * 5);
+    resetWarming();
   });
 });

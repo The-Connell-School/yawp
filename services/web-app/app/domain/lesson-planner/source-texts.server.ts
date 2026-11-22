@@ -128,7 +128,10 @@ export function isTextOfWork(text: string, work: RegisteredWork): boolean {
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 const DEFAULT_TIMEOUT_MS = 6_000;
-const CACHE_SIZE = 8;
+// Every registered work, once had, for as long as the server runs (round 4,
+// Nov 22: Gutenberg answered 503 to a lesson's own fetch; a text fetched
+// earlier, quietly, is there when the lesson needs it).
+const CACHE_SIZE = 64;
 const MIN_LENGTH = 1_000;
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -204,4 +207,35 @@ export async function fetchWorkText(
     cache.delete(oldest);
   }
   return pending;
+}
+
+let warming: Promise<void> | null = null;
+const WARM_GAP_MS = 4_000;
+
+/**
+ * Fetch every registered work in the background, one at a time with a pause
+ * between, so the texts are in hand before lessons ask for them. Once per
+ * server; a work that cannot be had is asked for again when a lesson needs it.
+ */
+export function warmSourceTexts({
+  fetch: fetcher,
+  gapMs = WARM_GAP_MS,
+}: { fetch?: Fetch; gapMs?: number } = {}): Promise<void> {
+  if (warming) return warming;
+  warming = (async () => {
+    for (const work of SOURCE_TEXT_WORKS) {
+      try {
+        await fetchWorkText(work, fetcher ? { fetch: fetcher } : {});
+      } catch {
+        // The next work.
+      }
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+    }
+  })();
+  return warming;
+}
+
+/** Forget that the texts were warmed (tests). */
+export function resetWarming() {
+  warming = null;
 }
