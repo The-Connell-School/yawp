@@ -11,7 +11,59 @@ This plan replaces phase 2 of `2026-11-21-slides-that-teach-build-plan.md`.
 Paths are relative to `services/web-app/app/` unless they start with a
 top-level folder.
 
-## 1. Where we are
+## Status, Nov 22 (evening)
+
+Kevin: "ok I like your plan … build that." Built on
+`claude/context-tools-timeline-map` (PR #997), behind
+`lesson_planner_found_pictures`, each part test first.
+
+Built:
+
+- **D1, in part.** A facts slide (`notes`), a big idea and each timeline
+  event can hold a picture, and the kit draws it beside the words (Present,
+  the studio, PowerPoint and the PDF, through the existing picture element).
+  A people slide and a picture slide already could.
+- **D2.** Slides, events and people say what they want
+  (`"wants": { "subject", "shows" }`). The planner is told to ask on every
+  teaching slide. The `find_pictures` tool is no longer offered.
+- **D3, rung 3 (and a first cache, rung 2).** `resolveDeckPictures` asks
+  Wikipedia for each subject's lead picture (free licenses only) and the
+  files' credits: two requests for a whole deck, then the downloads together.
+  A picture kept for a subject is copied for the next lesson that wants it.
+- **"No picture is better than a wrong one"**, without a vision model yet:
+  maps, logos, files too small to project and subjects with no free picture
+  are left empty, and a town's lead picture is kept only when its file is
+  named for the town. A picture slide whose picture is not found becomes its
+  question.
+- **D5, in part.** Pictures are found after the planner's reply, inside a
+  nine-second limit, and a failure leaves the deck as written. (Not yet in
+  the background with the deck already open.)
+- **Counting, in part.** One log line per deck: wanted, filled, reused,
+  empty by reason. No page for it yet.
+
+Measured live, Nov 22, on eleven subjects from the 1950s deck: 0.98 seconds;
+five filled (Sputnik, the Korean War, Ginsberg, Disneyland, and a wrong one
+for Levittown, since fixed by the town rule); six empty (two with no free
+picture, two too small, and the *Howl* first edition twice, unavailable).
+An earlier lookup of twenty subjects returned nineteen lead pictures in 0.36
+seconds.
+
+Found along the way:
+
+- **Wikimedia limits anonymous servers hard.** From the build machine, API
+  requests were refused (HTTP 429) for minutes at a time between successes.
+  The code sends a contact address and, when `WIKIMEDIA_ACCESS_TOKEN` is set,
+  a token. A free token is needed before this can be relied on; whether the
+  preview host is limited the same way is not known yet.
+- **The 20th century is thin**, as expected: no free lead picture for Brown
+  v. Board, Kerouac or Corso.
+
+Not built yet: pictures on `define`, `statement` and `excerpt` slides; the
+vision check (D4); other sources (the Library of Congress first); the
+background fill; the studio's alternates and "not this one"; S3; packs; the
+counting page; the R13 lint.
+
+## 1. Where we are (as of the morning of Nov 22)
 
 Short answer: the plumbing exists, and the part that makes the right picture
 show up on a slide does not.
