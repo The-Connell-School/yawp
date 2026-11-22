@@ -873,7 +873,7 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
       ? [
           `Paintings this teacher has used lately: ${recentArt
             .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
-            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.`,
         ]
       : []),
   ];
@@ -966,7 +966,7 @@ export function buildDeckKitV4Section(
       ? [
           `Paintings this teacher has used lately: ${recentArt
             .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
-            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.`,
         ]
       : []),
   ];
