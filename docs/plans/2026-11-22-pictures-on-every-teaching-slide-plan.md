@@ -11,6 +11,58 @@ This plan replaces phase 2 of `2026-11-21-slides-that-teach-build-plan.md`.
 Paths are relative to `services/web-app/app/` unless they start with a
 top-level folder.
 
+## Status, Nov 22 (night): live runs on the preview
+
+Five context days planned with the live planner on the PR #997 preview
+(*Howl* and *The Grapes of Wrath*, each run more than once), then stepped
+through in Present.
+
+What the runs showed, and what changed:
+
+1. **The planner asks for too few pictures.** First *Howl* run: two
+   requests in thirteen slides, and the one that was filled (Ginsberg) was
+   set on the person slide itself, which draws only its people. Yawp! now
+   asks on the planner's behalf: each person on a person slide is their own
+   name, and each timeline event is whatever Wikipedia's search makes of its
+   title and date ("The Rosenbergs executed 1953" → Julius and Ethel
+   Rosenberg). These are asked, never written into the deck. A picture asked
+   for on a person slide goes to the person it names.
+2. **The gallery painting is gone on a context day.** The planner still
+   chose Winslow Homer's *Breezing Up* for a 1950s deck, and its strip filled
+   every big-idea slide. A deck with a timeline, map, define or person slide
+   now drops it.
+3. **Wrong pictures found, and ruled out:** a search for "First dust storms
+   1932" found *Red Dust*, a 1932 film (a searched event now takes a work only
+   when it names it); Tom Joad, Ma Joad and Jim Casy led to the novel's cover
+   and Rose of Sharon to a hibiscus (a person Yawp! asks about now takes a
+   picture only from their own article, never a character or a redirect,
+   and no file is used twice).
+4. **Pictures that were found but not drawn:** a look slide ("What do you
+   see?") asked about a Lange photograph it did not show, and a discuss slide
+   held a Dust Bowl picture it had no place for. Both draw their picture now.
+5. **Not pictures, found on the way:** a credit carried Commons' hidden
+   Wikidata line ("label QS:…"); California was pinned at California,
+   Maryland, and Oklahoma, Texas and Kansas were not found (a state's own
+   name is now the state); a deck was lost twice because its agenda and exit
+   had no title (they now take "Today" and "Before you go").
+
+Second *Howl* run (after fixes 1–2): 14 slides; pictures on the timeline (4
+of 5 events: the German surrender, McCarthy, the Rosenbergs, the *Howl* first
+edition), the notes slide and the person slide (Ginsberg). Five big-idea
+statements still have none: the planner asked on two of them, and neither
+subject ("Levittown, New York", "Postwar America") has a usable lead picture.
+
+Still open, by size of the gap on these runs:
+
+- **Statement slides stay bare** unless the planner names a subject that has
+  a picture. The next step is the R13 lint (a teaching slide with no request
+  gets one repair) or a small model call that names subjects for the slides
+  left without one, plus a second source (the Library of Congress has
+  Levittown and the FSA photographs).
+- **Timeline pictures are small**: a portrait fits a 340 × 236 corner box.
+- **Close pins crowd** (Kansas, Oklahoma and Texas on a map of the country).
+- The Wikimedia token, still not registered.
+
 ## Status, Nov 22 (evening)
 
 Kevin: "ok I like your plan … build that." Built on
