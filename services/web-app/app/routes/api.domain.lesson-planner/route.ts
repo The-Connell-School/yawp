@@ -64,6 +64,7 @@ import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
 import { fetchWorkText, sourceTextFailure, workForText } from '~/domain/lesson-planner/source-texts.server';
 import { aboutSettledQuotation, checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
+import { LESSON_REPAIR_SCHEMA, withLessonRepair, type Problem } from '~/domain/lesson-planner/lesson-repair.server';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -937,22 +938,48 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // names no registered work is about one that is not registered (Things
         // Fall Apart is not Heart of Darkness, though its lesson names both).
         const followUp = turn.message.trim().split(/\s+/).length < 15;
-        const quoted = await withQuotationCheck(reply, { work: workAsked ?? (followUp ? workForText(reply) : null) });
+        const checkedWork = workAsked ?? (followUp ? workForText(reply) : null);
+        const quoted = await withQuotationCheck(reply, { work: checkedWork });
         reply = quoted.reply;
-        const askFacts = factCheckCall(() => ({
+        const attribution = () => ({
           organizationId: ctx.organizationId,
           membershipId: ctx.membershipId,
           route: 'routes/api.domain.lesson-planner',
           requestId: crypto.randomUUID(),
           ipHash: computeIpHash(request),
-        }));
+        });
+        const askFacts = factCheckCall(attribution);
         const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: quoted.verified }) : { reply, applied: [], flagged: [] };
-        reply = withCheckNote(facts.reply, [
-          ...quoted.misplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
-          ...facts.flagged.filter((error) => !aboutSettledQuotation(error, [...quoted.verified, ...quoted.misplaced.map((miss) => miss.quote)])).map((error) => {
-            const words = checkNoteWords(error.wrong);
-            return `“${words.slice(0, 80)}${words.length > 80 ? '…' : ''}”: ${error.why}`;
-          }),
+        reply = facts.reply;
+        // Fix it, don't flag it (plan item 1, Nov 22): what the checks found
+        // and could not swap word for word goes to a repair pass, which fixes
+        // every place the lesson relies on it. Only what it cannot fix is
+        // left for the teacher.
+        const problems: Array<Problem & { note: string }> = [
+          ...quoted.misplaced.map((miss) => ({
+            what: `The lesson places the quotation "${miss.quote.slice(0, 160)}" in ${miss.claimed}; it is in ${miss.actual}.`,
+            words: miss.quote.slice(0, 200),
+            note: `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`,
+          })),
+          ...facts.flagged
+            .filter((error) => !aboutSettledQuotation(error, [...quoted.verified, ...quoted.misplaced.map((miss) => miss.quote)]))
+            .map((error) => {
+              const words = checkNoteWords(error.wrong);
+              return { what: error.why, words: error.wrong, right: error.right, note: `“${words.slice(0, 80)}${words.length > 80 ? '…' : ''}”: ${error.why}` };
+            }),
+        ];
+        const askRepair = problems.length ? factCheckCall(attribution, { schema: LESSON_REPAIR_SCHEMA, feature: 'lesson-planner-repair', timeoutMs: 35_000, maxTokens: 6_000 }) : undefined;
+        const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: quoted.verified }) : { reply, repaired: [], left: problems };
+        let requoted: Awaited<ReturnType<typeof withQuotationCheck>> | null = null;
+        if (repair.repaired.length) {
+          // A repair may quote: it is checked against the work like the rest.
+          requoted = await withQuotationCheck(repair.reply, { work: checkedWork });
+          reply = requoted.reply;
+        }
+        const stillMisplaced = (requoted?.misplaced ?? []).filter((miss) => !quoted.misplaced.some((was) => was.quote === miss.quote));
+        reply = withCheckNote(reply, [
+          ...(repair.left as Array<Problem & { note?: string }>).map((problem) => problem.note ?? problem.what),
+          ...stillMisplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
         ]);
         // Counts only, never the lesson: in the log, and to the client, which
         // shows nothing of it (it lets a test see the checks ran).
@@ -965,6 +992,8 @@ async function turnAction({ request }: ActionFunctionArgs) {
           quotationsMisplaced: quoted.misplaced.length,
           factsCorrected: facts.applied.length,
           factsFlagged: facts.flagged.length,
+          repaired: repair.repaired.length,
+          leftForTeacher: repair.left.length + stillMisplaced.length,
           ms: Date.now() - checkedAt,
         };
         // eslint-disable-next-line no-console

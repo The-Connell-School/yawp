@@ -134,9 +134,9 @@ function placesOf(text: string, words: string): number[] {
   return places;
 }
 
-type Fence = { start: number; end: number; lang: string; headerEnd: number };
+export type Fence = { start: number; end: number; lang: string; headerEnd: number };
 
-function fencesOf(reply: string): Fence[] {
+export function fencesOf(reply: string): Fence[] {
   const fences: Fence[] = [];
   const open = /^```([\w-]*)[^\n]*$/gm;
   let match: RegExpExecArray | null;
@@ -262,12 +262,13 @@ const MAX_PLACES = 3;
  * (the plan's prose and the deck's JSON often both say it: re-test, Nov 22,
  * a fact flagged and left on the slide); or null when any place is unsafe.
  */
-function placeEdits(
+export function placeEdits(
   reply: string,
-  { wrong, right }: FactError,
-  fences: Fence[]
+  { wrong, right }: Pick<FactError, 'wrong' | 'right'>,
+  fences: Fence[],
+  { maxWrong = MAX_WRONG, maxRight = MAX_RIGHT }: { maxWrong?: number; maxRight?: number } = {}
 ): Array<{ start: number; end: number; text: string }> | null {
-  if (wrong.length >= MAX_WRONG || right.length > MAX_RIGHT || !right.trim())
+  if (wrong.length >= maxWrong || right.length > maxRight || !right.trim())
     return null;
   if (/```/.test(right) || /```/.test(wrong)) return null;
   // As written, and as a JSON string writes it (a quotation mark inside a slide is \").

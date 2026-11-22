@@ -26,6 +26,17 @@ describe('factCheckCall', () => {
     });
   });
 
+  test('the lesson repair is the same call, held to its own answer and logged as its own feature', async () => {
+    const complete = mock(async () => '{"edits": []}');
+    const schema = { type: 'object', properties: { edits: { type: 'array' } } };
+    await factCheckCall(attribution, { model: 'claude-sonnet-5-5', complete: complete as never, schema, feature: 'lesson-planner-repair', maxTokens: 6_000 })!('system', 'the lesson');
+    expect((complete.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({
+      maxTokens: 6_000,
+      outputConfig: { format: { type: 'json_schema', schema } },
+      metadata: { feature: 'lesson-planner-repair' },
+    });
+  });
+
   test('a model the account cannot use: the planner’s own checks instead', async () => {
     const models: string[] = [];
     const complete = mock(async (request: { model: string }) => {

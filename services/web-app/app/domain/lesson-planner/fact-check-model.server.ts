@@ -33,28 +33,41 @@ export function factCheckCall(
     fallbackModel = (process.env.AI_MODEL as string | undefined) ||
       DEFAULT_ANTHROPIC_MODEL,
     complete = getLLMCompletion,
-  }: { model?: string; fallbackModel?: string; complete?: Complete } = {}
+    // The same call serves the lesson repair (Nov 22, plan item 1), with its own answer.
+    schema = FACT_CHECK_SCHEMA as Record<string, unknown>,
+    feature = 'lesson-planner-fact-check',
+    timeoutMs = FACT_CHECK_MS,
+    maxTokens = 4_000,
+  }: {
+    model?: string;
+    fallbackModel?: string;
+    complete?: Complete;
+    schema?: Record<string, unknown>;
+    feature?: string;
+    timeoutMs?: number;
+    maxTokens?: number;
+  } = {}
 ): AskFactChecker | undefined {
   if (model === 'off') return undefined;
   return async (system, prompt) => {
-    const signal = AbortSignal.timeout(FACT_CHECK_MS);
+    const signal = AbortSignal.timeout(timeoutMs);
     const request = (which: string, outputConfig?: Record<string, unknown>) =>
       complete({
         model: which,
         system,
         messages: [{ role: AgentType.User, content: prompt }],
-        maxTokens: 4_000,
+        maxTokens,
         attribution: attribution(),
         allowFallbackProvider: false,
         signal,
         logPayload: 'metadata-only',
-        metadata: { feature: 'lesson-planner-fact-check' },
+        metadata: { feature },
         ...(outputConfig ? { outputConfig } : {}),
       });
     try {
       return await request(model, {
         effort: 'low',
-        format: { type: 'json_schema', schema: FACT_CHECK_SCHEMA },
+        format: { type: 'json_schema', schema },
       });
     } catch (error) {
       if (signal.aborted) throw error;
