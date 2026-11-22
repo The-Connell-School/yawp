@@ -161,3 +161,28 @@ describe('the names an English class uses (demo pass, Nov 20–21)', () => {
     expect(findPlace('Arkhangel’sk', 'Russia')?.found).toBe('Arkhangel’sk, Russia');
   });
 });
+
+describe('a state by its own name (preview, Nov 22: The Grapes of Wrath)', () => {
+  test('Oklahoma, Texas, Kansas and California are the states, not a town that shares the name', () => {
+    for (const [name, lat, lon] of [['Oklahoma', 35.6, -97.5], ['Texas', 31.5, -99.3], ['Kansas', 38.5, -98.4], ['California', 37.2, -119.5]] as const) {
+      const found = findPlace(name, 'United States');
+      expect(found?.found).toBe(`${name} (the state)`);
+      expect(found?.lat).toBeCloseTo(lat, 1);
+      expect(found?.lon).toBeCloseTo(lon, 1);
+    }
+    expect(findPlace('California')?.found).toBe('California (the state)');
+  });
+
+  test('a city of the name is still the city, and a town in a named state is still the town', () => {
+    expect(findPlace('New York', 'United States')?.found).toContain('New York');
+    expect(findPlace('New York', 'United States')?.found).not.toContain('(the state)');
+    expect(findPlace('Washington', 'United States')?.found).toBe('Washington, D.C., District Of Columbia, United States of America');
+    expect(findPlace('Washington State')?.found).toBe('Washington (the state)');
+    expect(findPlace('Washington', 'Utah')?.found).toContain('Utah');
+    expect(findPlace('California', 'Maryland')?.found ?? '').not.toContain('(the state)');
+  });
+
+  test('every state has a middle', () => {
+    for (const name of ['Alaska', 'Hawaii', 'Rhode Island', 'West Virginia', 'Wyoming', 'Maine']) expect(findPlace(name)?.found).toBe(`${name} (the state)`);
+  });
+});

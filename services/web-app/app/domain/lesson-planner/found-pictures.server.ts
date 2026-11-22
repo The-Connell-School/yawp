@@ -111,7 +111,10 @@ export function openLicense(short: string | null | undefined): string | null {
 
 const plain = (html: unknown, max: number) => {
   const text = String(html ?? '')
+    // Commons' hidden Wikidata line ("label QS:Len,\"Migrant Mother\"", preview, Nov 22) is not for people.
+    .replace(/<(\w+)[^>]*display:\s*none[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/<[^>]+>/g, '')
+    .replace(/\s*label QS:[\s\S]*$/i, '')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#039;|&apos;/g, '’')

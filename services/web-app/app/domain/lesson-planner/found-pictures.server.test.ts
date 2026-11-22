@@ -5,7 +5,7 @@
  * copy with the lesson. The model never writes a picture address.
  */
 import { describe, expect, test } from 'bun:test';
-import { findPicturesForLesson, openLicense, searchOpenPictures, type PictureStore } from './found-pictures.server';
+import { candidateFromFile, findPicturesForLesson, openLicense, searchOpenPictures, type PictureStore } from './found-pictures.server';
 
 // A 2×1 PNG: a real raster the sniffer accepts.
 const PNG = Uint8Array.from(
@@ -114,6 +114,32 @@ describe('searchOpenPictures', () => {
     const found = await searchOpenPictures('x', { fetch: fetcher });
     expect(found[0]!.credit).toBe('wellcomeimages.org, Aldini plate, CC BY 4.0, via Wikimedia Commons');
     expect(found[1]!.credit).toBe('Prohibition disposal, Public domain, via Wikimedia Commons');
+  });
+
+  test('Commons’ hidden Wikidata line is never part of a credit (preview, Nov 22: Migrant Mother)', () => {
+    const found = candidateFromFile({
+      title: 'File:Lange-MigrantMother02.jpg',
+      imageinfo: [
+        {
+          mime: 'image/jpeg',
+          thumburl: 'https://upload.wikimedia.org/thumb/Lange-MigrantMother02.jpg/1280px-Lange-MigrantMother02.jpg',
+          thumbwidth: 1280,
+          thumbheight: 1600,
+          descriptionurl: 'https://commons.wikimedia.org/wiki/File:Lange-MigrantMother02.jpg',
+          extmetadata: {
+            LicenseShortName: { value: 'Public domain' },
+            Artist: { value: '<a href="https://en.wikipedia.org/wiki/Dorothea_Lange">Dorothea Lange</a>' },
+            ObjectName: { value: 'Migrant mother, Nipomo, California<div style="display: none;">label QS:Len,"Migrant Mother"</div>' },
+          },
+        },
+      ],
+    } as never);
+    expect(found!.credit).toBe('Dorothea Lange, Migrant mother, Nipomo, California, Public domain, via Wikimedia Commons');
+    const bare = candidateFromFile({
+      title: 'File:x.jpg',
+      imageinfo: [{ mime: 'image/jpeg', thumburl: 'https://u/x.jpg', thumbwidth: 1280, thumbheight: 900, extmetadata: { LicenseShortName: { value: 'Public domain' }, ObjectName: { value: 'Migrant mother label QS:Len,"Migrant Mother"label QS:Les,"x"' } } }],
+    } as never);
+    expect(bare!.credit).toBe('Migrant mother, Public domain, via Wikimedia Commons');
   });
 
   test('a picture too small to project is left out', async () => {

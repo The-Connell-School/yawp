@@ -59,6 +59,10 @@ const A_PLACE =
  * Pennsylvania, a colonial house: live run, Nov 22). It is kept only when the
  * file is named for the town, as a skyline or a street of it is.
  */
+/** An article about a made thing (Wikipedia's short description: "1932 film by Victor Fleming"). */
+const A_WORK =
+  /\b(film|movie|album|song|single|novel|novella|book|poem|play|musical|opera|band|television|TV series|sitcom|video game|episode|painting|sculpture)\b/i;
+
 function namedFor(file: string, article: string): boolean {
   const name = pictureKey(article.split(/[,(]/)[0] ?? article);
   return name.length > 2 && pictureKey(file).includes(name);
@@ -203,7 +207,7 @@ async function lookUp(
   };
   const leads = new Map<
     string,
-    { file: string; width: number; fits: boolean }
+    { file: string; width: number; fits: boolean; title: string; work: boolean }
   >();
   for (const page of Object.values(pages.query.pages) as Array<{
     title?: string;
@@ -219,6 +223,8 @@ async function lookUp(
       file: page.pageimage,
       width: page.thumbnail?.width ?? 0,
       fits,
+      title: page.title,
+      work: A_WORK.test(page.description ?? ''),
     });
   }
   const fileFor = new Map<string, string>();
@@ -232,6 +238,16 @@ async function lookUp(
       !lead.fits
     )
       why.set(key, 'not a picture');
+    // A search can land on a film of the same words ("First dust storms 1932"
+    // found Red Dust, a 1932 film): a work is kept only when the event names it.
+    else if (
+      want.find &&
+      lead.work &&
+      !pictureKey(want.subject).includes(
+        pictureKey(lead.title.replace(/\s*\([^)]*\)\s*$/, ''))
+      )
+    )
+      why.set(key, 'none');
     else fileFor.set(key, lead.file);
   }
   if (!fileFor.size) return { found, why };

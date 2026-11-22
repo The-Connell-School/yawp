@@ -408,3 +408,49 @@ describe('what the planner forgot to ask for (live preview, Nov 22: two requests
     });
   });
 });
+
+describe('a picture on the slides students look at and talk about (preview, Nov 22: Grapes of Wrath)', () => {
+  test('a look slide studies its own picture, large', () => {
+    const look = {
+      layout: 'look',
+      title: 'Nipomo, California, 1936',
+      question: 'What do you see? What do you think is happening?',
+      seconds: 90,
+      image: 'cklange00001',
+      speakerNotes: 'n',
+    } as Slide;
+    const layout = layoutKitV4Slide(deckOf([look]), 1);
+    const picture = layout.elements.find(
+      (element) => element.kind === 'picture'
+    )!;
+    expect((picture as { id: string }).id).toBe('cklange00001');
+    expect(picture.w).toBeGreaterThanOrEqual(900);
+    expect(texts(layout.elements)).toContain(
+      'What do you see? What do you think is happening?'
+    );
+  });
+
+  test('a discuss slide shows its picture on the panel, the question beside it, nothing off the slide', () => {
+    const talk = {
+      layout: 'discuss',
+      title: 'What do you already know?',
+      question: 'What do you know about the Dust Bowl?',
+      grouping: 'Whole class',
+      minutes: 5,
+      image: 'ckdust000001',
+      speakerNotes: 'n',
+    } as Slide;
+    const layout = layoutKitV4Slide(deckOf([talk]), 1);
+    expect(pictures(layout.elements)).toEqual(['ckdust000001']);
+    const words = texts(layout.elements);
+    for (const word of [
+      'What do you already know?',
+      'What do you know about the Dust Bowl?',
+    ])
+      expect(words).toContain(word);
+    for (const element of layout.elements) {
+      expect(element.x + element.w).toBeLessThanOrEqual(1280);
+      expect(element.y + element.h).toBeLessThanOrEqual(720);
+    }
+  });
+});

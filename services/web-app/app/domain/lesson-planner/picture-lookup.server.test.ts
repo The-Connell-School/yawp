@@ -100,6 +100,26 @@ const PAGES = {
           height: 900,
         },
       },
+      '11': {
+        title: 'Red Dust (1932 film)',
+        description: '1932 film by Victor Fleming',
+        pageimage: 'Red-Dust-1932-film-poster.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/RedDust.jpg',
+          width: 1280,
+          height: 1900,
+        },
+      },
+      '12': {
+        title: 'The Grapes of Wrath',
+        description: '1939 novel by John Steinbeck',
+        pageimage: 'The_Grapes_of_Wrath_(1939_1st_ed_cover).jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Grapes.jpg',
+          width: 1280,
+          height: 1900,
+        },
+      },
       '7': {
         title: 'Jack Kerouac',
         pageimage: 'Kerouac_by_Palumbo.png',
@@ -157,6 +177,16 @@ const FILES = {
         'Magicpiano'
       ),
       f: info('Sicilia_Palermo5_tango7174.jpg', 'CC BY-SA 3.0', 'Tango7174'),
+      h: info(
+        'Red-Dust-1932-film-poster.jpg',
+        'Public domain',
+        'Metro-Goldwyn-Mayer'
+      ),
+      i: info(
+        'The_Grapes_of_Wrath_(1939_1st_ed_cover).jpg',
+        'Public domain',
+        'Elmer Hader'
+      ),
       g: info(
         'Julius_and_Ethel_Rosenberg_NYWTS.jpg',
         'Public domain',
@@ -184,9 +214,11 @@ function wikipedia(overrides: { pagesStatus?: number; hang?: RegExp } = {}) {
       const asked = new URL(href).searchParams.get('srsearch') ?? '';
       const title = /Rosenberg/.test(asked)
         ? 'Julius and Ethel Rosenberg'
-        : /Beat/.test(asked)
-          ? 'Beat Generation'
-          : null;
+        : /dust storms/.test(asked)
+          ? 'Red Dust (1932 film)'
+          : /Grapes/.test(asked)
+            ? 'The Grapes of Wrath'
+            : null;
       return new Response(
         JSON.stringify({ query: { search: title ? [{ ns: 0, title }] : [] } }),
         { status: 200 }
@@ -203,9 +235,7 @@ function wikipedia(overrides: { pagesStatus?: number; hang?: RegExp } = {}) {
   return { fetcher, calls };
 }
 
-function shelf(
-  kept: Array<{ key: string; id: string }> = []
-): PictureShelf & {
+function shelf(kept: Array<{ key: string; id: string }> = []): PictureShelf & {
   created: Array<Record<string, unknown>>;
   copied: string[];
 } {
@@ -491,6 +521,32 @@ describe('what the planner did not ask for (live preview, Nov 22)', () => {
       { subject: 'Nothing like it', why: 'none' },
       { subject: 'Jack Kerouac', why: 'not a picture' },
     ]);
+  });
+
+  test('a search that lands on a film of the same words is no picture of the event; a work the event names is (preview, Nov 22)', async () => {
+    const deck = {
+      title: 'The 1930s',
+      slides: [
+        {
+          layout: 'timeline',
+          title: 'T',
+          events: [
+            { date: '1932', title: 'First dust storms' },
+            { date: '1939', title: 'The Grapes of Wrath' },
+          ],
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
+    expect(result.deck.slides[0]!.events![0]!.image).toBeUndefined();
+    expect(result.empty).toEqual([
+      { subject: 'First dust storms', why: 'none' },
+    ]);
+    expect(result.deck.slides[0]!.events![1]!.image).toBeTruthy();
   });
 
   test('search refused: the remaining searches are skipped, and named subjects are still looked up', async () => {

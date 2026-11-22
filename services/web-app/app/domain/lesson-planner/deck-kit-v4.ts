@@ -733,14 +733,29 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
           ? from(sans(grouping, 22, KIT_V4.sand), on('grouping', { trail: grouping.length - slide.grouping.length }))
           : sans(grouping, 22, KIT_V4.sand)
         : null;
-      split(
-        [para([panelLabel], 18), para([from(panelHeadline(slide.title), on('title'))], 18, 1.05), para([groupingRun])],
-        [
-          para(mark(question, (t, c) => head(t, Math.min(promptSize(question), 54), c), on(askFrom)), 30, 1.15),
-          para([slide.stem ? from(serif(slide.stem, 30, color), on('stem')) : null], 20, 1.25),
-          para([slide.followUp ? from(sans(slide.followUp, 22, KIT_V4.body), on('followUp')) : null]),
-        ]
-      );
+      const asked = [
+        para(mark(question, (t, c) => head(t, Math.min(promptSize(question), 54), c), on(askFrom)), 30, 1.15),
+        para([slide.stem ? from(serif(slide.stem, 30, color), on('stem')) : null], 20, 1.25),
+        para([slide.followUp ? from(sans(slide.followUp, 22, KIT_V4.body), on('followUp')) : null]),
+      ];
+      if (slide.image) {
+        // Dual coding (preview, Nov 22: "What do you know about the Dust
+        // Bowl?" beside a dust storm): the picture on the panel under the
+        // slide's name, the question beside it.
+        const left = plan.panel!.side === 'left';
+        const panelX = left ? 0 : W - PANEL_WIDTH;
+        elements.push({ kind: 'rect', role: 'panel', fill: plan.panel!.color, x: panelX, y: 0, w: PANEL_WIDTH, h: H });
+        elements.push(
+          column({ x: panelX + 60, y: 48, w: PANEL_WIDTH - 120, h: 214 }, [para([panelLabel], 10), para([from(panelHeadline(slide.title), on('title'))], 10, 1.05), para([groupingRun])], 'top')
+        );
+        elements.push({ kind: 'picture', id: slide.image, x: panelX + 60, y: 280, w: PANEL_WIDTH - 120, h: 380 });
+        const creamX = left ? PANEL_WIDTH + MARGIN : MARGIN;
+        const creamRight = left ? W - MARGIN : W - PANEL_WIDTH - 60;
+        pushRunningHead(creamX, creamRight);
+        elements.push(column({ x: creamX, y: TOP, w: creamRight - creamX, h: COLUMN_H }, asked));
+        return out();
+      }
+      split([para([panelLabel], 18), para([from(panelHeadline(slide.title), on('title'))], 18, 1.05), para([groupingRun])], asked);
       return out();
     }
 
@@ -924,7 +939,10 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
     case 'picture': {
       const isPicture = plan.template === 'picture';
       const question = isPicture ? pictureSlideText(slide) : slide.question ?? slide.body ?? slide.title;
-      const large = isPicture ? Boolean(slide.image) : Boolean(art);
+      // A look slide studies its own picture when it has one (preview, Nov 22:
+      // "What do you see?" asked of a Lange photograph that was not drawn).
+      const own = Boolean(slide.image);
+      const large = own || (!isPicture && Boolean(art));
       const seconds = slide.seconds ? `${slide.seconds} seconds` : null;
       const routine = slide.routine ? withoutDots(slide.routine) : null;
       if (large) {
@@ -932,9 +950,9 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
         // It hangs from the slide's top left corner, as in the kit.
         const box = v41 ? { x: 0, y: 0, w: 1000, h: 668 } : { x: 40, y: 40, w: 900, h: 600 };
         const creditBox = v41 ? { x: 24, y: 678, w: 976, h: 30 } : { x: 40, y: 652, w: 900, h: 30 };
-        if (isPicture) elements.push({ kind: 'picture', id: slide.image!, ...box });
+        if (own) elements.push({ kind: 'picture', id: slide.image!, ...box });
         else elements.push({ kind: 'art', src: art!.src, fit: 'contain', alt: `${art!.title}, ${art!.artist}`, ...box });
-        if (!isPicture) elements.push(credit(art!, creditBox));
+        if (!own) elements.push(credit(art!, creditBox));
         else if (slide.attribution) elements.push({ kind: 'text', role: 'credit', valign: 'top', ...creditBox, paras: [para([from(sans(slide.attribution, 15, KIT_V4.grey), on('attribution'))])] });
       }
       const x = large ? (v41 ? 1032 : 976) : MARGIN;
