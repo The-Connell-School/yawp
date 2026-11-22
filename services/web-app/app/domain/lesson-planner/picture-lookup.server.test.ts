@@ -311,18 +311,31 @@ function shelf(
 ): PictureShelf & {
   created: Array<Record<string, unknown>>;
   copied: string[];
+  changes: Array<{ altText?: string } | undefined>;
+  forgotten: string[];
 } {
   const created: Array<Record<string, unknown>> = [];
   const copied: string[] = [];
+  const changes: Array<{ altText?: string } | undefined> = [];
+  const forgotten: string[] = [];
   return {
     created,
     copied,
+    changes,
+    forgotten,
     async findKept(keys) {
-      return kept.filter((row) => keys.includes(row.key));
+      // Every kept picture has its bytes, as the database row does.
+      return kept
+        .filter((row) => keys.includes(row.key))
+        .map((row) => ({ ...row, blob: PNG, contentType: 'image/png' }));
     },
-    async copy(id) {
+    async copy(id, _owner, change) {
       copied.push(id);
+      changes.push(change);
       return { id: `ckcopy${id.slice(-7)}` };
+    },
+    async forget(id) {
+      forgotten.push(id);
     },
     async create(data) {
       created.push(data);
@@ -896,15 +909,69 @@ describe('the second look (Nov 22, night)', () => {
     expect(result.look).toBeNull();
   });
 
-  test('a picture kept before is not looked at again', async () => {
+  test('a picture kept before is looked at again; kept only on its word, with the look’s alt text (Grapes rerun, Nov 22)', async () => {
     const { look, seen } = looker();
-    await resolveDeckPictures(DECK, owner, {
-      fetch: wikipedia().fetcher,
-      shelf: shelf([{ key: 'giuseppe garibaldi', id: 'ckkept0000001' }]),
+    const db = shelf([{ key: 'giuseppe garibaldi', id: 'ckkept0000001' }]);
+    const { fetcher, calls } = wikipedia();
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: fetcher,
+      shelf: db,
       look,
     });
-    expect(seen).not.toContain('Giuseppe Garibaldi');
-    expect(seen.length).toBe(3);
+    // Seen once, from the shelf: not looked up on Wikipedia again.
+    expect(
+      seen.filter((subject) => subject === 'Giuseppe Garibaldi').length
+    ).toBe(1);
+    expect(
+      decodeURIComponent(
+        calls.find((url) => url.includes('prop=pageimages'))!
+      ).replace(/\+/g, ' ')
+    ).not.toContain('Giuseppe Garibaldi');
+    expect(db.copied).toEqual(['ckkept0000001']);
+    expect(db.changes).toEqual([
+      { altText: 'A picture of Giuseppe Garibaldi.' },
+    ]);
+    expect(result.deck.slides[0]!.image).toBe('ckcopy0000001');
+    expect(result.counts.reused).toBe(1);
+  });
+
+  test('a kept picture the look turns down is not reused, and leaves the shelf for good', async () => {
+    const { look } = looker(['Tom Joad']);
+    const db = shelf([{ key: 'tom joad', id: 'ckkeptcover01' }]);
+    const deck = {
+      title: 'The Joads',
+      slides: [
+        {
+          layout: 'person',
+          title: 'The Joads',
+          people: [{ name: 'Tom Joad', role: 'The son' }],
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: db,
+      look,
+    });
+    expect(db.copied).toEqual([]);
+    expect(db.forgotten).toEqual(['ckkeptcover01']);
+    expect(result.deck.slides[0]!.people![0]!.image).toBeUndefined();
+    expect(result.empty).toEqual([
+      { subject: 'Tom Joad', why: 'not the thing' },
+    ]);
+  });
+
+  test('a kept picture the look did not answer for is not reused, and stays on the shelf', async () => {
+    const db = shelf([{ key: 'giuseppe garibaldi', id: 'ckkept0000001' }]);
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: db,
+      look: async () => Promise.reject(new Error('timeout')),
+    });
+    expect(db.copied).toEqual([]);
+    expect(db.forgotten).toEqual([]);
+    expect(result.counts.reused).toBe(0);
   });
 });
 

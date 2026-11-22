@@ -81,13 +81,25 @@ type Fetch = typeof fetch;
 /** Where found pictures are kept: this lesson's, and any kept before for the same subject. */
 export type PictureShelf = {
   /** The newest picture kept for each of these subjects, by anyone: they are open pictures. */
-  findKept(
-    keys: string[]
-  ): Promise<
-    Array<{ key: string; id: string; credit?: string; altText?: string }>
+  findKept(keys: string[]): Promise<
+    Array<{
+      key: string;
+      id: string;
+      credit?: string;
+      altText?: string;
+      /** The picture itself, for the second look. */
+      blob?: Uint8Array;
+      contentType?: string;
+    }>
   >;
-  /** That picture again, as this lesson's own. */
-  copy(id: string, owner: Owner): Promise<{ id: string }>;
+  /** That picture again, as this lesson's own (with the look's alt text, when it wrote one). */
+  copy(
+    id: string,
+    owner: Owner,
+    changes?: { altText?: string }
+  ): Promise<{ id: string }>;
+  /** Off the shelf: the second look turned it down, so it is never offered for its subject again. */
+  forget?(id: string): Promise<void>;
   create(
     data: Parameters<PictureStore['create']>[0] & { subject: string }
   ): Promise<{ id: string }>;
@@ -382,17 +394,25 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const work = (async () => {
     const keys = wanted.map((want) => pictureKey(want.subject));
     // Kept before, for anyone: no request at all.
-    // A picture kept before today's rules is held to them again (Night, Nov
-    // 22: a disputed-copyright file and the Auschwitz ramp were on the shelf).
+    // A picture kept before is held to today's fixed rules (Night, Nov 22: a
+    // disputed-copyright file and the Auschwitz ramp were on the shelf) and,
+    // with the second look on, to the look like any new one (the Grapes rerun
+    // reused the novel's cover for three Joads).
     const kept = (await deps.shelf.findKept(keys).catch(() => [])).filter(
       (row) =>
         !FOR_THE_TEACHER.test(
           `${row.key} ${row.altText ?? ''} ${row.credit ?? ''}`
         ) && !/copyright claims?/i.test(row.credit ?? '')
     );
+    const held = new Map<string, (typeof kept)[number]>();
     await Promise.all(
       kept.map(async (row) => {
-        if (ids.has(row.key)) return;
+        if (ids.has(row.key) || held.has(row.key)) return;
+        if (deps.look) {
+          if (row.blob && /^image\/(jpeg|png)$/.test(row.contentType ?? ''))
+            held.set(row.key, row);
+          return;
+        }
         ids.set(row.key, '');
         const copy = await deps.shelf.copy(row.id, owner).catch(() => null);
         if (copy) {
@@ -401,18 +421,33 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         } else ids.delete(row.key);
       })
     );
-    const rest = wanted.filter((want) => !ids.get(pictureKey(want.subject)));
-    if (!rest.length) return;
-    const looked = await lookUp(rest, {
-      fetcher,
-      timeoutMs,
-      retryMs: deps.retryMs ?? 1_200,
-    });
+    const rest = wanted.filter(
+      (want) =>
+        !ids.get(pictureKey(want.subject)) &&
+        !held.has(pictureKey(want.subject))
+    );
+    const looked = rest.length
+      ? await lookUp(rest, {
+          fetcher,
+          timeoutMs,
+          retryMs: deps.retryMs ?? 1_200,
+        })
+      : {
+          found: new Map<string, FoundCandidate>(),
+          why: new Map<string, Miss>(),
+        };
     for (const [key, reason] of looked.why) why.set(key, reason);
     // Every picture downloaded first, so the second look sees them together.
     const downloaded = (
       await Promise.all(
         [...looked.found].map(async ([key, candidate]) => {
+          // Never fetched, never shown to a model.
+          if (
+            FOR_THE_TEACHER.test(`${candidate.title} ${candidate.description}`)
+          ) {
+            why.set(key, 'for the teacher');
+            return null;
+          }
           const bytes = await downloadPicture(
             candidate.imageUrl,
             fetcher,
@@ -427,48 +462,82 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         })
       )
     ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const shelved = [...held.values()];
     let verdicts: {
       verdicts: Map<number, LookVerdict>;
       unchecked: number;
     } | null = null;
-    if (deps.look && downloaded.length) {
+    if (deps.look && (downloaded.length || shelved.length)) {
       const words = pictureWords(deck);
       const asked = new Map(
         wanted.map((want) => [pictureKey(want.subject), want])
       );
+      const about = (key: string) => ({
+        subject: asked.get(key)?.subject ?? key,
+        shows: asked.get(key)?.shows,
+        words: words.get(key),
+      });
       verdicts = await secondLook(
-        downloaded.flatMap((item, i) =>
-          item.contentType === 'image/jpeg' || item.contentType === 'image/png'
-            ? [
-                {
-                  n: i + 1,
-                  subject: asked.get(item.key)?.subject ?? item.key,
-                  shows: asked.get(item.key)?.shows,
-                  words: words.get(item.key),
-                  bytes: item.bytes,
-                  contentType: item.contentType,
-                },
-              ]
-            : []
-        ),
+        [
+          ...downloaded.flatMap((item, i) =>
+            item.contentType === 'image/jpeg' ||
+            item.contentType === 'image/png'
+              ? [
+                  {
+                    n: i + 1,
+                    ...about(item.key),
+                    bytes: item.bytes,
+                    contentType: item.contentType,
+                  },
+                ]
+              : []
+          ),
+          ...shelved.map((row, i) => ({
+            n: downloaded.length + i + 1,
+            ...about(row.key),
+            bytes: row.blob!,
+            contentType: row.contentType as 'image/jpeg' | 'image/png',
+          })),
+        ],
         deps.look
       );
       lookOutcome = {
-        seen: downloaded.length,
+        seen: downloaded.length + shelved.length,
         turnedDown: [...verdicts.verdicts.values()].filter(
           (verdict) => !verdict.keep
         ).length,
         unchecked: verdicts.unchecked,
       };
     }
+    // Kept before, and kept again only on the look's word. One it turns down
+    // leaves the shelf, so the next deck looks its subject up afresh.
     await Promise.all(
-      downloaded.map(async ({ key, candidate, bytes, contentType }, i) => {
-        if (
-          FOR_THE_TEACHER.test(`${candidate.title} ${candidate.description}`)
-        ) {
-          why.set(key, 'for the teacher');
+      shelved.map(async (row, i) => {
+        const verdict = verdicts?.verdicts.get(downloaded.length + i + 1);
+        if (!verdict) {
+          why.set(row.key, 'unchecked');
           return;
         }
+        if (!verdict.keep) {
+          why.set(row.key, 'not the thing');
+          await deps.shelf.forget?.(row.id).catch(() => undefined);
+          return;
+        }
+        const copy = await deps.shelf
+          .copy(
+            row.id,
+            owner,
+            verdict.alt ? { altText: cleanAltText(verdict.alt) } : undefined
+          )
+          .catch(() => null);
+        if (copy) {
+          ids.set(row.key, copy.id);
+          reused += 1;
+        } else why.set(row.key, 'unavailable');
+      })
+    );
+    await Promise.all(
+      downloaded.map(async ({ key, candidate, bytes, contentType }, i) => {
         const verdict = verdicts?.verdicts.get(i + 1);
         // With the second look on, only what it saw and kept is kept.
         if (deps.look && !verdict) {

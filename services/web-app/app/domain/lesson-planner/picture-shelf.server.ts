@@ -14,7 +14,14 @@ export const pictureShelf: PictureShelf = {
       where: { origin: 'found', subject: { in: keys } },
       orderBy: { createdAt: 'desc' },
       distinct: ['subject'],
-      select: { id: true, subject: true, credit: true, altText: true },
+      select: {
+        id: true,
+        subject: true,
+        credit: true,
+        altText: true,
+        blob: true,
+        contentType: true,
+      },
     });
     return rows.flatMap((row) =>
       row.subject
@@ -24,12 +31,14 @@ export const pictureShelf: PictureShelf = {
               id: row.id,
               credit: row.credit ?? '',
               altText: row.altText ?? '',
+              blob: row.blob ? new Uint8Array(row.blob) : undefined,
+              contentType: row.contentType,
             },
           ]
         : []
     );
   },
-  async copy(id, owner) {
+  async copy(id, owner, changes) {
     const row = await prisma.lessonPlanUploadPicture.findFirst({
       where: { id, origin: 'found' },
     });
@@ -45,12 +54,21 @@ export const pictureShelf: PictureShelf = {
     return prisma.lessonPlanUploadPicture.create({
       data: {
         ...picture,
+        // A credit kept before Commons' hidden Wikidata line was dropped (Nov 22).
+        credit: picture.credit?.replace(/\s*label QS:[\s\S]*$/i, '') ?? null,
+        ...(changes?.altText ? { altText: changes.altText } : {}),
         membershipId: owner.membershipId,
         conversationId: owner.conversationId,
         position: 0,
         slideNumbers: [],
       },
       select: { id: true },
+    });
+  },
+  async forget(id) {
+    await prisma.lessonPlanUploadPicture.update({
+      where: { id },
+      data: { subject: null },
     });
   },
   create: (data) =>
