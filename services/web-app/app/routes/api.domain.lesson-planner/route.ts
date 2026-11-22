@@ -62,7 +62,7 @@ import { withQuotationCheck } from '~/domain/lesson-planner/quotation-check.serv
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
 import { fetchWorkText, sourceTextFailure, workForText } from '~/domain/lesson-planner/source-texts.server';
-import { checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
+import { aboutSettledQuotation, checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -862,7 +862,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: quoted.verified }) : { reply, applied: [], flagged: [] };
         reply = withCheckNote(facts.reply, [
           ...quoted.misplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
-          ...facts.flagged.map((error) => {
+          ...facts.flagged.filter((error) => !aboutSettledQuotation(error, [...quoted.verified, ...quoted.misplaced.map((miss) => miss.quote)])).map((error) => {
             const words = checkNoteWords(error.wrong);
             return `“${words.slice(0, 80)}${words.length > 80 ? '…' : ''}”: ${error.why}`;
           }),
@@ -914,7 +914,7 @@ export async function action({ request }: ActionFunctionArgs) {
           const pictured = await withResolvedPictures(
             reply,
             { membershipId: ctx.membershipId, conversationId: activeConversation?.id ?? null },
-            { shelf: pictureShelf, deadlineMs: 16_000, ...pictureModel }
+            { shelf: pictureShelf, deadlineMs: 24_000, ...pictureModel }
           );
           reply = pictured.reply;
           foundPictureIds.push(...pictured.ids);

@@ -46,3 +46,20 @@ export function withCheckNote(reply: string, items: string[]): string {
   }
   return `${reply.trimEnd()}\n\n${note}\n`;
 }
+
+const letters = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Whether a fact the second model flagged is about a quotation the quotation
+ * check already settled against the work's own text (found, corrected, or
+ * found in another chapter). The text is the authority there: on the preview
+ * the model put Gatsby's "one of the few honest people" in chapter 1 right
+ * beside the check's (true) "is in Chapter 3" (re-test, Nov 22).
+ */
+export function aboutSettledQuotation(fact: { wrong: string; why: string }, quotations: string[]): boolean {
+  const said = letters(`${fact.wrong} ${fact.why}`);
+  return quotations
+    .map(letters)
+    .filter((quote) => quote.length >= 16)
+    .some((quote) => said.includes(quote.slice(0, 40)) || quote.includes(letters(fact.wrong).slice(0, 40)));
+}

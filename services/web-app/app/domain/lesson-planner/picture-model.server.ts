@@ -19,7 +19,10 @@ import {
 } from './picture-subjects.server';
 
 export const DEFAULT_PICTURE_MODEL = 'claude-haiku-5-5';
-const EDITOR_MS = 5_000;
+// A literature deck asks about more slides than a context day: 5 s cut the
+// editor off mid-answer on the preview (re-test, Nov 22), and the deck went
+// without pictures.
+const EDITOR_MS = 10_000;
 // Per batch of four pictures, the batches side by side.
 const LOOK_MS = 10_000;
 

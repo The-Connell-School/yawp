@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { checkNoteWords, withCheckNote } from './check-note';
+import { aboutSettledQuotation, checkNoteWords, withCheckNote } from './check-note';
 
 describe('withCheckNote', () => {
   test('goes just before the closing question, outside any block', () => {
@@ -40,5 +40,15 @@ describe('checkNoteWords', () => {
   });
   test('prose is left as it is', () => {
     expect(checkNoteWords('The trials end in  October 1692.')).toBe('The trials end in October 1692.');
+  });
+});
+
+describe('aboutSettledQuotation', () => {
+  const honest = 'Everyone suspects himself of at least one of the cardinal virtues, and this is mine: I am one of the few honest people that I have ever known.';
+  test('a flag about a quotation the source text settled is not shown', () => {
+    expect(aboutSettledQuotation({ wrong: 'Nick tells us, on page 1, that he is "one of the few honest people"', why: 'The line comes later in Chapter 1, in the paragraph "Everyone suspects himself of at least one of the cardinal virtues, and this is mine"' }, [honest])).toBe(true);
+  });
+  test('a flag about something else is', () => {
+    expect(aboutSettledQuotation({ wrong: 'The novel was published in 1924', why: 'It was published in April 1925.' }, [honest])).toBe(false);
   });
 });
