@@ -56,6 +56,7 @@ import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
+import { visualKitFor } from '~/domain/lesson-planner/work-visuals';
 import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
@@ -1062,7 +1063,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
               deadlineMs: 32_000,
               ...pictureModel,
               // The work's vetted pictures, from what the teacher asked for in this lesson.
-              kit: null,
+              kit: visualKitFor(
+                [turn.message, ...(activeConversation?.messages ?? []).filter((message) => message.role === 'user').map((message) => message.content)].join('\n')
+              ),
             }
           );
           reply = pictured.reply;
