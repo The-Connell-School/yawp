@@ -160,8 +160,10 @@ async function fetchText(
       if (raw.length > MAX_BYTES) return null;
       const text = stripGutenberg(raw);
       if (text.length < MIN_LENGTH || !isTextOfWork(text, work)) {
-        failures.set(work.id, 'not the work');
-        return null;
+        // A page that is not the book (an error page served as 200: the
+        // preview, Nov 22): the next address may have it.
+        why.push(`${new URL(url).hostname} not the work`);
+        continue;
       }
       failures.delete(work.id);
       return text;
