@@ -56,7 +56,9 @@ const NAMED_ENTITIES: Record<string, string> = {
   gt: '>',
   quot: '"',
   apos: "'",
-  nbsp: ' ',
+  // A plain space: the kit's fonts cannot measure a no-break space, and a
+  // handout of "&nbsp;" answer lines failed to print (Nov 22).
+  nbsp: ' ',
   hellip: '…',
   mdash: '—',
   ndash: '–',

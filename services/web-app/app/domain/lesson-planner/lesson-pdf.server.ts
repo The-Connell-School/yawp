@@ -969,6 +969,10 @@ export async function renderStepHandoutPdf({
   /** The Lesson Deck Kit's handout style (handoutKit), or null. */
   kit?: HandoutKit | null;
 }): Promise<Uint8Array> {
+  // "&nbsp;" (the planner's blank answer space) became a no-break space that
+  // the kit's font cannot measure, and the whole handout failed (HTTP 500 on
+  // the preview, Nov 22): a plain space leaves the same blank line.
+  parts = parts.map((part) => ({ ...part, content: part.content.replace(/&nbsp;|\u00a0/g, ' ') }));
   const single = parts.length === 1;
   const heading = single ? parts[0]!.title : title;
   const doc = newDocument(heading, kit);

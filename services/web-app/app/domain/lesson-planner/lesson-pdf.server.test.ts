@@ -688,6 +688,15 @@ describe("renderStepHandoutPdf (Brian's run 3, item 8)", () => {
   });
 });
 
+describe('a kit handout with blank answer lines (preview, Nov 22: HTTP 500)', () => {
+  test('"&nbsp;" lines, the planner’s blank answer space, print as blank lines instead of failing the handout', async () => {
+    const kit = handoutKit(packetWith([{ id: 's1', content: 'x', keptAudience: 'student' }]), { deckGallery: true })!;
+    const content = '**1.** What are the soldiers compared to?\n\n&nbsp;\n\n&nbsp;\n\n**2.** Where does the poem change?\n\n\u00a0';
+    const bytes = await renderStepHandoutPdf({ title: 'Dulce', className: null, parts: [{ id: 'a', title: 'Close reading', content, lines: 2 }], kit });
+    expect(Buffer.from(bytes).toString('latin1').startsWith('%PDF-')).toBe(true);
+  });
+});
+
 describe('renderSlidesPdf — a deck drawn in spec v4', () => {
   const v4 = {
     title: 'Body Paragraphs',

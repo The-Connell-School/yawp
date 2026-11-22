@@ -72,6 +72,8 @@ export type DeckAccent = (typeof DECK_ACCENTS)[number];
 const MAX_TITLE_CHARS = 90;
 const MAX_LINE_CHARS = 200;
 const MAX_BODY_CHARS = 320;
+/** A passage students annotate: eight lines of verse or a short paragraph. */
+const MAX_EXCERPT_CHARS = 700;
 // Wider than a bullet on purpose: "here is a weak conclusion next to a strong
 // one" is two paragraphs, and that is a slide worth projecting.
 const MAX_COLUMN_CHARS = 320;
@@ -103,7 +105,9 @@ const slideSchema = z
     layout: z.enum(SLIDE_LAYOUTS),
     title: z.string().trim().min(1).max(MAX_TITLE_CHARS),
     subtitle: z.string().trim().min(1).max(MAX_LINE_CHARS).optional(),
-    body: z.string().trim().min(1).max(MAX_BODY_CHARS).optional(),
+    // An excerpt carries a stanza or a paragraph as printed (Nov 22); every
+    // other slide keeps to MAX_BODY_CHARS, checked below.
+    body: z.string().trim().min(1).max(MAX_EXCERPT_CHARS).optional(),
     bullets: z.array(line).min(1).max(MAX_BULLETS).optional(),
     left: column.optional(),
     right: column.optional(),
@@ -308,6 +312,16 @@ const slideSchema = z
         code: z.ZodIssueCode.custom,
         path: ['body'],
         message: `A ${slide.layout} slide needs a body.`,
+      });
+    }
+    if (slide.body && slide.layout !== 'excerpt' && slide.body.length > MAX_BODY_CHARS) {
+      context.addIssue({
+        code: z.ZodIssueCode.too_big,
+        maximum: MAX_BODY_CHARS,
+        type: 'string',
+        inclusive: true,
+        path: ['body'],
+        message: `String must contain at most ${MAX_BODY_CHARS} character(s)`,
       });
     }
   });
@@ -820,7 +834,13 @@ function describeBadJson(json: string, error: unknown): string {
  * unambiguous, and the alternative is spending a model round on a comma.
  */
 function withoutTrailingCommas(json: string): string {
-  return json.replace(/,(\s*[}\]])/g, '$1');
+  return (
+    json
+      .replace(/,(\s*[}\]])/g, '$1')
+      // \' is never JSON, and always meant an apostrophe: a Dulce et Decorum
+      // Est deck on the preview (Nov 22) was lost over "one\'s country".
+      .replace(/(^|[^\\])((?:\\\\)*)\\'/g, "$1$2'")
+  );
 }
 
 export type SlideDeckValidation =

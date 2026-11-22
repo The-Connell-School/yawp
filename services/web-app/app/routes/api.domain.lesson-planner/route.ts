@@ -842,6 +842,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // against the work itself and corrected; then a second model checks the
       // facts. What neither can fix safely is a note for the teacher. A
       // failure leaves the reply as the planner wrote it.
+      let checks: Record<string, string | number> | null = null;
       try {
         const checkedAt = Date.now();
         const quoted = await withQuotationCheck(reply);
@@ -858,7 +859,18 @@ export async function action({ request }: ActionFunctionArgs) {
           ...quoted.misplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
           ...facts.flagged.map((error) => `“${error.wrong.slice(0, 80)}${error.wrong.length > 80 ? '…' : ''}”: ${error.why}`),
         ]);
-        // Counts only, never the lesson.
+        // Counts only, never the lesson: in the log, and to the client, which
+        // shows nothing of it (it lets a test see the checks ran).
+        checks = {
+          work: quoted.work?.id ?? 'none',
+          quotationsCorrected: quoted.corrections.length,
+          quotationsVerified: quoted.verified.length,
+          quotationsUnverified: quoted.unverified.length,
+          quotationsMisplaced: quoted.misplaced.length,
+          factsCorrected: facts.applied.length,
+          factsFlagged: facts.flagged.length,
+          ms: Date.now() - checkedAt,
+        };
         // eslint-disable-next-line no-console
         console.info(
           `[lesson-planner] accuracy: work ${quoted.work?.id ?? 'none'} · quotations corrected ${quoted.corrections.length}, verified ${quoted.verified.length}, unverified ${quoted.unverified.length}, misplaced ${quoted.misplaced.length} · facts corrected ${facts.applied.length}, flagged ${facts.flagged.length} · ${Date.now() - checkedAt}ms`
@@ -1121,6 +1133,7 @@ export async function action({ request }: ActionFunctionArgs) {
           openedNewDay: Boolean(dayTarget && !dayTarget.conversationId),
           // "<messageId>:<blockKey>" now in the lesson's stack (Nov 4).
           ...(filed.length ? { filed } : {}),
+          ...(checks ? { checks } : {}),
         },
       };
     }
