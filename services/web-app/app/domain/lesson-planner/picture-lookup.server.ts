@@ -40,6 +40,7 @@ import {
   wantedPictures,
   withFoundPictures,
   withoutEmptyPictureSlides,
+  withPictureSlots,
   type WantedPicture,
 } from './picture-wants';
 import {
@@ -633,15 +634,17 @@ export async function withResolvedPictures(
     : { deck: outcome.deck, named: 0 };
   const resolved = await resolveDeckPictures(edited.deck, owner, deps);
   let settled = withoutEmptyPictureSlides(resolved.deck);
-  // A day about a text's world shows that world: the gallery painting's strip
-  // is a mood, not the thing (Kevin on the Leopard deck; the Howl deck, Nov 22).
+  // The gallery painting is a mood, not the thing: Kevin on the Leopard deck,
+  // and the 13-lesson review (Nov 22: Hokusai's Great Wave on Homer, Gatsby
+  // and Hamlet; Turner's Temeraire on a World War I poem). It stays only
+  // when a look slide studies it.
   if (
     settled.art &&
-    settled.slides.some((slide) =>
-      CONTEXT_SLIDE_LAYOUTS.includes(slide.layout as never)
-    )
+    !settled.slides.some((slide) => slide.layout === 'look' && !slide.image)
   )
     settled = { ...settled, art: undefined };
+  // What was asked for and not found is a labeled slot for the teacher (R10).
+  settled = withPictureSlots(settled);
   if (settled === outcome.deck) return nothing;
   return {
     reply: `${outcome.body.trim()}\n\n${fenceSlideDeck(settled)}`,

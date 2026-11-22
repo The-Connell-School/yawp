@@ -213,10 +213,14 @@ export function findPlace(name: string, where?: string | null): FoundPlace | nul
  */
 export function resolveDeckPlaces<T extends SlideDeck>(deck: T): T {
   if (!deck.slides.some((slide) => slide.layout === 'map')) return deck;
+  const firstMap = deck.slides.findIndex((slide) => slide.layout === 'map');
   return {
     ...deck,
-    slides: deck.slides.map((slide) => {
+    slides: deck.slides.map((slide, index) => {
       if (slide.layout !== 'map') return slide;
+      // A deck's first map starts wide unless the planner said otherwise
+      // (R2; 13-lesson review, Nov 22: Alabama with no country around it).
+      if (index === firstMap && slide.wide === undefined) slide = { ...slide, wide: true };
       const found: MapView[] = [];
       const places = (slide.places ?? []).map(({ lat: _lat, lon: _lon, found: _found, ...place }) => {
         const hit = findPlace(place.name, place.where);

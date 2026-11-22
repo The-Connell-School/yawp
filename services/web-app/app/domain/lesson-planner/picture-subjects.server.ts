@@ -30,7 +30,7 @@ For each slide you are given, name the exact title of the English Wikipedia arti
 
 Rules:
 - The specific thing, never a general topic. "Levittown, New York", not "Suburb" or "Postwar America". "Dust Bowl", not "Drought".
-- Real things only. A character in a novel has no photograph: name the real person, place or event the slide points to, or nothing.
+- Real things only. A character in a novel has no photograph: name the real person, place or event the slide points to, a well-known painting or engraving of the scene by the title of its own article (a Romantic painting of Macbeth's witches, an illustration from the first edition), or nothing.
 - Never the film of the book being taught.
 - For a slide about the Holocaust, a genocide, a massacre, a lynching or other mass death or cruelty, give null: those pictures are always the teacher's choice.
 - When the slide is about an idea, a feeling, the students or the lesson itself, and no real thing stands for it, give null. A wrong picture is worse than none.

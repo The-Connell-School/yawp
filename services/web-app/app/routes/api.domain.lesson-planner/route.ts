@@ -56,6 +56,7 @@ import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
+import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -826,6 +827,9 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
       reply = repaired.reply;
+      // Minutes that agree (Nov 22): the deck's agenda and slide minutes come
+      // from the plan's steps, never written separately.
+      reply = withDeckMatchingPlan(reply);
       // A map slide's places are found in Yawp!'s own place list (Nov 19): a
       // pin is never where the model guessed.
       reply = withResolvedPlaces(reply);

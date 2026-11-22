@@ -976,26 +976,26 @@ describe('the second look (Nov 22, night)', () => {
 });
 
 describe('withResolvedPictures', () => {
-  test('a day about a text’s world drops the gallery painting: a mood, not the thing', async () => {
+  test('the gallery painting is dropped, a mood not the thing, unless a look slide studies it (13-lesson review, Nov 22)', async () => {
     const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
     const { withResolvedPictures } = await import('./picture-lookup.server');
-    const withArt = { ...DECK, kit: 'v4.1' as const, art: 'homer-breezing-up' };
-    const context = await withResolvedPictures(
-      `Deck.\n\n${fenceSlideDeck(withArt)}`,
-      owner,
-      { fetch: wikipedia().fetcher, shelf: shelf() }
-    );
-    expect(parseSlideDeck(context.reply)!.deck!.art).toBeUndefined();
-    const noContext = {
-      ...withArt,
-      slides: DECK.slides.filter((slide) => slide.layout !== 'timeline'),
-    };
-    const kept = await withResolvedPictures(
-      `Deck.\n\n${fenceSlideDeck(noContext)}`,
-      owner,
-      { fetch: wikipedia().fetcher, shelf: shelf() }
-    );
-    expect(parseSlideDeck(kept.reply)!.deck!.art).toBe('homer-breezing-up');
+    const withArt = { ...DECK, kit: 'v4.1' as const, art: 'hokusai-great-wave' };
+    const plain = await withResolvedPictures(`Deck.\n\n${fenceSlideDeck(withArt)}`, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    expect(parseSlideDeck(plain.reply)!.deck!.art).toBeUndefined();
+    const studied = { ...withArt, slides: [...DECK.slides, { layout: 'look', title: 'Look', question: 'What do you see?', speakerNotes: 'n' } as Slide] };
+    const kept = await withResolvedPictures(`Deck.\n\n${fenceSlideDeck(studied)}`, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    expect(parseSlideDeck(kept.reply)!.deck!.art).toBe('hokusai-great-wave');
+  });
+
+  test('a picture asked for and not found is a labeled slot in the slide’s notes, for the teacher (R10)', async () => {
+    const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
+    const { withResolvedPictures } = await import('./picture-lookup.server');
+    const result = await withResolvedPictures(`Deck.\n\n${fenceSlideDeck(DECK)}`, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    const levittown = parseSlideDeck(result.reply)!.deck!.slides[1]!;
+    expect(levittown.image).toBeUndefined();
+    expect(levittown.speakerNotes).toContain('Picture to add: Levittown, New York (from the air).');
+    // A slide that got its picture says nothing of the kind.
+    expect(parseSlideDeck(result.reply)!.deck!.slides[0]!.speakerNotes).not.toContain('Picture to add');
   });
 
   test('the reply’s deck comes back with its pictures, and says which were kept', async () => {

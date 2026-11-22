@@ -203,3 +203,36 @@ export function withoutEmptyPictureSlides<T extends SlideDeck>(deck: T): T {
     }),
   };
 }
+
+/** The line a slide's notes carry for a picture asked for and not found. */
+export const PICTURE_SLOT_LEAD = 'Picture to add:';
+
+/**
+ * A picture asked for and not found is a labeled slot, not a quiet gap (R10;
+ * 13-lesson review, Nov 22: the Hurston portrait and the Atticus still the
+ * planner asked for vanished). The slide's speaker notes say which picture
+ * goes there, where the teacher sees it in the studio and the printed notes
+ * and students do not.
+ */
+export function withPictureSlots<T extends SlideDeck>(deck: T): T {
+  if (!deck.slides.some((slide) => slide.wants && !slide.image)) return deck;
+  return {
+    ...deck,
+    slides: deck.slides.map((slide): Slide => {
+      if (
+        !slide.wants ||
+        slide.image ||
+        (slide.speakerNotes ?? '').includes(PICTURE_SLOT_LEAD)
+      )
+        return slide;
+      const what = `${slide.wants.subject}${slide.wants.shows ? ` (${slide.wants.shows})` : ''}`;
+      const line = `${PICTURE_SLOT_LEAD} ${what}. Yawp! could not find one it could use; add your own in the deck studio.`;
+      return {
+        ...slide,
+        speakerNotes: slide.speakerNotes
+          ? `${slide.speakerNotes.trim()}\n\n${line}`
+          : line,
+      };
+    }),
+  };
+}

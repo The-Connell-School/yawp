@@ -116,7 +116,7 @@ describe('a map that starts wider than the place (Kevin, Nov 21)', () => {
   const mapOf = (wide: boolean) =>
     resolveDeckPlaces({
       title: 'Italy',
-      slides: [{ layout: 'map', title: 'Where is Italy?', shade: ['Italy'], places: [{ name: 'Rome', where: 'Italy' }], speakerNotes: 'n', ...(wide ? { wide: true } : {}) } as Slide],
+      slides: [{ layout: 'map', title: 'Where is Italy?', shade: ['Italy'], places: [{ name: 'Rome', where: 'Italy' }], speakerNotes: 'n', wide } as Slide],
     }).slides[0]!.view!;
 
   test('wide shows the country among its neighbours: a much larger area, still around it', () => {
@@ -184,5 +184,15 @@ describe('a state by its own name (preview, Nov 22: The Grapes of Wrath)', () =>
 
   test('every state has a middle', () => {
     for (const name of ['Alaska', 'Hawaii', 'Rhode Island', 'West Virginia', 'Wyoming', 'Maine']) expect(findPlace(name)?.found).toBe(`${name} (the state)`);
+  });
+});
+
+describe('a deck’s first map starts wide unless the planner says otherwise (13-lesson review, Nov 22)', () => {
+  const map = (title: string, extra: Partial<Slide> = {}) => ({ layout: 'map', title, places: [{ name: 'Montgomery', where: 'Alabama' }], speakerNotes: 'n', ...extra }) as Slide;
+  test('the first map is wide; a later one keeps its close view; one marked not wide stays close', () => {
+    const out = resolveDeckPlaces({ title: 'D', slides: [map('Where'), map('Closer')] });
+    expect(out.slides[0]!.wide).toBe(true);
+    expect(out.slides[1]!.wide).toBeUndefined();
+    expect(resolveDeckPlaces({ title: 'D', slides: [map('Where', { wide: false })] }).slides[0]!.wide).toBe(false);
   });
 });

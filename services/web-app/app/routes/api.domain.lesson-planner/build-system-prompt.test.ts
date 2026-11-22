@@ -2403,3 +2403,50 @@ describe('buildLessonPlannerSystemPrompt — the arc of a lesson (Kevin, Nov 21)
     expect(textOf(false)).not.toContain('Start with the students, and start with the theme');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — standards every lesson meets (13-lesson review, Nov 22)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', contextTools, deckGallery: true, deckKitV4: true, deckKitV41: true })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('the text in students’ hands: the passage on the slide and the handout, a slot for a work in copyright', () => {
+    const on = textOf(true);
+    expect(on).toContain('The text in students’ hands');
+    expect(on).toContain('printed in full on the student handout, above the questions');
+    expect(on).toContain('includes that handout in this reply');
+    expect(on).toContain('[Paste chapter 1, pages 1–3 from your edition here]');
+    // The excerpt rule now lets a public-domain passage on the slide, exactly as printed.
+    expect(on).toContain('For a work in the public domain');
+    expect(on).not.toContain('40–90 words, only text the teacher supplied or a tool returned');
+  });
+
+  test('exactly right, teach what was asked, model first, words and access, checks during, care, units backward, minutes agree', () => {
+    const on = textOf(true);
+    for (const line of [
+      'Never put a famous line in the wrong chapter or the wrong mouth',
+      'find the step that teaches each thing the request names',
+      'Never answer a request to plan with only a question',
+      'I do, we do, you do',
+      'Gloss the passage’s hard words',
+      'two or three sentence starters',
+      'a one-minute check',
+      '"Care note"',
+      'Never ask students to write about wanting to end their life',
+      'A unit plan starts from its final task',
+      'never whole chapters aloud day after day',
+      'its slides’ minutes add up to the plan’s',
+    ])
+      expect(on).toContain(line);
+  });
+
+  test('a map never shades today’s country for a colony', () => {
+    expect(textOf(true)).toContain('never shade today’s country to stand for a colony');
+  });
+
+  test('off, none of it', () => {
+    const off = textOf(false);
+    expect(off).not.toContain('The text in students’ hands');
+    expect(off).not.toContain('"Care note"');
+  });
+});
