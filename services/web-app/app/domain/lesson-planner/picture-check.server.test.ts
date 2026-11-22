@@ -37,6 +37,8 @@ describe('what the model is told', () => {
     expect(SECOND_LOOK_SYSTEM).toContain(
       'Never keep a photograph of an atrocity'
     );
+    // Grapes confirmation run: a good Dust Bowl photograph turned down for not matching "should show" word for word.
+    expect(SECOND_LOOK_SYSTEM).toContain('is a preference, not a test');
   });
 });
 
