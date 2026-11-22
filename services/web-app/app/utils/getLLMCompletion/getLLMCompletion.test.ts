@@ -337,6 +337,24 @@ describe('getLLMCompletion', () => {
     });
   });
 
+  test('response-only logs keep the answer and redact the input', async () => {
+    anthropicCreate.mockResolvedValueOnce(anthropicTextResponse('{"pictures": []}'));
+    await getLLMCompletion({
+      model: 'claude-haiku-5-5',
+      system: 'Check these pictures.',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'The slide says: Ada Lovelace.' }] }],
+      logPayload: 'response-only',
+      metadata: { feature: 'lesson-planner-picture-look' },
+      attribution: testAttribution,
+    });
+    const log = llmLogCreate.mock.calls[0][0].data;
+    expect(log.systemPrompt).toBeUndefined();
+    expect(JSON.stringify(log.messages)).not.toContain('Ada');
+    expect(log.messages).toMatchObject({ redacted: true });
+    expect(log.response).toBe('{"pictures": []}');
+    expect(log.metadata).toMatchObject({ payloadLogging: 'response-only' });
+  });
+
   test('supports metadata-only audit logs for sensitive prompts and tool results', async () => {
     anthropicCreate
       .mockResolvedValueOnce({

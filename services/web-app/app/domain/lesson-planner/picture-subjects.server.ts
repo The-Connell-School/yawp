@@ -10,6 +10,7 @@
  * like any other. See docs/plans/2026-11-22-picture-editor-build-plan.md.
  */
 import { z } from 'zod';
+import { readLenientJson } from './lenient-json';
 import type { Slide, SlideDeck } from './slide-deck';
 
 /** Slides that teach something a picture can show. Routine slides (agenda, write, exit…) never ask. */
@@ -40,12 +41,34 @@ Answer with JSON only, no other text:
 const Answer = z.object({
   slides: z.array(
     z.object({
-      slide: z.number().int(),
-      subject: z.string().trim().max(120).nullable().optional(),
-      shows: z.string().trim().max(160).nullable().optional(),
+      slide: z.coerce.number().int(),
+      subject: z.string().nullable().optional(),
+      shows: z.string().nullable().optional(),
     })
   ),
 });
+
+/** The answer's shape, for the API's structured outputs. */
+export const PICTURE_EDITOR_SCHEMA = {
+  type: 'object',
+  properties: {
+    slides: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slide: { type: 'integer' },
+          subject: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          shows: { type: 'string' },
+        },
+        required: ['slide', 'subject', 'shows'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['slides'],
+  additionalProperties: false,
+} as const;
 
 /** The words a slide teaches with, as the editor reads them. */
 function slideWords(slide: Slide): string {
@@ -100,28 +123,16 @@ export function pictureEditorPrompt(
 export function readPictureEditorAnswer(
   text: string
 ): Array<{ slide: number; subject: string; shows?: string }> {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  const answer = Answer.safeParse(parsed);
-  if (!answer.success) return [];
-  return answer.data.slides.flatMap((entry) =>
-    entry.subject && !/^(null|none|n\/a)$/i.test(entry.subject)
-      ? [
-          {
-            slide: entry.slide,
-            subject: entry.subject,
-            ...(entry.shows ? { shows: entry.shows } : {}),
-          },
-        ]
-      : []
-  );
+  const answer = readLenientJson(text, Answer);
+  if (!answer) return [];
+  return answer.slides.flatMap((entry) => {
+    const subject = entry.subject?.trim();
+    // A title is a title: one too long to be one is no answer, not a shortened one.
+    if (!subject || subject.length > 120 || /^(null|none|n\/a)$/i.test(subject))
+      return [];
+    const shows = entry.shows?.trim().slice(0, 160);
+    return [{ slide: entry.slide, subject, ...(shows ? { shows } : {}) }];
+  });
 }
 
 export type AskEditor = (system: string, prompt: string) => Promise<string>;

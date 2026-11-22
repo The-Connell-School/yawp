@@ -1,9 +1,10 @@
 /**
  * The small model behind the picture editor and the second look (Nov 22,
  * night; docs/plans/2026-11-22-picture-editor-build-plan.md). Claude Haiku
- * 5.5 at low effort, each call on its own short limit, logged without its
- * payload (the second look carries pictures), and never handed to another
- * provider. `LESSON_PLANNER_PICTURE_MODEL=off` turns both off.
+ * 5.5 at low effort, its answer held to a JSON schema, each call on its own
+ * short limit, logged with its answer but never its input (the second look
+ * carries pictures, the editor the teacher's slides), and never handed to
+ * another provider. `LESSON_PLANNER_PICTURE_MODEL=off` turns both off.
  *
  * Not counted against the teacher's hourly planner requests: both calls are
  * part of a turn that was already admitted, a third of a cent between them,
@@ -11,8 +12,11 @@
  * Yawp! looked at pictures.
  */
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
-import type { LookAt } from './picture-check.server';
-import type { AskEditor } from './picture-subjects.server';
+import { SECOND_LOOK_SCHEMA, type LookAt } from './picture-check.server';
+import {
+  PICTURE_EDITOR_SCHEMA,
+  type AskEditor,
+} from './picture-subjects.server';
 
 export const DEFAULT_PICTURE_MODEL = 'claude-haiku-5-5';
 const EDITOR_MS = 5_000;
@@ -41,6 +45,7 @@ export function pictureModelCalls(
   const call = async (
     feature: string,
     ms: number,
+    schema: object,
     system: string,
     content: string | Array<Record<string, unknown>>
   ) => {
@@ -54,22 +59,37 @@ export function pictureModelCalls(
         attribution: attribution(),
         allowFallbackProvider: false,
         signal,
-        logPayload: 'metadata-only',
+        logPayload: 'response-only',
         metadata: { feature },
         ...(outputConfig ? { outputConfig } : {}),
       });
     try {
-      return await request({ effort: 'low' });
+      return await request({
+        effort: 'low',
+        format: { type: 'json_schema', schema },
+      });
     } catch (error) {
-      // A model that will not take the effort setting is asked once more without it.
+      // A model that will not take these settings is asked once more without them.
       if (statusOf(error) === 400 && !signal.aborted) return request();
       throw error;
     }
   };
   return {
     name: (system, prompt) =>
-      call('lesson-planner-picture-editor', EDITOR_MS, system, prompt),
+      call(
+        'lesson-planner-picture-editor',
+        EDITOR_MS,
+        PICTURE_EDITOR_SCHEMA,
+        system,
+        prompt
+      ),
     look: (system, content) =>
-      call('lesson-planner-picture-look', LOOK_MS, system, content),
+      call(
+        'lesson-planner-picture-look',
+        LOOK_MS,
+        SECOND_LOOK_SCHEMA,
+        system,
+        content
+      ),
   };
 }

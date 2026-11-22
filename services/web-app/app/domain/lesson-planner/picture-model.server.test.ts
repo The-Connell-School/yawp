@@ -15,7 +15,7 @@ const attribution = () => ({
 });
 
 describe('pictureModelCalls', () => {
-  test('Haiku 5.5 at low effort, no other provider, no payload in the logs', async () => {
+  test('Haiku 5.5 at low effort, held to a JSON schema, no other provider, its answer logged but never its input', async () => {
     const complete = mock(async () => '{"slides": []}');
     const calls = pictureModelCalls(attribution, {
       model: DEFAULT_PICTURE_MODEL,
@@ -29,9 +29,15 @@ describe('pictureModelCalls', () => {
       model: 'claude-haiku-5-5',
       system: 'system',
       messages: [{ content: 'prompt' }],
-      outputConfig: { effort: 'low' },
+      outputConfig: {
+        effort: 'low',
+        format: {
+          type: 'json_schema',
+          schema: { required: ['slides'] },
+        },
+      },
       allowFallbackProvider: false,
-      logPayload: 'metadata-only',
+      logPayload: 'response-only',
       metadata: { feature: 'lesson-planner-picture-editor' },
     });
     expect(request.signal).toBeInstanceOf(AbortSignal);
@@ -50,6 +56,7 @@ describe('pictureModelCalls', () => {
     expect(request).toMatchObject({
       messages: [{ content: blocks }],
       metadata: { feature: 'lesson-planner-picture-look' },
+      outputConfig: { format: { schema: { required: ['pictures'] } } },
     });
   });
 

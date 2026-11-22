@@ -68,6 +68,12 @@ describe('reading the verdicts', () => {
       keep: true,
       alt: 'Julius and Ethel Rosenberg behind a wire screen.',
     });
+    // A sentence first and a note after; a number as text; yes for true; a long alt cut, not refused.
+    const loose = readSecondLookAnswer(
+      `Here you go:\n{"pictures": [{"n": "1", "keep": "yes", "alt": "${'word '.repeat(100)}"}]}\nNote: {none}`
+    );
+    expect(loose?.get(1)?.keep).toBe(true);
+    expect(loose?.get(1)?.alt?.length).toBeLessThanOrEqual(300);
     expect(readSecondLookAnswer('Looks fine to me.')).toBeNull();
     expect(readSecondLookAnswer('{"pictures": [{"n": "one"}]}')).toBeNull();
   });

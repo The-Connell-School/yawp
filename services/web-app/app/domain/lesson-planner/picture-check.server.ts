@@ -10,6 +10,7 @@
  * model was unavailable.
  */
 import { z } from 'zod';
+import { readLenientJson } from './lenient-json';
 
 export type LookCandidate = {
   n: number;
@@ -39,16 +40,52 @@ For each picture also write "alt": one plain sentence saying what is actually in
 Answer with JSON only, no other text:
 {"pictures": [{"n": <number>, "keep": true or false, "alt": "<sentence>", "why": "<reason, when not kept>"}]}`;
 
+/** Cut short, never refused: one long sentence must not lose the whole answer. */
+const words = (max: number) =>
+  z
+    .string()
+    .nullable()
+    .optional()
+    .transform((text) => (text ?? '').trim().slice(0, max));
 const Answer = z.object({
   pictures: z.array(
     z.object({
-      n: z.number().int(),
-      keep: z.boolean(),
-      alt: z.string().trim().max(400).nullable().optional(),
-      why: z.string().trim().max(200).nullable().optional(),
+      n: z.coerce.number().int(),
+      keep: z.union([
+        z.boolean(),
+        z
+          .string()
+          .regex(/^(true|false|yes|no)$/i)
+          .transform((text) => /^(true|yes)$/i.test(text)),
+      ]),
+      alt: words(300),
+      why: words(200),
     })
   ),
 });
+
+/** The answer's shape, for the API's structured outputs. */
+export const SECOND_LOOK_SCHEMA = {
+  type: 'object',
+  properties: {
+    pictures: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          n: { type: 'integer' },
+          keep: { type: 'boolean' },
+          alt: { type: 'string' },
+          why: { type: 'string' },
+        },
+        required: ['n', 'keep', 'alt', 'why'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['pictures'],
+  additionalProperties: false,
+} as const;
 
 const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
 
@@ -82,19 +119,10 @@ export function secondLookContent(
 export function readSecondLookAnswer(
   text: string
 ): Map<number, LookVerdict> | null {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-  const answer = Answer.safeParse(parsed);
-  if (!answer.success) return null;
+  const answer = readLenientJson(text, Answer);
+  if (!answer) return null;
   const verdicts = new Map<number, LookVerdict>();
-  for (const entry of answer.data.pictures) {
+  for (const entry of answer.pictures) {
     if (verdicts.has(entry.n)) continue;
     verdicts.set(entry.n, {
       keep: entry.keep,
