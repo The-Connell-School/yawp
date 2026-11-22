@@ -57,6 +57,7 @@ import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flag
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
+import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -1052,6 +1053,15 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       } catch (error) {
         console.error('[lesson-planner] uploaded deck not filed', error instanceof Error ? error.message : 'unknown');
+      }
+      // A handout asked for after the lesson was built ("Build the student
+      // handout for this lesson") goes into that lesson, beside the pieces
+      // already there: on the preview (Nov 22) it never reached the printed
+      // packet, and students were left without the passage.
+      try {
+        filed = [...filed, ...(await fileLaterHandout({ conversationId, message: { id: assistantMessageId, createdAt: answeredAt, content: reply }, teacherMessage: turn.message }))];
+      } catch (error) {
+        console.error('[lesson-planner] handout not filed', error instanceof Error ? error.message : 'unknown');
       }
 
       return {
