@@ -721,7 +721,10 @@ export async function action({ request }: ActionFunctionArgs) {
       const startedAt = Date.now();
       // The text a lesson is about, fetched while the planner writes, for the
       // quotation check after it (Nov 22). Never waited on here.
-      const workAsked = workForText(turn.message);
+      // A teacher names the work once ("Hamlet's 'To be, or not to be'");
+      // a reply is read with more care (re-test, Nov 22: Hamlet and Romeo
+      // and Juliet went unchecked).
+      const workAsked = workForText(turn.message, { mentions: 1 });
       if (workAsked) void fetchWorkText(workAsked).catch(() => null);
       const ask = () => getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,

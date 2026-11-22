@@ -179,3 +179,16 @@ describe('the text', () => {
     expect(calls).toBe(3); // gutenberg.org and its two mirrors
   });
 });
+
+describe('the work a teacher names once (re-test, Nov 22)', () => {
+  test.each([
+    ["Teach a 50-minute lesson for 12th grade on Hamlet's 'To be, or not to be' soliloquy (Act 3, Scene 1).", 'hamlet'],
+    ['Teach a 50-minute lesson for 9th grade on the Prologue of Romeo and Juliet: how the sonnet tells us the ending.', 'romeo-and-juliet'],
+  ])('%s', (request, id) => {
+    expect(workForText(request)).toBeNull();
+    expect(workForText(request, { mentions: 1 })?.id).toBe(id);
+  });
+  test('a request about a work that is not registered names none', () => {
+    expect(workForText('Build day 1 of a unit on Things Fall Apart for 10th grade: who Chinua Achebe was writing back to.', { mentions: 1 })).toBeNull();
+  });
+});

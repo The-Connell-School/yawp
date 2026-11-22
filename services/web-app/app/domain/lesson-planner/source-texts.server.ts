@@ -77,7 +77,7 @@ function headingText(text: string): string {
  * in the heading: a lesson on a work not registered (Their Eyes Were Watching
  * God, 1984) is never checked against another one it mentions in passing.
  */
-export function workForText(text: string): RegisteredWork | null {
+export function workForText(text: string, { mentions = 2 }: { mentions?: number } = {}): RegisteredWork | null {
   if (!text) return null;
   const heading = headingText(text);
   let best: { work: RegisteredWork; score: number } | null = null;
@@ -88,7 +88,7 @@ export function workForText(text: string): RegisteredWork | null {
       score += text.match(pattern)?.length ?? 0;
       if (heading && heading.match(pattern)) score += 5;
     }
-    if (score >= 2 && (!best || score > best.score)) best = { work, score };
+    if (score >= mentions && (!best || score > best.score)) best = { work, score };
   }
   return best?.work ?? null;
 }
