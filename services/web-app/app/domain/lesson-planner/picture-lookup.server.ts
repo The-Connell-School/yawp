@@ -207,7 +207,14 @@ async function lookUp(
   };
   const leads = new Map<
     string,
-    { file: string; width: number; fits: boolean; title: string; work: boolean }
+    {
+      file: string;
+      width: number;
+      fits: boolean;
+      title: string;
+      work: boolean;
+      fictional: boolean;
+    }
   >();
   for (const page of Object.values(pages.query.pages) as Array<{
     title?: string;
@@ -225,6 +232,7 @@ async function lookUp(
       fits,
       title: page.title,
       work: A_WORK.test(page.description ?? ''),
+      fictional: /\b(fictional|character)\b/i.test(page.description ?? ''),
     });
   }
   const fileFor = new Map<string, string>();
@@ -246,6 +254,23 @@ async function lookUp(
       !pictureKey(want.subject).includes(
         pictureKey(lead.title.replace(/\s*\([^)]*\)\s*$/, ''))
       )
+    )
+      why.set(key, 'none');
+    // A person Yawp! asked for on its own is only their own article: on the
+    // preview (Nov 22) Tom Joad led to the novel's cover and Rose of Sharon
+    // to a hibiscus. A character in a novel has no photograph.
+    else if (
+      want.own &&
+      (lead.fictional ||
+        lead.work ||
+        !pictureKey(lead.title).includes(pictureKey(want.subject)))
+    )
+      why.set(key, 'none');
+    // One file, one subject: what Yawp! asked for on its own never repeats a
+    // picture already on the way (three Joads, one book cover).
+    else if (
+      (want.own || want.find) &&
+      [...fileFor.values()].includes(lead.file)
     )
       why.set(key, 'none');
     else fileFor.set(key, lead.file);

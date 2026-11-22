@@ -5,9 +5,15 @@
  */
 import type { Slide, SlideDeck } from './slide-deck';
 
-export type WantedPicture = { subject: string; shows?: string; find?: string };
+export type WantedPicture = {
+  subject: string;
+  shows?: string;
+  find?: string;
+  own?: true;
+};
 
-type Want = { subject: string; shows?: string; find?: string };
+/** `own`: only the subject's own article will do (a name that leads to a novel or a flower is not that person). */
+type Want = { subject: string; shows?: string; find?: string; own?: true };
 type Person = NonNullable<Slide['people']>[number];
 type Event = NonNullable<Slide['events']>[number];
 
@@ -20,7 +26,7 @@ type Event = NonNullable<Slide['events']>[number];
  */
 const personWant = (person: Person): Want | undefined =>
   person.wants ??
-  (person.name.trim() ? { subject: person.name.trim() } : undefined);
+  (person.name.trim() ? { subject: person.name.trim(), own: true } : undefined);
 const eventWant = (event: Event): Want | undefined =>
   event.wants ??
   (event.title.trim()
@@ -59,6 +65,7 @@ export function wantedPictures(
       subject: want.subject,
       ...(want.shows ? { shows: want.shows } : {}),
       ...(want.find ? { find: want.find } : {}),
+      ...(want.own ? { own: true as const } : {}),
     });
   };
   for (const slide of deck.slides) {

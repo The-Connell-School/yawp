@@ -21,7 +21,11 @@ const PNG = Uint8Array.from(
 
 const PAGES = {
   query: {
-    redirects: [{ from: 'Risorgimento', to: 'Unification of Italy' }],
+    redirects: [
+      { from: 'Risorgimento', to: 'Unification of Italy' },
+      { from: 'Ma Joad', to: 'The Grapes of Wrath' },
+      { from: 'Rose of Sharon', to: 'Hibiscus syriacus' },
+    ],
     normalized: [{ from: 'allen ginsberg', to: 'Allen ginsberg' }],
     pages: {
       '1': { title: 'Brown v. Board of Education' },
@@ -118,6 +122,26 @@ const PAGES = {
           source: 'https://thumb.wikimedia.org/a/Grapes.jpg',
           width: 1280,
           height: 1900,
+        },
+      },
+      '13': {
+        title: 'Tom Joad',
+        description: 'Fictional character in The Grapes of Wrath',
+        pageimage: 'The_Grapes_of_Wrath_(1939_1st_ed_cover).jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Grapes.jpg',
+          width: 1280,
+          height: 1900,
+        },
+      },
+      '14': {
+        title: 'Hibiscus syriacus',
+        description: 'Species of flowering plant',
+        pageimage: 'Hibiscus_syriacus_flower.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Hibiscus.jpg',
+          width: 1280,
+          height: 900,
         },
       },
       '7': {
@@ -547,6 +571,65 @@ describe('what the planner did not ask for (live preview, Nov 22)', () => {
       { subject: 'First dust storms', why: 'none' },
     ]);
     expect(result.deck.slides[0]!.events![1]!.image).toBeTruthy();
+  });
+
+  test('a person Yawp! asks for is only their own article: never a novel’s cover, a character, or a flower (preview, Nov 22)', async () => {
+    const deck = {
+      title: 'The Joads',
+      slides: [
+        {
+          layout: 'person',
+          title: 'The people we will follow',
+          people: [
+            { name: 'Tom Joad', role: 'The novel’s center' },
+            { name: 'Ma Joad', role: 'The family’s spine' },
+            { name: 'Rose of Sharon', role: 'Tom’s sister' },
+            { name: 'Giuseppe Garibaldi', role: 'For comparison' },
+          ],
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
+    expect(
+      result.deck.slides[0]!.people!.map((person) => Boolean(person.image))
+    ).toEqual([false, false, false, true]);
+    expect(result.empty.map((miss) => miss.subject)).toEqual([
+      'Tom Joad',
+      'Ma Joad',
+      'Rose of Sharon',
+    ]);
+  });
+
+  test('what Yawp! asks for on its own never repeats a picture already on the way', async () => {
+    const deck = {
+      title: 'x',
+      slides: [
+        {
+          layout: 'timeline',
+          title: 'T',
+          events: [{ date: '1953', title: 'The Rosenbergs executed' }],
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'big_idea',
+          title: 'The trial',
+          body: 'b',
+          wants: { subject: 'Julius and Ethel Rosenberg' },
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
+    // The planner's own request comes first and keeps the photograph; the event Yawp! asked about does not repeat it.
+    expect(result.deck.slides[1]!.image).toBeTruthy();
+    expect(result.deck.slides[0]!.events![0]!.image).toBeUndefined();
   });
 
   test('search refused: the remaining searches are skipped, and named subjects are still looked up', async () => {
