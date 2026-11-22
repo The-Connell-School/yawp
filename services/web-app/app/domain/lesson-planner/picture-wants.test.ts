@@ -454,3 +454,14 @@ describe('a picture on the slides students look at and talk about (preview, Nov 
     }
   });
 });
+
+describe('a deck is not lost for an agenda or exit without a title (preview, Nov 22: Grapes of Wrath)', () => {
+  test('they take the layout’s own heading', () => {
+    const deck = read([
+      { layout: 'agenda', body: 'The Dust Bowl', agenda: [{ title: 'Class starter', minutes: 5 }], speakerNotes: 'n' } as unknown as Slide,
+      { layout: 'exit', body: 'Name one force behind the migration.', speakerNotes: 'n' } as unknown as Slide,
+    ]);
+    expect(deck.slides[1]!.title).toBe('Today');
+    expect(deck.slides[2]!.title).toBe('Before you go');
+  });
+});

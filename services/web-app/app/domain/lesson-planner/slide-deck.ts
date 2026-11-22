@@ -579,6 +579,8 @@ const OPEN_IN_YAWP_TAIL = /\s*[:—–-]?\s*open it in Yawp!?(\s+before you go)?
 /** "Next time:" and "Tomorrow:", however many, at the start of the next lesson. */
 const NEXT_TIME_LEAD = /^\s*(?:(?:next time|tomorrow|next class|next lesson)\s*[:—–-]\s*)+/i;
 
+const OWN_TITLES: Record<string, string> = { agenda: 'Today', exit: 'Before you go' };
+
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const slide = applyAliases(raw as Record<string, unknown>, FIELD_ALIASES);
@@ -598,6 +600,11 @@ function normalizeSlide(raw: unknown): unknown {
   const calledQuiz = typeof slide.layout === 'string' && QUIZ_NAMES.has(slide.layout.trim().toLowerCase());
   slide.layout = normalizeLayout(slide);
   if (calledQuiz && slide.question === undefined && slide.body === undefined && typeof slide.title === 'string') slide.question = slide.title;
+  // An agenda and an exit have the layout's own heading; a deck is not lost
+  // for leaving it out (preview, Nov 22: a Grapes of Wrath deck failed twice
+  // over the two missing titles).
+  const ownTitle = OWN_TITLES[slide.layout as string];
+  if (ownTitle && (typeof slide.title !== 'string' || !slide.title.trim())) slide.title = ownTitle;
   if (slide.choices !== undefined) slide.choices = normalizeChoices(slide.choices);
   if (slide.answer !== undefined) {
     slide.answer = normalizeAnswer(slide.answer, slide.choices);
