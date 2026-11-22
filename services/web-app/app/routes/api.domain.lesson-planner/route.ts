@@ -949,6 +949,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
       // facts. What neither can fix safely is a note for the teacher. A
       // failure leaves the reply as the planner wrote it.
       let checks: Record<string, string | number> | null = null;
+      let pictureReport: Record<string, unknown> | null = null;
       try {
         const checkedAt = Date.now();
         // The work the teacher named; a short follow-up ("now the handout")
@@ -1059,6 +1060,16 @@ async function turnAction({ request }: ActionFunctionArgs) {
           );
           reply = pictured.reply;
           foundPictureIds.push(...pictured.ids);
+          // Counts and reasons only, never the lesson: why a picture was not
+          // found is otherwise invisible outside the server's log.
+          pictureReport = {
+            ...pictured.counts,
+            named: pictured.named,
+            reasons: pictured.empty.reduce<Record<string, number>>((tally, miss) => ({ ...tally, [miss.why]: (tally[miss.why] ?? 0) + 1 }), {}),
+            misses: pictured.empty.map((miss) => `${miss.subject.slice(0, 60)}: ${miss.why}`).slice(0, 20),
+            ...(pictured.look ? { look: pictured.look } : {}),
+            ms: Date.now() - lookedAt,
+          };
           if (pictured.counts.wanted || pictured.named) {
             const reasons = pictured.empty.reduce<Record<string, number>>((tally, miss) => ({ ...tally, [miss.why]: (tally[miss.why] ?? 0) + 1 }), {});
             // Counts only, never what the lesson is about.
@@ -1287,6 +1298,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
           // "<messageId>:<blockKey>" now in the lesson's stack (Nov 4).
           ...(filed.length ? { filed } : {}),
           ...(checks ? { checks } : {}),
+          ...(pictureReport ? { pictures: pictureReport } : {}),
         },
       };
     }
