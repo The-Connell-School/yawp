@@ -23,8 +23,8 @@ describe('withDeckMatchingPlan on real replies', () => {
       const after = readSlideDeck(withDeckMatchingPlan(reply));
       if (after.kind !== 'deck') throw new Error('deck lost');
       const agenda = after.deck.slides.find((slide) => slide.layout === 'agenda');
-      const slidesOnly = after.deck.slides.filter((slide) => slide.layout !== 'agenda');
-      expect(slidesOnly.reduce((sum, slide) => sum + (slide.minutes ?? 0), 0)).toBe(planTotal);
+      // The total the deck shows, its agenda's own minute included (re-test: it said 51 for 50).
+      expect(deckDurationMinutes(after.deck)).toBe(planTotal);
       if (agenda) expect(agenda.agenda!.reduce((sum, item) => sum + (item.minutes ?? 0), 0)).toBe(planTotal);
       // Nothing else about the deck changes.
       expect(after.deck.slides.length).toBe(before.deck.slides.length);

@@ -74,6 +74,46 @@ const MAX_LINE_CHARS = 200;
 const MAX_BODY_CHARS = 320;
 /** A passage students annotate: eight lines of verse or a short paragraph. */
 const MAX_EXCERPT_CHARS = 700;
+/** The most a slide's page note holds ("pp. 1–3", "1.3.130–142"). */
+const MAX_PAGE_CHARS = 20;
+
+/**
+ * Agenda lines, no more than an agenda slide holds: past that, the two
+ * neighbouring lines with the fewest minutes between them share a line, so
+ * every part is still there and the minutes still add up (re-test, Nov 22: a
+ * seven-line agenda, the planner's own or built from the plan, lost the deck).
+ */
+export function fitAgenda<T extends { title: string; minutes?: number }>(items: T[]): T[] {
+  let lines = [...items];
+  const at = (i: number) => lines[i]!.minutes ?? 0;
+  while (lines.length > MAX_AGENDA_ITEMS) {
+    let best = 0;
+    for (let i = 1; i < lines.length - 1; i += 1) if (at(i) + at(i + 1) < at(best) + at(best + 1)) best = i;
+    const [a, b] = [lines[best]!, lines[best + 1]!];
+    const joined = `${a.title}, ${b.title.charAt(0).toLowerCase()}${b.title.slice(1)}`;
+    const minutes = a.minutes == null && b.minutes == null ? undefined : at(best) + at(best + 1);
+    lines = [...lines.slice(0, best), { ...a, title: joined.length <= 70 ? joined : a.title, ...(minutes == null ? {} : { minutes }) }, ...lines.slice(best + 2)];
+  }
+  return lines;
+}
+
+/** A long page note in the short forms a teacher writes. */
+export function shortPage(page: string): string {
+  let short = page
+    .trim()
+    .replace(/\bact\s+([ivx\d]+)\s*,?\s*scene\s+([ivx\d]+)\s*,?\s*(?:lines?|ll?\.)\s*/i, '$1.$2.')
+    .replace(/\bact\s+([ivx\d]+)\s*,?\s*scene\s+([ivx\d]+)/i, '$1.$2')
+    .replace(/\bbook\s+([ivx\d]+)\s*,?\s*(?:lines?|ll?\.)\s*/i, '$1.')
+    .replace(/\bchapter\s+/gi, 'ch. ')
+    .replace(/\bpages?\s+/gi, (m) => (/s\s/i.test(m) ? 'pp. ' : 'p. '))
+    .replace(/\blines\s+/gi, 'll. ')
+    .replace(/\bline\s+/gi, 'l. ')
+    .replace(/\bstanzas?\s+/gi, 'st. ')
+    .replace(/\s+/g, ' ');
+  if (short.length > MAX_PAGE_CHARS) short = short.slice(0, MAX_PAGE_CHARS).replace(/[\s,;–-]+\S*$/, '').trim();
+  return short || page.trim().slice(0, MAX_PAGE_CHARS);
+}
+
 /** The most parts an agenda slide lists. */
 export const MAX_AGENDA_ITEMS = 6;
 // Wider than a bullet on purpose: "here is a weak conclusion next to a strong
@@ -158,7 +198,7 @@ const slideSchema = z
     seconds: z.coerce.number().int().min(5).max(600).optional(),
     author: z.string().trim().min(1).max(80).optional(),
     work: z.string().trim().min(1).max(120).optional(),
-    page: z.string().trim().min(1).max(20).optional(),
+    page: z.string().trim().min(1).max(MAX_PAGE_CHARS).optional(),
     part: z.string().trim().min(1).max(12).optional(),
     nextLesson: z.string().trim().min(1).max(MAX_TITLE_CHARS).optional(),
     // Deck spec v3: the divider that starts a stage names its writing-process
@@ -641,6 +681,16 @@ function normalizeSlide(raw: unknown): unknown {
   // An agenda and an exit have the layout's own heading; a deck is not lost
   // for leaving it out (preview, Nov 22: a Grapes of Wrath deck failed twice
   // over the two missing titles).
+  // Where the passage is, as short as a slide's chip holds: "Act 1, Scene 3,
+  // lines 130–142" is 1.3.130–142 (re-test, Nov 22: three long page notes
+  // lost a Macbeth deck).
+  if (typeof slide.page === 'string' && slide.page.trim().length > MAX_PAGE_CHARS) slide.page = shortPage(slide.page);
+  if (typeof slide.part === 'number') slide.part = String(slide.part);
+  if (Array.isArray(slide.agenda) && slide.agenda.length > MAX_AGENDA_ITEMS && slide.agenda.every((item) => item && typeof item === 'object' && typeof (item as { title?: unknown }).title === 'string')) {
+    slide.agenda = fitAgenda(
+      (slide.agenda as Array<{ title: string; minutes?: unknown }>).map((item) => ({ ...item, minutes: typeof item.minutes === 'number' ? item.minutes : Number(item.minutes) || undefined }))
+    );
+  }
   // An excerpt slide without its passage still says where the passage is
   // (work, lines or page) and what to do with it: it is a reading slide, not a
   // lost deck (re-test, Nov 22: "Dulce et Decorum Est" lost its deck over two).

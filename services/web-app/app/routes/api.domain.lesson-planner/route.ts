@@ -121,8 +121,13 @@ const MAX_HISTORY_CHARS = 36_000;
 // Raised from 120 s on Nov 22: lessons ran 100 to 115 s, and one with a
 // passage on its slides ran out at 120 s while still writing.
 const PLANNER_REQUEST_DEADLINE_MS = 240_000;
-/** A failure this early is a busy or dropped connection, not the lesson: one more try. */
-const PLANNER_RETRY_WITHIN_MS = 45_000;
+/**
+ * A failure before this leaves time for a whole second try under the deadline
+ * (a lesson takes 90 to 130 s): one more try. 45 s until the re-test (Nov 22),
+ * where a Romeo and Juliet lesson failed at 69 s and 75 s and the teacher got
+ * nothing.
+ */
+const PLANNER_RETRY_WITHIN_MS = 95_000;
 const HEARTBEAT_MS = 10_000;
 // A full lesson plan plus a ten-slide deck with speaker notes runs well past
 // 8k. Hitting the ceiling cuts the deck's JSON mid-object, and a cut-off deck
@@ -758,8 +763,8 @@ export async function action({ request }: ActionFunctionArgs) {
         try {
           reply = await ask();
         } catch (first) {
-          // Two of three failed turns on the preview (Nov 22) failed in 5 and
-          // 22 seconds: a busy model, not the lesson. One more try, quietly.
+          // Failed turns on the preview (Nov 22) failed in 5, 22, 69 and 75
+          // seconds: a busy or dropped call, not the lesson. One more try, quietly.
           if (deadline.aborted || isProviderConfigurationError(first) || Date.now() - startedAt > PLANNER_RETRY_WITHIN_MS) throw first;
           // eslint-disable-next-line no-console
           console.warn(`[lesson-planner] model call failed early, trying once more: ${describeProviderError(first)}`);

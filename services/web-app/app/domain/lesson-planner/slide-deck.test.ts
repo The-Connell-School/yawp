@@ -11,6 +11,7 @@ import {
   deckPictureIds,
   SLIDE_DECK_FENCE,
   SLIDE_LAYOUTS,
+  shortPage,
 } from './slide-deck';
 
 function fenced(deck: unknown): string {
@@ -802,5 +803,41 @@ describe('an excerpt slide without its passage (re-test, Nov 22)', () => {
     const result = validateSlideDeck(json);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.deck.slides[1]!.layout).toBe('read');
+  });
+});
+
+describe('a long page note is made short, not a lost deck (re-test, Nov 22)', () => {
+  test.each([
+    ['Act 1, Scene 3, lines 130–142', '1.3.130–142'],
+    ['Chapter 1, pages 1–3', 'ch. 1, pp. 1–3'],
+    ['Book 9, lines 105–566', '9.105–566'],
+  ])('%s → %s', (long, short) => {
+    expect(shortPage(long)).toBe(short);
+  });
+  test('the deck builds', () => {
+    const json = JSON.stringify({ title: 'M', slides: [{ layout: 'title', title: 'Macbeth', speakerNotes: 'n' }, { layout: 'excerpt', title: 'The aside', body: 'Two truths are told', work: 'Macbeth', page: 'Act 1, Scene 3, lines 130–142', speakerNotes: 'n' }] });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('the planner’s own seven-line agenda (re-test, Nov 22: Things Fall Apart lost its deck)', () => {
+  test('is fitted to six lines, every part and minute kept; a numbered part is read as text', () => {
+    const agenda = [5, 3, 15, 2, 12, 8, 5].map((minutes, i) => ({ title: `Part ${i + 1}`, minutes }));
+    const json = JSON.stringify({
+      title: 'TFA',
+      slides: [
+        { layout: 'title', title: 'Things Fall Apart', speakerNotes: 'n' },
+        { layout: 'agenda', title: 'Today', agenda, speakerNotes: 'n' },
+        { layout: 'big_idea', title: 'Idea', body: 'Achebe writes back.', part: 2, speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const lines = result.deck.slides[1]!.agenda!;
+    expect(lines).toHaveLength(6);
+    expect(lines.reduce((sum, line) => sum + (line.minutes ?? 0), 0)).toBe(50);
+    expect(result.deck.slides[2]!.part).toBe('2');
   });
 });
