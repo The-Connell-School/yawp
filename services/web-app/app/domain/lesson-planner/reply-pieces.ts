@@ -45,7 +45,11 @@ export function keepAllPlan(content: string): { keys: string[]; minutes: Record<
   const minutes: Record<string, number> = {};
   pieces.forEach((piece, index) => {
     if (!piece.step) return;
-    const held = blocksUnder(pieces, index).map((key) => pieces.find((other) => other.key === key)!);
+    const under = blocksUnder(pieces, index).map((key) => pieces.find((other) => other.key === key)!);
+    // Of several Short Responses offered, the one written for this lesson
+    // comes first: a general library prompt ("What ambition costs") is not
+    // the lesson's writing (round 3, Nov 22: Macbeth's aside went unwritten).
+    const held = choices.has(piece.key) ? [...under.filter((block) => block.ownPrompt), ...under.filter((block) => !block.ownPrompt)] : under;
     const kept: Placed[] = [];
     const seen = new Set<string>();
     for (const block of held) {
@@ -71,14 +75,20 @@ export function keepAllPlan(content: string): { keys: string[]; minutes: Record<
     // pick one of the three…") is that assignment: filing both reads as the
     // starter twice, once at 0 minutes (re-test, Nov 22). The assignment
     // stands for the step and takes its minutes.
-    const sole = kept.length === 1 ? kept[0]! : null;
+    // A handout under the step is a page, not the step's work: it does not
+    // keep the step from being its one assignment.
+    const work = kept.filter((block) => !block.printable);
+    for (const block of kept) if (block.printable) minutes[block.key] = 0;
+    const sole = work.length === 1 ? work[0]! : null;
     if (!piece.emptyStep && sole && (sole.block === 'yawp-daily-pages' || sole.key === EXIT_TICKET_BLOCK_KEY)) {
       skip.add(piece.key);
       minutes[sole.key] = piece.minutes;
       return;
     }
     if (!piece.emptyStep) for (const block of kept) minutes[block.key] = 0;
-    else {
+    else if (work.length < kept.length) {
+      for (const block of work) minutes[block.key] = work.length === 1 ? piece.minutes : 0;
+    } else {
       const share = Math.max(1, Math.floor(piece.minutes / kept.length));
       kept.forEach((block, i) => {
         minutes[block.key] = i === kept.length - 1 ? Math.max(1, piece.minutes! - share * (kept.length - 1)) : share;
@@ -95,7 +105,25 @@ export function keepAllPlan(content: string): { keys: string[]; minutes: Record<
       return true;
     })
     .map((piece) => piece.key);
-  return { keys, minutes };
+  return { keys: withHandoutsWhereRead(keys, pieces), minutes };
+}
+
+const READS = /\b(read|reading|annotat|close|passage|aside|soliloquy|stanza|sonnet|poem|prologue|excerpt|model)/i;
+
+/**
+ * A handout filed with the step that reads it, not at the end of the lesson
+ * because the reply printed it last (round 3, Nov 22: Hamlet's soliloquy and
+ * Macbeth's passage came after the exit ticket, at 0 minutes).
+ */
+function withHandoutsWhereRead(keys: string[], pieces: Placed[]): string[] {
+  const byKey = new Map(pieces.map((piece) => [piece.key, piece]));
+  const reading = keys.find((key) => byKey.get(key)?.step && READS.test(byKey.get(key)!.title ?? ''));
+  if (!reading) return keys;
+  const moving = keys.filter((key, i) => byKey.get(key)?.printable && i > keys.indexOf(reading));
+  if (!moving.length) return keys;
+  const rest = keys.filter((key) => !moving.includes(key));
+  const at = rest.indexOf(reading) + 1;
+  return [...rest.slice(0, at), ...moving, ...rest.slice(at)];
 }
 
 /**
@@ -240,6 +268,12 @@ type Placed = {
   step?: boolean;
   emptyStep?: boolean;
   minutes?: number | null;
+  /** A step's heading. */
+  title?: string;
+  /** A handout: a page students hold, used in whichever step reads it. */
+  printable?: boolean;
+  /** A Short Response written for this lesson (no library id). */
+  ownPrompt?: boolean;
 };
 
 function placedPieces(content: string): Placed[] {
@@ -254,6 +288,7 @@ function placedPieces(content: string): Placed[] {
       step: true,
       emptyStep: !step.content.trim(),
       minutes: step.minutes,
+      title: step.title,
     });
   }
 
@@ -267,11 +302,16 @@ function placedPieces(content: string): Placed[] {
     const block = match[0];
     const push = (key: string, order: number) => placed.push({ at, order, key, block: match[1] });
     if (match[1] === 'yawp-material') {
-      if (readLessonMaterials(block).materials.length) push(String(materials++), 1);
+      const read = readLessonMaterials(block).materials;
+      if (read.length) {
+        push(String(materials++), 1);
+        if (read[0]!.kind === 'handout') placed[placed.length - 1]!.printable = true;
+      }
     } else if (match[1] === 'yawp-daily-pages') {
-      readDailyPagesExercises(block).exercises.forEach((_, index) =>
-        push(dailyPagesBlockKey(exercises++), 1 + index / 100)
-      );
+      readDailyPagesExercises(block).exercises.forEach((exercise, index) => {
+        push(dailyPagesBlockKey(exercises++), 1 + index / 100);
+        if (exercise.kind === 'daily-pages' && !exercise.promptId) placed[placed.length - 1]!.ownPrompt = true;
+      });
     } else if (match[1] === 'yawp-exit-ticket') {
       if (readPlannedExitTickets(block).tickets.length) {
         push(tickets === 0 ? EXIT_TICKET_BLOCK_KEY : `${EXIT_TICKET_BLOCK_KEY}:${tickets}`, 1);

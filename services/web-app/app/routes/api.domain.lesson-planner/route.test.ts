@@ -1354,7 +1354,10 @@ test('streamed monthly admission and replay use the same terminal-event protocol
     );
     const text = await response.text();
     expect(text.endsWith('\n')).toBe(true);
-    expect(JSON.parse(text.trim())).toMatchObject({
+    // The stream opens before the checks (round 3, Nov 22); their answer is the last line.
+    const lines = text.trim().split('\n');
+    expect(JSON.parse(lines[0]!)).toMatchObject({ type: 'progress' });
+    expect(JSON.parse(lines.at(-1)!)).toMatchObject({
       type: 'done',
       status: kind === 'replay' ? 200 : kind === 'exhausted' ? 403 : 409,
       payload: kind === 'replay' ? { reply: 'Saved lesson' } : { error: kind },
@@ -1362,4 +1365,30 @@ test('streamed monthly admission and replay use the same terminal-event protocol
   }
   expect(getLLMCompletion).not.toHaveBeenCalled();
   expect(reserveAiRequest).not.toHaveBeenCalled();
+});
+
+test('a streamed turn answers before the checks finish (round 3, Nov 22: eight minutes of silence)', async () => {
+  monthlyEnabled = true;
+  let release: () => void = () => {};
+  beginMonthlyOperation.mockClear();
+  beginMonthlyOperation.mockImplementation(
+    () => new Promise((resolve) => (release = () => resolve({ kind: 'exhausted' })))
+  );
+  const response = (await action({
+    request: formRequest({ message: 'A slow check', requestId: 'slow-check', stream: '1' }),
+  } as any)) as Response;
+  const reader = response.body!.getReader();
+  const first = new TextDecoder().decode((await reader.read()).value);
+  expect(JSON.parse(first.trim().split('\n')[0]!)).toMatchObject({ type: 'progress' });
+  // The check is still waiting: the first line came before it.
+  for (let i = 0; i < 400 && beginMonthlyOperation.mock.calls.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(beginMonthlyOperation).toHaveBeenCalledTimes(1);
+  release();
+  let rest = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    rest += new TextDecoder().decode(value);
+  }
+  expect(JSON.parse(rest.trim().split('\n').at(-1)!)).toMatchObject({ type: 'done', status: 403 });
 });

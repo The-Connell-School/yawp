@@ -147,6 +147,15 @@ type PacketAudience = 'teacher' | 'student';
 /** Shown when the turn never made it back — distinct from one the server refused. */
 const PLANNER_UNREACHABLE =
   'That lesson did not come back. Please check your connection and try again.';
+/** The planner answered, then stopped before the lesson was done. */
+const PLANNER_UNFINISHED =
+  'This lesson stopped before it reached you. It may still appear in your lessons in a minute; if not, please try again.';
+/**
+ * The planner answers at once (round 3, Nov 22): a request that has heard
+ * nothing in this long never reached it, and is sent once more, with the same
+ * request id, so it is never counted or built twice.
+ */
+const FIRST_LINE_MS = 30_000;
 
 type ChatMessage = {
   /** 'stack': asked on the stack page, shown here as one compact line (run 3). */
@@ -1042,11 +1051,12 @@ export default function LessonPlannerRoute() {
     message: string,
     unitDay?: { day: number; title: string; display?: string }
   ) {
+    const requestId = crypto.randomUUID();
     const body = new URLSearchParams({
       intent: 'chat',
       message,
       stream: '1',
-      requestId: crypto.randomUUID(),
+      requestId,
       ...(conversationId ? { conversationId } : {}),
       ...(!conversationId && seed
         ? { originClassAssignmentId: seed.classAssignmentId }
@@ -1063,13 +1073,47 @@ export default function LessonPlannerRoute() {
 
     setProgress(PLANNING_PROGRESS_START);
     let landed: LessonPlannerActionData | null = null;
+    let heard = false;
     try {
-      const response = await fetch('/api/domain/lesson-planner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      });
-      if (!response.body) throw new Error('no stream');
+      let response: Response | null = null;
+      for (let attempt = 1; attempt <= 2 && !response; attempt += 1) {
+        const controller = new AbortController();
+        const silence = setTimeout(() => controller.abort(), FIRST_LINE_MS);
+        try {
+          const sent = await fetch('/api/domain/lesson-planner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            signal: controller.signal,
+          });
+          if (!sent.body) throw new Error('no stream');
+          // The first line, or nothing: only then is the wait handed to the stream.
+          const reader = sent.body.getReader();
+          const first = await reader.read();
+          clearTimeout(silence);
+          heard = true;
+          response = new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                if (first.value) c.enqueue(first.value);
+                if (first.done) c.close();
+              },
+              async pull(c) {
+                const next = await reader.read();
+                if (next.done) c.close();
+                else c.enqueue(next.value);
+              },
+            })
+          );
+        } catch (error) {
+          clearTimeout(silence);
+          // Nothing heard: the request never reached the planner (it answers
+          // at once), so sending it again cannot build the lesson twice.
+          if (attempt === 2) throw error;
+          setProgress({ label: 'Reaching the planner again…', fraction: PLANNING_PROGRESS_START.fraction });
+        }
+      }
+      if (!response?.body) throw new Error('no stream');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -1105,7 +1149,8 @@ export default function LessonPlannerRoute() {
       setProgress(null);
     }
 
-    setStreamed(landed ?? { error: PLANNER_UNREACHABLE });
+    // Heard from, then no lesson: the planner stopped, not the connection.
+    setStreamed(landed ?? { error: heard ? PLANNER_UNFINISHED : PLANNER_UNREACHABLE });
     // The loader owns the lesson list and which unit days are built, and the
     // fetcher would have refreshed both for us.
     if (landed?.reply || landed?.conversationId) revalidator.revalidate();

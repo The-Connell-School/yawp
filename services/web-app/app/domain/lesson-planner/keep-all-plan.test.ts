@@ -88,3 +88,51 @@ describe('the ways back on time never cut the reading', () => {
     expect(trim?.text).toContain('Context: the scene so far');
   });
 });
+
+describe('round 3 (Nov 22): the handout where it is read, the lesson’s own prompt first', () => {
+  const HAMLET = fixture('reply-hamlet-round-3.md');
+
+  test('the soliloquy handout is filed with the step that reads it, not after the exit ticket', () => {
+    const pieces = filed(HAMLET);
+    const kinds = pieces.map((piece) => piece.kind);
+    const handout = kinds.indexOf('handout');
+    expect(handout).toBeGreaterThan(-1);
+    expect(handout).toBeLessThan(kinds.indexOf('exit-ticket'));
+    expect(pieces[handout - 1]!.title).toMatch(/read/i);
+    expect(pieces[handout]!.minutes).toBe(0);
+  });
+
+  test('the stack still adds up to the period', () => {
+    const total = filed(HAMLET)
+      .filter((piece) => piece.kind !== 'slides')
+      .reduce((sum, piece) => sum + (piece.minutes ?? 0), 0);
+    expect(total).toBe(50);
+  });
+
+  test('of two Short Responses offered, the one written for the lesson is filed', () => {
+    const reply = [
+      '## Read aloud (40 min) {type: read_aloud}',
+      '',
+      'Read Act 1, Scene 3 aloud.',
+      '',
+      '## Short Response (10 min) {type: daily_pages}',
+      '',
+      'Pick one.',
+      '',
+      '```yawp-daily-pages',
+      'kind: daily-pages',
+      'id: SR-014',
+      'title: What ambition costs',
+      'Ambition costs something. Say what it costs.',
+      '```',
+      '',
+      '```yawp-daily-pages',
+      'kind: daily-pages',
+      'title: What the aside reveals',
+      "What does Macbeth's aside reveal that the witches did not put there? Quote one phrase.",
+      '```',
+    ].join('\n');
+    const responses = filed(reply).filter((piece) => piece.kind === 'daily-pages');
+    expect(responses.map((piece) => piece.title)).toEqual(['Short Response: What the aside reveals']);
+  });
+});

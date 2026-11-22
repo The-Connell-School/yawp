@@ -56,6 +56,7 @@ import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
+import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
 import { withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
@@ -256,7 +257,85 @@ function boundedHistory(
   return plannerHistory(messages, MAX_HISTORY_CHARS);
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+/**
+ * A streamed turn answers at once, before anything else is done (round 3,
+ * Nov 22: two of sixteen turns sent nothing for eight minutes, then worked on
+ * a second try). The first line goes out the moment the request arrives; the
+ * checks before the planner (the teacher, the lesson, the month's allowance)
+ * run inside the stream, and what they answer arrives as its last line.
+ */
+export async function action(args: ActionFunctionArgs) {
+  let streamed = false;
+  try {
+    streamed = (await args.request.clone().formData()).get('stream') === '1';
+  } catch {
+    streamed = false;
+  }
+  if (!streamed) return turnAction(args);
+  // eslint-disable-next-line no-console
+  console.info(`[lesson-planner] turn accepted at ${new Date().toISOString()}`);
+  return streamFromStart(() => turnAction(args));
+}
+
+/** A finished answer of any shape as the stream's last line. */
+async function doneLine(answer: unknown): Promise<Record<string, unknown>> {
+  if (answer instanceof Response) {
+    let payload: unknown;
+    try {
+      payload = await answer.json();
+    } catch {
+      payload = { error: PLANNER_FAILED };
+    }
+    return { type: 'done', status: answer.status, payload };
+  }
+  if (answer && typeof answer === 'object' && 'data' in answer && 'init' in answer) {
+    const { data, init } = answer as { data: unknown; init?: { status?: number } | null };
+    return { type: 'done', status: init?.status ?? 200, payload: data };
+  }
+  return { type: 'done', status: 200, payload: answer };
+}
+
+function streamFromStart(handle: () => Promise<unknown>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const line = (event: Record<string, unknown>) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      line({ type: 'progress', ...PLANNING_PROGRESS_START });
+      const heartbeat = setInterval(() => line({ type: 'keepalive' }), HEARTBEAT_MS);
+      try {
+        let answer: unknown;
+        try {
+          answer = await handle();
+        } catch (thrown) {
+          answer = thrown instanceof Response ? thrown : null;
+        }
+        clearInterval(heartbeat);
+        if (answer instanceof Response && (answer.headers.get('Content-Type') ?? '').includes('ndjson') && answer.body) {
+          const reader = answer.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } else if (answer === null) {
+          line({ type: 'done', status: 500, payload: { error: PLANNER_FAILED } });
+        } else {
+          line(await doneLine(answer));
+        }
+      } catch {
+        line({ type: 'done', status: 500, payload: { error: PLANNER_FAILED } });
+      } finally {
+        clearInterval(heartbeat);
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' },
+  });
+}
+
+async function turnAction({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
   const access = await requireLessonPlannerAccess(request);
 
@@ -899,6 +978,8 @@ export async function action({ request }: ActionFunctionArgs) {
       // Minutes that agree (Nov 22): the deck's agenda and slide minutes come
       // from the plan's steps, never written separately.
       reply = withDeckMatchingPlan(reply);
+      // The writing on the slides is the writing "Add everything" files (round 3, Nov 22).
+      reply = withWriteSlidesAsFiled(reply);
       // A map slide's places are found in Yawp!'s own place list (Nov 19): a
       // pin is never where the model guessed.
       reply = withResolvedPlaces(reply);
