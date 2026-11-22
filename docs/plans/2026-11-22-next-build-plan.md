@@ -357,3 +357,20 @@ Whatever you pick, I end with another round (the same 13, plus the 3 new ones if
 Dependencies:
 - **Item 1** is used by 4 (glosses), 6 (unit repairs) and 9 (character names). Without it, those fall back to the "Check before class" note.
 - **Item 2** uses the quotation check's source text, so it covers public-domain works only. For copyrighted works the slot stays, labelled.
+
+---
+
+## After round 4 and the twelve new lessons (Nov 22, evening)
+
+Items 1, 2, 3 and 7 are built. Round 4 on the original thirteen: **2.77** (10 of 13 usable with edits). Twelve never-tested lessons: **2.58** (7 of 12). Lessons on texts Yawp! had in hand averaged 3.00; lessons on texts it did not have averaged 2.20 and invented quotations. Full write-up: `docs/plans/2026-11-22-lesson-review/round-4/summary.md`.
+
+New items, numbered after the eleven above:
+
+- **12. The teacher's own pages.** Ask once, optionally, for a PDF, photo or pasted text when the work is in copyright and the lesson reads closely. "Add your pages" in the slot fills the slide and handout and checks every quotation against it. Without the text, quote nothing from a copyrighted work. (M)
+- **13. A lost deck rebuilt.** A reply with no deck, or a deck cut off, gets one built from its plan in a second call. (S–M)
+- **14. One text, one version.** Slides and handout take a passage from the same source (Dickinson's 1890 edit on the slides, her own text on the handout). (S)
+- **15. Minutes and writing share per step.** Each slide carries its step and that step's minutes; the writing share counts writing only. (S–M)
+- **16. Three exit tickets.** Brian's ask: check understanding, explain a term, ask a question. (S)
+- **17. A sub-ready printed plan.** Today's short print, plus one with every step's full directions. (S)
+
+Recommended next: **12, 13, 5, 16.**
