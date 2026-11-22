@@ -6,10 +6,18 @@
  * Shapes below are Wikipedia's own, as returned on Nov 22.
  */
 import { describe, expect, test } from 'bun:test';
-import { resolveDeckPictures, type PictureShelf } from './picture-lookup.server';
+import {
+  resolveDeckPictures,
+  type PictureShelf,
+} from './picture-lookup.server';
 import type { Slide, SlideDeck } from './slide-deck';
 
-const PNG = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR4nGP4z8DwHwQZYAQAZ/gH+Z3ZzW4AAAAASUVORK5CYII=', 'base64'));
+const PNG = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR4nGP4z8DwHwQZYAQAZ/gH+Z3ZzW4AAAAASUVORK5CYII=',
+    'base64'
+  )
+);
 
 const PAGES = {
   query: {
@@ -17,18 +25,99 @@ const PAGES = {
     normalized: [{ from: 'allen ginsberg', to: 'Allen ginsberg' }],
     pages: {
       '1': { title: 'Brown v. Board of Education' },
-      '2': { title: 'Giuseppe Garibaldi', pageimage: 'Garibaldi_(1866).jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Garibaldi.jpg', width: 1280, height: 1568 } },
-      '3': { title: 'Levittown, New York', pageimage: 'Nassau_County_New_York_incorporated_and_unincorporated_areas_Levittown_highlighted.svg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Levittown.svg.png', width: 1280, height: 878 } },
-      '4': { title: 'Unification of Italy', pageimage: 'Episodio_delle_cinque_giornate.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Episodio.jpg', width: 1280, height: 1827 } },
-      '5': { title: 'Mary Shelley', pageimage: 'Mary_Wollstonecraft_Shelley_Rothwell.tif', thumbnail: { source: 'https://thumb.wikimedia.org/a/Shelley.tif.jpg', width: 1280, height: 1558 } },
-      '6': { title: 'Allen ginsberg', pageimage: 'Allen_Ginsberg_1979.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Ginsberg.jpg', width: 1280, height: 1707 } },
-      '8': { title: 'Levittown, Pennsylvania', description: 'Unincorporated community in Pennsylvania, US', pageimage: 'BristolPA_PhineasPembertonHouse.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Pemberton.jpg', width: 1280, height: 850 } },
-      '9': { title: 'Palermo', description: 'City in Sicily, Italy', pageimage: 'Sicilia_Palermo5_tango7174.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Palermo.jpg', width: 1280, height: 900 } },
-      '7': { title: 'Jack Kerouac', pageimage: 'Kerouac_by_Palumbo.png', thumbnail: { source: 'https://thumb.wikimedia.org/a/Kerouac.png', width: 388, height: 518 } },
+      '2': {
+        title: 'Giuseppe Garibaldi',
+        pageimage: 'Garibaldi_(1866).jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Garibaldi.jpg',
+          width: 1280,
+          height: 1568,
+        },
+      },
+      '3': {
+        title: 'Levittown, New York',
+        pageimage:
+          'Nassau_County_New_York_incorporated_and_unincorporated_areas_Levittown_highlighted.svg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Levittown.svg.png',
+          width: 1280,
+          height: 878,
+        },
+      },
+      '4': {
+        title: 'Unification of Italy',
+        pageimage: 'Episodio_delle_cinque_giornate.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Episodio.jpg',
+          width: 1280,
+          height: 1827,
+        },
+      },
+      '5': {
+        title: 'Mary Shelley',
+        pageimage: 'Mary_Wollstonecraft_Shelley_Rothwell.tif',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Shelley.tif.jpg',
+          width: 1280,
+          height: 1558,
+        },
+      },
+      '6': {
+        title: 'Allen ginsberg',
+        pageimage: 'Allen_Ginsberg_1979.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Ginsberg.jpg',
+          width: 1280,
+          height: 1707,
+        },
+      },
+      '8': {
+        title: 'Levittown, Pennsylvania',
+        description: 'Unincorporated community in Pennsylvania, US',
+        pageimage: 'BristolPA_PhineasPembertonHouse.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Pemberton.jpg',
+          width: 1280,
+          height: 850,
+        },
+      },
+      '9': {
+        title: 'Palermo',
+        description: 'City in Sicily, Italy',
+        pageimage: 'Sicilia_Palermo5_tango7174.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Palermo.jpg',
+          width: 1280,
+          height: 900,
+        },
+      },
+      '10': {
+        title: 'Julius and Ethel Rosenberg',
+        pageimage: 'Julius_and_Ethel_Rosenberg_NYWTS.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Rosenberg.jpg',
+          width: 1280,
+          height: 900,
+        },
+      },
+      '7': {
+        title: 'Jack Kerouac',
+        pageimage: 'Kerouac_by_Palumbo.png',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Kerouac.png',
+          width: 388,
+          height: 518,
+        },
+      },
     },
   },
 };
-const info = (file: string, license: string, artist: string, mime = 'image/jpeg') => ({
+const info = (
+  file: string,
+  license: string,
+  artist: string,
+  mime = 'image/jpeg'
+) => ({
   title: `File:${file.replace(/_/g, ' ')}`,
   imageinfo: [
     {
@@ -37,7 +126,12 @@ const info = (file: string, license: string, artist: string, mime = 'image/jpeg'
       thumbwidth: 1280,
       thumbheight: 1500,
       descriptionurl: `https://commons.wikimedia.org/wiki/File:${file}`,
-      extmetadata: { LicenseShortName: { value: license }, Artist: { value: artist }, ImageDescription: { value: `<p>${file}</p>` }, ObjectName: { value: file.replace(/\.\w+$/, '').replace(/_/g, ' ') } },
+      extmetadata: {
+        LicenseShortName: { value: license },
+        Artist: { value: artist },
+        ImageDescription: { value: `<p>${file}</p>` },
+        ObjectName: { value: file.replace(/\.\w+$/, '').replace(/_/g, ' ') },
+      },
     },
   ],
 });
@@ -45,11 +139,29 @@ const FILES = {
   query: {
     pages: {
       a: info('Garibaldi_(1866).jpg', 'Public domain', 'Unknown author'),
-      b: info('Episodio_delle_cinque_giornate.jpg', 'Public domain', 'Baldassare Verazzi'),
-      c: info('Mary_Wollstonecraft_Shelley_Rothwell.tif', 'Public domain', 'Richard Rothwell', 'image/tiff'),
+      b: info(
+        'Episodio_delle_cinque_giornate.jpg',
+        'Public domain',
+        'Baldassare Verazzi'
+      ),
+      c: info(
+        'Mary_Wollstonecraft_Shelley_Rothwell.tif',
+        'Public domain',
+        'Richard Rothwell',
+        'image/tiff'
+      ),
       d: info('Allen_Ginsberg_1979.jpg', 'CC BY-SA 3.0', 'Hans van Dijk'),
-      e: info('BristolPA_PhineasPembertonHouse.jpg', 'CC BY-SA 4.0', 'Magicpiano'),
+      e: info(
+        'BristolPA_PhineasPembertonHouse.jpg',
+        'CC BY-SA 4.0',
+        'Magicpiano'
+      ),
       f: info('Sicilia_Palermo5_tango7174.jpg', 'CC BY-SA 3.0', 'Tango7174'),
+      g: info(
+        'Julius_and_Ethel_Rosenberg_NYWTS.jpg',
+        'Public domain',
+        'Roger Higgins, World-Telegram staff photographer'
+      ),
     },
   },
 };
@@ -59,16 +171,44 @@ function wikipedia(overrides: { pagesStatus?: number; hang?: RegExp } = {}) {
   const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
     const href = String(url);
     calls.push(href);
-    if (overrides.hang?.test(href)) return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
-    expect(new Headers(init?.headers).get('user-agent')).toContain('support@yawp.school');
-    if (href.includes('prop=pageimages')) return new Response(JSON.stringify(PAGES), { status: overrides.pagesStatus ?? 200 });
-    if (href.includes('prop=imageinfo')) return new Response(JSON.stringify(FILES), { status: 200 });
+    if (overrides.hang?.test(href))
+      return new Promise<Response>((_resolve, reject) =>
+        init?.signal?.addEventListener('abort', () =>
+          reject(new Error('aborted'))
+        )
+      );
+    expect(new Headers(init?.headers).get('user-agent')).toContain(
+      'support@yawp.school'
+    );
+    if (href.includes('list=search')) {
+      const asked = new URL(href).searchParams.get('srsearch') ?? '';
+      const title = /Rosenberg/.test(asked)
+        ? 'Julius and Ethel Rosenberg'
+        : /Beat/.test(asked)
+          ? 'Beat Generation'
+          : null;
+      return new Response(
+        JSON.stringify({ query: { search: title ? [{ ns: 0, title }] : [] } }),
+        { status: 200 }
+      );
+    }
+    if (href.includes('prop=pageimages'))
+      return new Response(JSON.stringify(PAGES), {
+        status: overrides.pagesStatus ?? 200,
+      });
+    if (href.includes('prop=imageinfo'))
+      return new Response(JSON.stringify(FILES), { status: 200 });
     return new Response(PNG, { status: 200 });
   }) as typeof fetch;
   return { fetcher, calls };
 }
 
-function shelf(kept: Array<{ key: string; id: string }> = []): PictureShelf & { created: Array<Record<string, unknown>>; copied: string[] } {
+function shelf(
+  kept: Array<{ key: string; id: string }> = []
+): PictureShelf & {
+  created: Array<Record<string, unknown>>;
+  copied: string[];
+} {
   const created: Array<Record<string, unknown>> = [];
   const copied: string[] = [];
   return {
@@ -88,19 +228,44 @@ function shelf(kept: Array<{ key: string; id: string }> = []): PictureShelf & { 
   };
 }
 
-const want = (subject: string, shows?: string) => ({ subject, ...(shows ? { shows } : {}) });
+const want = (subject: string, shows?: string) => ({
+  subject,
+  ...(shows ? { shows } : {}),
+});
 const DECK: SlideDeck = {
   title: 'Italy and after',
   slides: [
-    { layout: 'big_idea', title: 'Garibaldi', body: 'One general, a thousand volunteers.', wants: want('Giuseppe Garibaldi'), speakerNotes: 'n' },
-    { layout: 'notes', title: 'Levittown', facts: ['17,000 houses.'], wants: want('Levittown, New York', 'from the air'), speakerNotes: 'n' },
-    { layout: 'notes', title: 'The Risorgimento', facts: ['1815 to 1871.'], wants: want('Risorgimento'), speakerNotes: 'n' },
+    {
+      layout: 'big_idea',
+      title: 'Garibaldi',
+      body: 'One general, a thousand volunteers.',
+      wants: want('Giuseppe Garibaldi'),
+      speakerNotes: 'n',
+    },
+    {
+      layout: 'notes',
+      title: 'Levittown',
+      facts: ['17,000 houses.'],
+      wants: want('Levittown, New York', 'from the air'),
+      speakerNotes: 'n',
+    },
+    {
+      layout: 'notes',
+      title: 'The Risorgimento',
+      facts: ['1815 to 1871.'],
+      wants: want('Risorgimento'),
+      speakerNotes: 'n',
+    },
     {
       layout: 'timeline',
       title: 'Two centuries',
       events: [
         { date: '1818', title: 'Frankenstein', wants: want('Mary Shelley') },
-        { date: '1954', title: 'Brown v. Board', wants: want('Brown v. Board of Education') },
+        {
+          date: '1954',
+          title: 'Brown v. Board',
+          wants: want('Brown v. Board of Education'),
+        },
         { date: '1956', title: 'Howl', wants: want('allen ginsberg') },
         { date: '1957', title: 'On the Road', wants: want('Jack Kerouac') },
       ],
@@ -114,7 +279,10 @@ describe('resolveDeckPictures', () => {
   test('two requests for the whole deck, and each subject’s own picture on the slide that asked', async () => {
     const { fetcher, calls } = wikipedia();
     const db = shelf();
-    const result = await resolveDeckPictures(DECK, owner, { fetch: fetcher, shelf: db });
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: fetcher,
+      shelf: db,
+    });
     const api = calls.filter((url) => url.includes('/w/api.php'));
     expect(api.length).toBe(2);
     expect(api[0]).toContain('en.wikipedia.org');
@@ -125,94 +293,295 @@ describe('resolveDeckPictures', () => {
     expect(result.deck.slides[3]!.events![2]!.image).toBeTruthy();
     // A TIFF original is kept from its JPEG rendering.
     expect(result.deck.slides[3]!.events![0]!.image).toBeTruthy();
-    expect(db.created[0]).toMatchObject({ subject: 'giuseppe garibaldi', origin: 'found', license: 'Public domain', credit: 'Garibaldi (1866), Public domain, via Wikimedia Commons', membershipId: 'm1' });
-    expect(db.created.find((row) => row.subject === 'allen ginsberg')).toMatchObject({ license: 'CC BY-SA 3.0', credit: 'Hans van Dijk, Allen Ginsberg 1979, CC BY-SA 3.0, via Wikimedia Commons' });
+    expect(db.created[0]).toMatchObject({
+      subject: 'giuseppe garibaldi',
+      origin: 'found',
+      license: 'Public domain',
+      credit: 'Garibaldi (1866), Public domain, via Wikimedia Commons',
+      membershipId: 'm1',
+    });
+    expect(
+      db.created.find((row) => row.subject === 'allen ginsberg')
+    ).toMatchObject({
+      license: 'CC BY-SA 3.0',
+      credit:
+        'Hans van Dijk, Allen Ginsberg 1979, CC BY-SA 3.0, via Wikimedia Commons',
+    });
   });
 
   test('no picture is better than a wrong one: a map of the county, a tiny file and a subject with none are left empty', async () => {
     const { fetcher } = wikipedia();
-    const result = await resolveDeckPictures(DECK, owner, { fetch: fetcher, shelf: shelf() });
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: fetcher,
+      shelf: shelf(),
+    });
     expect(result.deck.slides[1]!.image).toBeUndefined();
     expect(result.deck.slides[3]!.events![1]!.image).toBeUndefined();
     expect(result.deck.slides[3]!.events![3]!.image).toBeUndefined();
-    expect(result.counts).toEqual({ wanted: 7, filled: 4, reused: 0, empty: 3 });
-    expect(result.empty.map((miss) => miss.subject).sort()).toEqual(['Brown v. Board of Education', 'Jack Kerouac', 'Levittown, New York']);
+    expect(result.counts).toEqual({
+      wanted: 7,
+      filled: 4,
+      reused: 0,
+      empty: 3,
+    });
+    expect(result.empty.map((miss) => miss.subject).sort()).toEqual([
+      'Brown v. Board of Education',
+      'Jack Kerouac',
+      'Levittown, New York',
+    ]);
   });
 
   test('a town’s lead picture is often some landmark in it: kept only when the file is named for the town (live run, Nov 22)', async () => {
     const towns = {
       title: 'Places',
       slides: [
-        { layout: 'notes', title: 'Levittown', facts: ['Identical houses.'], wants: want('Levittown, Pennsylvania', 'the rows of identical houses'), speakerNotes: 'n' },
-        { layout: 'notes', title: 'Palermo', facts: ['Sicily’s capital.'], wants: want('Palermo'), speakerNotes: 'n' },
+        {
+          layout: 'notes',
+          title: 'Levittown',
+          facts: ['Identical houses.'],
+          wants: want(
+            'Levittown, Pennsylvania',
+            'the rows of identical houses'
+          ),
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'notes',
+          title: 'Palermo',
+          facts: ['Sicily’s capital.'],
+          wants: want('Palermo'),
+          speakerNotes: 'n',
+        },
       ] as Slide[],
     };
-    const result = await resolveDeckPictures(towns, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    const result = await resolveDeckPictures(towns, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
     // The Phineas Pemberton House is in Levittown, Pennsylvania; it is not a picture of Levittown.
     expect(result.deck.slides[0]!.image).toBeUndefined();
-    expect(result.empty).toEqual([{ subject: 'Levittown, Pennsylvania', why: 'not a picture' }]);
+    expect(result.empty).toEqual([
+      { subject: 'Levittown, Pennsylvania', why: 'not a picture' },
+    ]);
     expect(result.deck.slides[1]!.image).toBeTruthy();
   });
 
   test('a picture already kept for a subject is reused without asking Wikipedia for it', async () => {
     const { fetcher, calls } = wikipedia();
     const db = shelf([{ key: 'giuseppe garibaldi', id: 'ckkept0000001' }]);
-    const result = await resolveDeckPictures(DECK, owner, { fetch: fetcher, shelf: db });
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: fetcher,
+      shelf: db,
+    });
     expect(db.copied).toEqual(['ckkept0000001']);
     expect(result.deck.slides[0]!.image).toBe('ckcopy0000001');
-    expect(decodeURIComponent(calls.find((url) => url.includes('prop=pageimages'))!).replace(/\+/g, ' ')).not.toContain('Giuseppe Garibaldi');
+    expect(
+      decodeURIComponent(
+        calls.find((url) => url.includes('prop=pageimages'))!
+      ).replace(/\+/g, ' ')
+    ).not.toContain('Giuseppe Garibaldi');
     expect(result.counts.reused).toBe(1);
   });
 
   test('a deck that wants nothing asks nothing', async () => {
     const { fetcher, calls } = wikipedia();
-    const plain = { title: 'x', slides: [{ layout: 'title', title: 'x', speakerNotes: 'n' }] as Slide[] };
-    const result = await resolveDeckPictures(plain, owner, { fetch: fetcher, shelf: shelf() });
+    const plain = {
+      title: 'x',
+      slides: [{ layout: 'title', title: 'x', speakerNotes: 'n' }] as Slide[],
+    };
+    const result = await resolveDeckPictures(plain, owner, {
+      fetch: fetcher,
+      shelf: shelf(),
+    });
     expect(result.deck).toBe(plain);
     expect(calls).toEqual([]);
   });
 
   test('Wikipedia busy or silent: the deck comes back as it was, in time', async () => {
-    const busy = await resolveDeckPictures(DECK, owner, { fetch: wikipedia({ pagesStatus: 429 }).fetcher, shelf: shelf(), retryMs: 10 });
+    const busy = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia({ pagesStatus: 429 }).fetcher,
+      shelf: shelf(),
+      retryMs: 10,
+    });
     expect(busy.deck.slides[0]!.image).toBeUndefined();
     expect(busy.counts.filled).toBe(0);
     const started = Date.now();
-    const silent = await resolveDeckPictures(DECK, owner, { fetch: wikipedia({ hang: /api\.php/ }).fetcher, shelf: shelf(), timeoutMs: 150, deadlineMs: 400 });
+    const silent = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia({ hang: /api\.php/ }).fetcher,
+      shelf: shelf(),
+      timeoutMs: 150,
+      deadlineMs: 400,
+    });
     expect(Date.now() - started).toBeLessThan(1500);
     expect(silent.counts.filled).toBe(0);
   });
 
   test('one slow download never costs the others their pictures', async () => {
-    const result = await resolveDeckPictures(DECK, owner, { fetch: wikipedia({ hang: /thumb\.wikimedia.*Garibaldi/ }).fetcher, shelf: shelf(), timeoutMs: 150, deadlineMs: 2000 });
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia({ hang: /thumb\.wikimedia.*Garibaldi/ }).fetcher,
+      shelf: shelf(),
+      timeoutMs: 150,
+      deadlineMs: 2000,
+    });
     expect(result.deck.slides[0]!.image).toBeUndefined();
     expect(result.deck.slides[2]!.image).toBeTruthy();
   });
 
   test('never more than a dozen pictures for one deck', async () => {
-    const many = { title: 'x', slides: Array.from({ length: 20 }, (_, i) => ({ layout: 'big_idea', title: `T${i}`, body: 'b', wants: want(`Subject ${i}`), speakerNotes: 'n' })) as Slide[] };
+    const many = {
+      title: 'x',
+      slides: Array.from({ length: 20 }, (_, i) => ({
+        layout: 'big_idea',
+        title: `T${i}`,
+        body: 'b',
+        wants: want(`Subject ${i}`),
+        speakerNotes: 'n',
+      })) as Slide[],
+    };
     const { fetcher, calls } = wikipedia();
     await resolveDeckPictures(many, owner, { fetch: fetcher, shelf: shelf() });
-    const asked = decodeURIComponent(calls.find((url) => url.includes('prop=pageimages'))!).replace(/\+/g, ' ');
+    const asked = decodeURIComponent(
+      calls.find((url) => url.includes('prop=pageimages'))!
+    ).replace(/\+/g, ' ');
     expect(asked).toContain('Subject 11');
     expect(asked).not.toContain('Subject 12');
   });
 });
 
+describe('what the planner did not ask for (live preview, Nov 22)', () => {
+  test('an event is found by searching its title and date; a person by their name', async () => {
+    const { fetcher, calls } = wikipedia();
+    const deck = {
+      title: 'The 1950s',
+      slides: [
+        {
+          layout: 'timeline',
+          title: 'Fear',
+          events: [
+            { date: '1953', title: 'The Rosenbergs executed' },
+            { date: '1955', title: 'Nothing like it' },
+          ],
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'person',
+          title: 'The Beats',
+          people: [
+            { name: 'Giuseppe Garibaldi', role: 'General' },
+            { name: 'Jack Kerouac', role: 'Novelist' },
+          ],
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: fetcher,
+      shelf: shelf(),
+    });
+    expect(calls.filter((url) => url.includes('list=search')).length).toBe(2);
+    expect(
+      decodeURIComponent(
+        calls.find((url) => url.includes('prop=pageimages'))!
+      ).replace(/\+/g, ' ')
+    ).toContain('Julius and Ethel Rosenberg');
+    expect(result.deck.slides[0]!.events![0]!.image).toBeTruthy();
+    expect(result.deck.slides[0]!.events![1]!.image).toBeUndefined();
+    expect(result.deck.slides[1]!.people![0]!.image).toBeTruthy();
+    expect(result.empty).toEqual([
+      { subject: 'Nothing like it', why: 'none' },
+      { subject: 'Jack Kerouac', why: 'not a picture' },
+    ]);
+  });
+
+  test('search refused: the remaining searches are skipped, and named subjects are still looked up', async () => {
+    const calls: string[] = [];
+    const fetcher = (async (
+      url: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      const href = String(url);
+      calls.push(href);
+      if (href.includes('list=search'))
+        return new Response('busy', { status: 429 });
+      return wikipedia().fetcher(url, init);
+    }) as typeof fetch;
+    const deck = {
+      title: 'x',
+      slides: [
+        {
+          layout: 'timeline',
+          title: 'T',
+          events: [
+            { date: '1953', title: 'The Rosenbergs executed' },
+            { date: '1955', title: 'Another' },
+            { date: '1956', title: 'A third' },
+          ],
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'big_idea',
+          title: 'G',
+          body: 'b',
+          wants: want('Giuseppe Garibaldi'),
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(deck, owner, {
+      fetch: fetcher,
+      shelf: shelf(),
+      retryMs: 10,
+    });
+    expect(calls.filter((url) => url.includes('list=search')).length).toBe(2);
+    expect(result.deck.slides[1]!.image).toBeTruthy();
+  });
+});
+
 describe('withResolvedPictures', () => {
+  test('a day about a text’s world drops the gallery painting: a mood, not the thing', async () => {
+    const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
+    const { withResolvedPictures } = await import('./picture-lookup.server');
+    const withArt = { ...DECK, kit: 'v4.1' as const, art: 'homer-breezing-up' };
+    const context = await withResolvedPictures(
+      `Deck.\n\n${fenceSlideDeck(withArt)}`,
+      owner,
+      { fetch: wikipedia().fetcher, shelf: shelf() }
+    );
+    expect(parseSlideDeck(context.reply)!.deck!.art).toBeUndefined();
+    const noContext = {
+      ...withArt,
+      slides: DECK.slides.filter((slide) => slide.layout !== 'timeline'),
+    };
+    const kept = await withResolvedPictures(
+      `Deck.\n\n${fenceSlideDeck(noContext)}`,
+      owner,
+      { fetch: wikipedia().fetcher, shelf: shelf() }
+    );
+    expect(parseSlideDeck(kept.reply)!.deck!.art).toBe('homer-breezing-up');
+  });
+
   test('the reply’s deck comes back with its pictures, and says which were kept', async () => {
     const { fenceSlideDeck, parseSlideDeck } = await import('./slide-deck');
     const { withResolvedPictures } = await import('./picture-lookup.server');
     const reply = `Here is the deck.\n\n${fenceSlideDeck(DECK)}`;
-    const result = await withResolvedPictures(reply, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    const result = await withResolvedPictures(reply, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
     expect(result.reply.startsWith('Here is the deck.')).toBe(true);
-    expect(parseSlideDeck(result.reply)!.deck!.slides[0]!.image).toBe(result.ids[0]);
+    expect(parseSlideDeck(result.reply)!.deck!.slides[0]!.image).toBe(
+      result.ids[0]
+    );
     expect(result.ids.length).toBe(4);
     expect(result.counts.wanted).toBe(7);
   });
 
   test('a reply with no deck is untouched', async () => {
     const { withResolvedPictures } = await import('./picture-lookup.server');
-    const result = await withResolvedPictures('Just a plan, no deck.', owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    const result = await withResolvedPictures('Just a plan, no deck.', owner, {
+      fetch: wikipedia().fetcher,
+      shelf: shelf(),
+    });
     expect(result.reply).toBe('Just a plan, no deck.');
     expect(result.ids).toEqual([]);
   });

@@ -5,7 +5,30 @@
  */
 import type { Slide, SlideDeck } from './slide-deck';
 
-export type WantedPicture = { subject: string; shows?: string };
+export type WantedPicture = { subject: string; shows?: string; find?: string };
+
+type Want = { subject: string; shows?: string; find?: string };
+type Person = NonNullable<Slide['people']>[number];
+type Event = NonNullable<Slide['events']>[number];
+
+/**
+ * What a person or an event stands for when the planner did not say (live
+ * preview, Nov 22: two requests in a 13-slide deck). A person is their own
+ * name. An event is whatever Wikipedia's search makes of its title and date
+ * ("The Rosenbergs executed 1953"), since an event's title is rarely an
+ * article's. The deck itself is not changed: these are asked, never saved.
+ */
+const personWant = (person: Person): Want | undefined =>
+  person.wants ??
+  (person.name.trim() ? { subject: person.name.trim() } : undefined);
+const eventWant = (event: Event): Want | undefined =>
+  event.wants ??
+  (event.title.trim()
+    ? {
+        subject: event.title.trim(),
+        find: [event.title, event.date].filter(Boolean).join(' ').trim(),
+      }
+    : undefined);
 
 /** A subject as it is compared: case, accents and spacing aside. */
 export function pictureKey(subject: string): string {
@@ -17,42 +40,96 @@ export function pictureKey(subject: string): string {
     .trim();
 }
 
-/** Every picture the deck asks for and does not have yet, once per subject, in slide order. */
-export function wantedPictures(deck: Pick<SlideDeck, 'slides'>): WantedPicture[] {
+/**
+ * Every picture the deck asks for and does not have yet, once per subject:
+ * what the planner asked for first, in slide order, then what its people and
+ * events stand for.
+ */
+export function wantedPictures(
+  deck: Pick<SlideDeck, 'slides'>
+): WantedPicture[] {
   const seen = new Set<string>();
   const wanted: WantedPicture[] = [];
-  const ask = (want: { subject: string; shows?: string } | undefined, has: string | undefined) => {
+  const ask = (want: Want | undefined, has: string | undefined) => {
     if (!want || has) return;
     const key = pictureKey(want.subject);
     if (!key || seen.has(key)) return;
     seen.add(key);
-    wanted.push({ subject: want.subject, ...(want.shows ? { shows: want.shows } : {}) });
+    wanted.push({
+      subject: want.subject,
+      ...(want.shows ? { shows: want.shows } : {}),
+      ...(want.find ? { find: want.find } : {}),
+    });
   };
   for (const slide of deck.slides) {
     ask(slide.wants, slide.image);
     for (const event of slide.events ?? []) ask(event.wants, event.image);
     for (const person of slide.people ?? []) ask(person.wants, person.image);
   }
+  for (const slide of deck.slides) {
+    for (const event of slide.events ?? [])
+      if (!event.wants) ask(eventWant(event), event.image);
+    for (const person of slide.people ?? [])
+      if (!person.wants) ask(personWant(person), person.image);
+  }
   return wanted;
 }
 
-/** The deck with each found picture on the slides and events that asked for its subject. */
-export function withFoundPictures<T extends SlideDeck>(deck: T, found: Map<string, string>): T {
+/**
+ * The deck with each found picture where it was asked for: on the slide, the
+ * event or the person. A person slide shows only its people's pictures, so a
+ * picture asked for on the slide itself goes to the person it names (or the
+ * first one without a picture).
+ */
+export function withFoundPictures<T extends SlideDeck>(
+  deck: T,
+  found: Map<string, string>
+): T {
   if (!found.size) return deck;
-  const idFor = (want: { subject: string } | undefined, has: string | undefined) => (want && !has ? found.get(pictureKey(want.subject)) : undefined);
+  const idFor = (want: Want | undefined, has: string | undefined) =>
+    want && !has ? found.get(pictureKey(want.subject)) : undefined;
   return {
     ...deck,
     slides: deck.slides.map((slide): Slide => {
-      const image = idFor(slide.wants, slide.image);
       const events = slide.events?.map((event) => {
-        const eventImage = idFor(event.wants, event.image);
+        const eventImage = idFor(eventWant(event), event.image);
         return eventImage ? { ...event, image: eventImage } : event;
       });
-      const people = slide.people?.map((person) => {
-        const personImage = idFor(person.wants, person.image);
+      let people = slide.people?.map((person) => {
+        const personImage = idFor(personWant(person), person.image);
         return personImage ? { ...person, image: personImage } : person;
       });
-      return { ...slide, ...(image ? { image } : {}), ...(events ? { events } : {}), ...(people ? { people } : {}) };
+      let image = idFor(slide.wants, slide.image);
+      if (slide.layout === 'person' && people?.length) {
+        const own =
+          image ??
+          (slide.image && !slide.people?.some((person) => person.image)
+            ? slide.image
+            : undefined);
+        if (own && !people.some((person) => person.image === own)) {
+          const key = pictureKey(slide.wants?.subject ?? '');
+          const named = people.findIndex(
+            (person) =>
+              !person.image &&
+              key &&
+              (pictureKey(person.name).includes(key) ||
+                key.includes(pictureKey(person.name)))
+          );
+          const at =
+            named >= 0 ? named : people.findIndex((person) => !person.image);
+          if (at >= 0)
+            people = people.map((person, i) =>
+              i === at ? { ...person, image: own } : person
+            );
+        }
+        image = undefined;
+      }
+      return {
+        ...slide,
+        ...(image ? { image } : {}),
+        ...(events ? { events } : {}),
+        ...(people ? { people } : {}),
+      };
     }),
   };
 }
@@ -63,13 +140,16 @@ export function withFoundPictures<T extends SlideDeck>(deck: T, found: Map<strin
  * still wanting the picture, so no one projects an empty frame.
  */
 export function withoutEmptyPictureSlides<T extends SlideDeck>(deck: T): T {
-  if (!deck.slides.some((slide) => slide.layout === 'picture' && !slide.image)) return deck;
+  if (!deck.slides.some((slide) => slide.layout === 'picture' && !slide.image))
+    return deck;
   return {
     ...deck,
     slides: deck.slides.map((slide): Slide => {
       if (slide.layout !== 'picture' || slide.image) return slide;
       const asked = slide.question ?? slide.body;
-      return asked ? { ...slide, layout: 'discuss', question: asked } : { ...slide, layout: 'big_idea', body: slide.title };
+      return asked
+        ? { ...slide, layout: 'discuss', question: asked }
+        : { ...slide, layout: 'big_idea', body: slide.title };
     }),
   };
 }

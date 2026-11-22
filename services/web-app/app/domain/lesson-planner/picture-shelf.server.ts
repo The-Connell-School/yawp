@@ -16,16 +16,37 @@ export const pictureShelf: PictureShelf = {
       distinct: ['subject'],
       select: { id: true, subject: true },
     });
-    return rows.flatMap((row) => (row.subject ? [{ key: row.subject, id: row.id }] : []));
+    return rows.flatMap((row) =>
+      row.subject ? [{ key: row.subject, id: row.id }] : []
+    );
   },
   async copy(id, owner) {
-    const row = await prisma.lessonPlanUploadPicture.findFirst({ where: { id, origin: 'found' } });
+    const row = await prisma.lessonPlanUploadPicture.findFirst({
+      where: { id, origin: 'found' },
+    });
     if (!row) throw new Error('That picture is no longer kept.');
-    const { id: _id, createdAt: _createdAt, uploadId: _uploadId, membershipId: _membershipId, conversationId: _conversationId, ...picture } = row;
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      uploadId: _uploadId,
+      membershipId: _membershipId,
+      conversationId: _conversationId,
+      ...picture
+    } = row;
     return prisma.lessonPlanUploadPicture.create({
-      data: { ...picture, membershipId: owner.membershipId, conversationId: owner.conversationId, position: 0, slideNumbers: [] },
+      data: {
+        ...picture,
+        membershipId: owner.membershipId,
+        conversationId: owner.conversationId,
+        position: 0,
+        slideNumbers: [],
+      },
       select: { id: true },
     });
   },
-  create: (data) => prisma.lessonPlanUploadPicture.create({ data: { ...data, blob: Buffer.from(data.blob) }, select: { id: true } }),
+  create: (data) =>
+    prisma.lessonPlanUploadPicture.create({
+      data: { ...data, blob: Buffer.from(data.blob) },
+      select: { id: true },
+    }),
 };
