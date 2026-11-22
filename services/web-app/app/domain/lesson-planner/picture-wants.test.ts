@@ -473,4 +473,30 @@ describe('a deck is not lost for an agenda or exit without a title (preview, Nov
     expect(deck.slides[1]!.title).toBe('Today');
     expect(deck.slides[2]!.title).toBe('Before you go');
   });
+
+  test('so do a big idea and a look slide; a title slide still needs its own', () => {
+    const deck = read([
+      {
+        layout: 'big_idea',
+        body: 'The Dust Bowl was not only a natural disaster.',
+        speakerNotes: 'n',
+      } as unknown as Slide,
+      {
+        layout: 'look',
+        question: 'What do you see?',
+        seconds: 90,
+        speakerNotes: 'n',
+      } as unknown as Slide,
+    ]);
+    expect(deck.slides[1]!.title).toBe('Big idea');
+    expect(deck.slides[2]!.title).toBe('Look');
+    expect(
+      parseSlideDeck(
+        fenceSlideDeck({
+          title: 'x',
+          slides: [{ layout: 'title', speakerNotes: 'n' } as unknown as Slide],
+        })
+      )?.deck
+    ).toBeFalsy();
+  });
 });

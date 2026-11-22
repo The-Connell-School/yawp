@@ -80,32 +80,72 @@ describe('reading the verdicts', () => {
 });
 
 describe('secondLook', () => {
-  test('a picture the answer says nothing about passed the rules, and is kept', async () => {
-    const verdicts = await secondLook(
+  test('a picture the answer says nothing about was not looked at: no verdict, counted unchecked', async () => {
+    const { verdicts, unchecked } = await secondLook(
       CANDIDATES,
       async () =>
         '{"pictures": [{"n": 1, "keep": false, "why": "film poster"}]}'
     );
-    expect(verdicts?.get(1)?.keep).toBe(false);
-    expect(verdicts?.get(2)).toEqual({ keep: true });
+    expect(verdicts.get(1)?.keep).toBe(false);
+    expect(verdicts.has(2)).toBe(false);
+    expect(unchecked).toBe(1);
   });
 
-  test('a failed or unreadable look is no look: null, and the caller keeps what the rules kept', async () => {
-    expect(
-      await secondLook(CANDIDATES, async () =>
-        Promise.reject(new Error('timeout'))
-      )
-    ).toBeNull();
-    expect(await secondLook(CANDIDATES, async () => 'sorry')).toBeNull();
+  test('a failed or unreadable look gives no verdicts, and nothing is kept on its word (Night, Nov 22)', async () => {
+    for (const look of [
+      async () => Promise.reject(new Error('timeout')),
+      async () => 'sorry',
+    ]) {
+      const { verdicts, unchecked } = await secondLook(CANDIDATES, look);
+      expect(verdicts.size).toBe(0);
+      expect(unchecked).toBe(2);
+    }
+  });
+
+  test('pictures go four at a time, side by side; a batch that fails costs only its own', async () => {
+    const many: LookCandidate[] = Array.from({ length: 9 }, (_, i) => ({
+      n: i + 1,
+      subject: `S${i + 1}`,
+      bytes: JPEG,
+      contentType: 'image/jpeg',
+    }));
+    const sizes: number[] = [];
+    const { verdicts, unchecked } = await secondLook(
+      many,
+      async (_system, content) => {
+        const ns = content.flatMap((block) =>
+          typeof block.text === 'string' && /^Picture (\d+)/.test(block.text)
+            ? [Number(/^Picture (\d+)/.exec(block.text)![1])]
+            : []
+        );
+        sizes.push(ns.length);
+        if (ns.includes(5)) throw new Error('timeout');
+        return JSON.stringify({
+          pictures: ns.map((n) => ({ n, keep: true, alt: `Picture ${n}.` })),
+        });
+      }
+    );
+    expect(sizes.sort()).toEqual([1, 4, 4]);
+    expect([...verdicts.keys()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 9]);
+    expect(unchecked).toBe(4);
+  });
+
+  test('a verdict for a picture it was not shown is ignored', async () => {
+    const { verdicts } = await secondLook(
+      CANDIDATES.slice(0, 1),
+      async () =>
+        '{"pictures": [{"n": 1, "keep": true}, {"n": 7, "keep": true}]}'
+    );
+    expect([...verdicts.keys()]).toEqual([1]);
   });
 
   test('nothing to look at asks nothing', async () => {
     let asked = false;
-    const verdicts = await secondLook([], async () => {
+    const { verdicts } = await secondLook([], async () => {
       asked = true;
       return '';
     });
     expect(asked).toBe(false);
-    expect(verdicts?.size).toBe(0);
+    expect(verdicts.size).toBe(0);
   });
 });

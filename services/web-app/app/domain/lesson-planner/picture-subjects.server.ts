@@ -32,6 +32,7 @@ Rules:
 - The specific thing, never a general topic. "Levittown, New York", not "Suburb" or "Postwar America". "Dust Bowl", not "Drought".
 - Real things only. A character in a novel has no photograph: name the real person, place or event the slide points to, or nothing.
 - Never the film of the book being taught.
+- For a slide about the Holocaust, a genocide, a massacre, a lynching or other mass death or cruelty, give null: those pictures are always the teacher's choice.
 - When the slide is about an idea, a feeling, the students or the lesson itself, and no real thing stands for it, give null. A wrong picture is worse than none.
 - "shows": a few words on what the picture should show.
 

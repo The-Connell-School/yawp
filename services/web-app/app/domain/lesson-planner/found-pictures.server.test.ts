@@ -142,6 +142,26 @@ describe('searchOpenPictures', () => {
     expect(bare!.credit).toBe('Migrant mother, Public domain, via Wikimedia Commons');
   });
 
+  test('a file whose credit says its copyright is disputed is left out (Night, Nov 22)', () => {
+    expect(
+      candidateFromFile({
+        title: 'File:Hitler 1933.jpg',
+        imageinfo: [
+          {
+            mime: 'image/jpeg',
+            thumburl: 'https://u/h.jpg',
+            thumbwidth: 1280,
+            thumbheight: 900,
+            extmetadata: {
+              LicenseShortName: { value: 'Public domain' },
+              Artist: { value: 'Unknown. Note: one or more third parties have made copyright claims against Wikimedia Commons in relation to the work.' },
+            },
+          },
+        ],
+      } as never)
+    ).toBeNull();
+  });
+
   test('a picture too small to project is left out', async () => {
     const small = page(1, 'Tiny.jpg', 'Public domain');
     small.imageinfo[0]!.width = 200;

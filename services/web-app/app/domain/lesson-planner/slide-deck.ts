@@ -579,7 +579,29 @@ const OPEN_IN_YAWP_TAIL = /\s*[:—–-]?\s*open it in Yawp!?(\s+before you go)?
 /** "Next time:" and "Tomorrow:", however many, at the start of the next lesson. */
 const NEXT_TIME_LEAD = /^\s*(?:(?:next time|tomorrow|next class|next lesson)\s*[:—–-]\s*)+/i;
 
-const OWN_TITLES: Record<string, string> = { agenda: 'Today', exit: 'Before you go' };
+/**
+ * The heading a slide's layout gives it when the planner wrote none. On these
+ * slides the title is a label or is hardly shown (a big idea draws its
+ * statement); a deck is not lost for leaving it out. The preview lost a
+ * Grapes of Wrath deck twice over an agenda and an exit, and then over two
+ * big ideas and a look slide (Nov 22). A title slide and a divider still
+ * need theirs: there the title is the slide.
+ */
+const OWN_TITLES: Record<string, string> = {
+  agenda: 'Today',
+  exit: 'Before you go',
+  discuss: 'Talk',
+  write: 'Write',
+  read: 'Read',
+  look: 'Look',
+  big_idea: 'Big idea',
+  notes: 'Notes',
+  excerpt: 'From the text',
+  timeline: 'Timeline',
+  map: 'Map',
+  define: 'Words',
+  person: 'People',
+};
 
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;

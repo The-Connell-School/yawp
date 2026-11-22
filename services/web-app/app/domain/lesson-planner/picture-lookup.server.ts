@@ -101,11 +101,34 @@ export type ResolvedPictures<T> = {
   counts: PictureCounts;
   empty: Array<{
     subject: string;
-    why: 'none' | 'not a picture' | 'unavailable' | 'not the thing';
+    why: Miss;
   }>;
-  /** The second look: pictures it saw and turned down; `checked` false when it could not be had. Null when there was none. */
-  look: { seen: number; turnedDown: number; checked: boolean } | null;
+  /** The second look: pictures sent to it, turned down, and not answered for (none of those is kept). Null when there was none. */
+  look: { seen: number; turnedDown: number; unchecked: number } | null;
 };
+
+/**
+ * Why a subject has no picture. `for the teacher`: a picture of mass death or
+ * cruelty, never placed automatically. `unchecked`: the second look did not
+ * answer for it, so it is not kept.
+ */
+type Miss =
+  | 'none'
+  | 'not a picture'
+  | 'unavailable'
+  | 'not the thing'
+  | 'for the teacher'
+  | 'unchecked';
+
+/**
+ * Pictures that are only ever a teacher's choice: the Holocaust and other
+ * genocides, massacres, lynchings, the dead. Checked on the article, its
+ * description and the file, before any model sees it (Night, Nov 22: the
+ * Auschwitz selection ramp reached a slide when the second look ran out of
+ * time).
+ */
+const FOR_THE_TEACHER =
+  /\b(holocaust|shoah|auschwitz|birkenau|treblinka|sobibor|majdanek|dachau|buchenwald|bergen[-\s_]?belsen|concentration[\s_]camps?|extermination|death[\s_]camps?|death[\s_]march|genocide|massacre|lynch(ed|ing|ings)?|pogrom|atrocit(y|ies)|corpses?|mass[\s_]graves?|execution[\s_]of)\b/i;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -154,10 +177,10 @@ async function lookUp(
   }: { fetcher: Fetch; timeoutMs: number; retryMs: number }
 ): Promise<{
   found: Map<string, FoundCandidate>;
-  why: Map<string, 'none' | 'not a picture' | 'unavailable'>;
+  why: Map<string, Miss>;
 }> {
   const found = new Map<string, FoundCandidate>();
-  const why = new Map<string, 'none' | 'not a picture' | 'unavailable'>();
+  const why = new Map<string, Miss>();
   // A subject named by a phrase ("The Rosenbergs executed 1953"), not a title:
   // Wikipedia's search names the article. One at a time, as Wikipedia asks of
   // its clients (a burst is what gets an address refused).
@@ -222,6 +245,7 @@ async function lookUp(
       fits: boolean;
       title: string;
       work: boolean;
+      grave: boolean;
       fictional: boolean;
     }
   >();
@@ -241,6 +265,9 @@ async function lookUp(
       fits,
       title: page.title,
       work: A_WORK.test(page.description ?? ''),
+      grave: FOR_THE_TEACHER.test(
+        `${page.title} ${page.description ?? ''} ${page.pageimage}`
+      ),
       fictional: /\b(fictional|character)\b/i.test(page.description ?? ''),
     });
   }
@@ -249,6 +276,7 @@ async function lookUp(
     const key = pictureKey(want.subject);
     const lead = leads.get(articleOf(titleOf(want)!));
     if (!lead) why.set(key, 'none');
+    else if (lead.grave) why.set(key, 'for the teacher');
     else if (
       NOT_A_PICTURE.test(lead.file) ||
       lead.width < MIN_WIDTH ||
@@ -343,10 +371,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const fetcher = deps.fetch ?? fetch;
   const timeoutMs = deps.timeoutMs ?? 5_000;
   const ids = new Map<string, string>();
-  const why = new Map<
-    string,
-    'none' | 'not a picture' | 'unavailable' | 'not the thing'
-  >();
+  const why = new Map<string, Miss>();
   let reused = 0;
   let lookOutcome: ResolvedPictures<T>['look'] = null;
 
@@ -391,7 +416,10 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         })
       )
     ).filter((item): item is NonNullable<typeof item> => Boolean(item));
-    let verdicts: Map<number, LookVerdict> | null = null;
+    let verdicts: {
+      verdicts: Map<number, LookVerdict>;
+      unchecked: number;
+    } | null = null;
     if (deps.look && downloaded.length) {
       const words = pictureWords(deck);
       const asked = new Map(
@@ -416,15 +444,26 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       );
       lookOutcome = {
         seen: downloaded.length,
-        turnedDown: verdicts
-          ? [...verdicts.values()].filter((verdict) => !verdict.keep).length
-          : 0,
-        checked: Boolean(verdicts),
+        turnedDown: [...verdicts.verdicts.values()].filter(
+          (verdict) => !verdict.keep
+        ).length,
+        unchecked: verdicts.unchecked,
       };
     }
     await Promise.all(
       downloaded.map(async ({ key, candidate, bytes, contentType }, i) => {
-        const verdict = verdicts?.get(i + 1);
+        if (
+          FOR_THE_TEACHER.test(`${candidate.title} ${candidate.description}`)
+        ) {
+          why.set(key, 'for the teacher');
+          return;
+        }
+        const verdict = verdicts?.verdicts.get(i + 1);
+        // With the second look on, only what it saw and kept is kept.
+        if (deps.look && !verdict) {
+          why.set(key, 'unchecked');
+          return;
+        }
         if (verdict && !verdict.keep) {
           why.set(key, 'not the thing');
           return;

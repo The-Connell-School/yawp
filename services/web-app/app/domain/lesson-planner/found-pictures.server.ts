@@ -204,6 +204,8 @@ export function candidateFromFile(page: CommonsPage): FoundCandidate | null {
   const named = /\.jpe?g(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '';
   const type = info.thumburl ? named : (info.mime ?? named);
   if (!license || !imageUrl || width < MIN_WIDTH || !/^image\/(jpeg|png)$/.test(type)) return null;
+  // A file whose credit says its copyright is disputed is not one a school should show (Night, Nov 22).
+  if (/copyright claims?/i.test(`${plain(meta.Artist?.value, 400)} ${plain(meta.Credit?.value, 400)}`)) return null;
   const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');
   // Who made it; for a collection's scan with no artist, the collection's credit line.
   const artist = cleanArtist(plain(meta.Artist?.value, 80)) || cleanArtist(plain(meta.Credit?.value, 200));

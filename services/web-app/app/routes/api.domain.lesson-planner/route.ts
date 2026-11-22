@@ -835,7 +835,7 @@ export async function action({ request }: ActionFunctionArgs) {
               `[lesson-planner] pictures: wanted ${pictured.counts.wanted} · filled ${pictured.counts.filled} (${pictured.counts.reused} reused) · empty ${pictured.counts.empty}${
                 pictured.counts.empty ? ` (${Object.entries(reasons).map(([why, n]) => `${why}: ${n}`).join(', ')})` : ''
               } · named ${pictured.named}${
-                pictured.look ? ` · looked at ${pictured.look.seen}, turned down ${pictured.look.turnedDown}${pictured.look.checked ? '' : ' (unchecked)'}` : ''
+                pictured.look ? ` · looked at ${pictured.look.seen}, turned down ${pictured.look.turnedDown}${pictured.look.unchecked ? `, not answered for ${pictured.look.unchecked}` : ''}` : ''
               } · ${Date.now() - lookedAt}ms`
             );
           }

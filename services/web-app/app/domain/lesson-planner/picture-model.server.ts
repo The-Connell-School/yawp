@@ -20,7 +20,8 @@ import {
 
 export const DEFAULT_PICTURE_MODEL = 'claude-haiku-5-5';
 const EDITOR_MS = 5_000;
-const LOOK_MS = 8_000;
+// Per batch of four pictures, the batches side by side.
+const LOOK_MS = 10_000;
 
 type Attribution = Parameters<typeof getLLMCompletion>[0]['attribution'];
 type Complete = typeof getLLMCompletion;

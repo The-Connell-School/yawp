@@ -95,6 +95,27 @@ const PAGES = {
           height: 900,
         },
       },
+      '15': {
+        title: 'The Holocaust',
+        description: 'Genocide of European Jews during World War II',
+        pageimage:
+          'Selection_on_the_ramp_at_Auschwitz-Birkenau,_1944_(Auschwitz_Album)_1a.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Ramp.jpg',
+          width: 1280,
+          height: 900,
+        },
+      },
+      '16': {
+        title: 'Hungary in World War II',
+        description: 'History of Hungary from 1939 to 1945',
+        pageimage: 'Hungary_1944_photo.jpg',
+        thumbnail: {
+          source: 'https://thumb.wikimedia.org/a/Hungary.jpg',
+          width: 1280,
+          height: 900,
+        },
+      },
       '10': {
         title: 'Julius and Ethel Rosenberg',
         pageimage: 'Julius_and_Ethel_Rosenberg_NYWTS.jpg',
@@ -211,6 +232,27 @@ const FILES = {
         'Public domain',
         'Elmer Hader'
       ),
+      k: {
+        ...info('Hungary_1944_photo.jpg', 'Public domain', 'Bernhard Walter'),
+        imageinfo: [
+          {
+            ...info(
+              'Hungary_1944_photo.jpg',
+              'Public domain',
+              'Bernhard Walter'
+            ).imageinfo[0],
+            extmetadata: {
+              LicenseShortName: { value: 'Public domain' },
+              Artist: { value: 'Bernhard Walter' },
+              ImageDescription: {
+                value:
+                  'Selection of Hungarian Jews on the ramp at Auschwitz-Birkenau, May 1944',
+              },
+              ObjectName: { value: 'Hungarian Jews, 1944' },
+            },
+          },
+        ],
+      },
       g: info(
         'Julius_and_Ethel_Rosenberg_NYWTS.jpg',
         'Public domain',
@@ -726,7 +768,7 @@ describe('the second look (Nov 22, night)', () => {
       subject: 'Giuseppe Garibaldi',
       why: 'not the thing',
     });
-    expect(result.look).toEqual({ seen: 4, turnedDown: 1, checked: true });
+    expect(result.look).toEqual({ seen: 4, turnedDown: 1, unchecked: 0 });
     expect(db.created.map((row) => row.subject)).not.toContain(
       'giuseppe garibaldi'
     );
@@ -735,15 +777,83 @@ describe('the second look (Nov 22, night)', () => {
     ).toBe('A picture of Mary Shelley.');
   });
 
-  test('a look that fails keeps what the rules kept, and says it was unchecked', async () => {
+  test('a picture of mass death or cruelty is only ever the teacher’s choice: never downloaded, never shown to the model (Night, Nov 22)', async () => {
+    const { look, seen } = looker();
+    const calls: string[] = [];
+    const { fetcher } = wikipedia();
+    const watching = (async (
+      url: string | URL | Request,
+      init?: RequestInit
+    ) => {
+      calls.push(String(url));
+      return fetcher(url, init);
+    }) as typeof fetch;
+    const night = {
+      title: 'Night',
+      slides: [
+        {
+          layout: 'discuss',
+          title: 'Talk',
+          question: 'What do you already know?',
+          wants: want('The Holocaust', 'prisoners in a camp'),
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'notes',
+          title: 'Hungary, 1944',
+          facts: ['Deportations began in May.'],
+          wants: want('Hungary in World War II'),
+          speakerNotes: 'n',
+        },
+        {
+          layout: 'big_idea',
+          title: 'Garibaldi',
+          body: 'b',
+          wants: want('Giuseppe Garibaldi'),
+          speakerNotes: 'n',
+        },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(night, owner, {
+      fetch: watching,
+      shelf: shelf(),
+      look,
+    });
+    expect(result.deck.slides[0]!.image).toBeUndefined();
+    expect(result.deck.slides[1]!.image).toBeUndefined();
+    expect(result.deck.slides[2]!.image).toBeTruthy();
+    expect(result.empty).toEqual([
+      { subject: 'The Holocaust', why: 'for the teacher' },
+      { subject: 'Hungary in World War II', why: 'for the teacher' },
+    ]);
+    // The article's own picture is never even fetched; the other is stopped by its description.
+    expect(calls.some((url) => url.includes('Ramp'))).toBe(false);
+    expect(seen).not.toContain('The Holocaust');
+  });
+
+  test('a look that fails keeps nothing: a picture is kept only on its word (Night, Nov 22)', async () => {
+    const db = shelf();
+    const result = await resolveDeckPictures(DECK, owner, {
+      fetch: wikipedia().fetcher,
+      shelf: db,
+      look: async () => Promise.reject(new Error('overloaded')),
+    });
+    expect(result.deck.slides[0]!.image).toBeUndefined();
+    expect(result.counts.filled).toBe(0);
+    expect(db.created).toEqual([]);
+    expect(result.empty.filter((miss) => miss.why === 'unchecked').length).toBe(
+      4
+    );
+    expect(result.look).toEqual({ seen: 4, turnedDown: 0, unchecked: 4 });
+  });
+
+  test('without the second look (the model off), the rules alone decide, as before', async () => {
     const result = await resolveDeckPictures(DECK, owner, {
       fetch: wikipedia().fetcher,
       shelf: shelf(),
-      look: async () => Promise.reject(new Error('overloaded')),
     });
-    expect(result.deck.slides[0]!.image).toBeTruthy();
     expect(result.counts.filled).toBe(4);
-    expect(result.look).toEqual({ seen: 4, turnedDown: 0, checked: false });
+    expect(result.look).toBeNull();
   });
 
   test('a picture kept before is not looked at again', async () => {

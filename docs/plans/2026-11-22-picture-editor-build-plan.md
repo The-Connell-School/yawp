@@ -111,12 +111,20 @@ of alt text describing what is actually in it.
 kept picture's alt text replaces the file's description. A picture turned down
 is counted empty with the reason `not the thing`.
 
-**If the look fails** (timeout, error, `off`), the pictures are kept as the
-rules left them, and the count says `unchecked`. Failing closed would take
-every picture away whenever the model is unavailable; the rules from tonight
-still hold.
+**If the look fails, nothing it did not see is kept** (changed after the
+eval, below: the first design kept unchecked pictures, and on the *Night*
+deck a look that ran out of time let the Auschwitz selection-ramp photograph
+onto the opening slide). Pictures go to the look four at a time, side by
+side, 10 seconds each, so one slow answer costs only its own four. With the
+model `off`, the rules alone decide, as before.
 
-**Limits.** One request, 8 seconds. At most twelve pictures, as now.
+**Under the model, a fixed rule:** an article, description or file about the
+Holocaust, a genocide, a massacre, a lynching or the dead is never placed
+automatically (`for the teacher`), and is never even downloaded. The editor
+is told to give no subject for such a slide. A file whose credit says its
+copyright is disputed is skipped.
+
+**Limits.** Batches of four, 10 seconds each. At most twelve pictures, as now.
 
 ## 3. Time
 
@@ -167,3 +175,45 @@ the Library of Congress (free, no key; strongest on American history and the
 FSA photographs), its results going through the same second look. To be
 decided on the eval's numbers: if most empty slides are American history,
 build it next.
+
+## Eval, Nov 22 (afternoon): six context days on the preview
+
+Run live after the build (commits `d1eb46c`, `e453ed8`). The first run
+showed the second look answering and none of its answer being read; reading
+was fixed (a schema for the answer, a lenient reader, the answer kept in the
+log) and all six were run again.
+
+| Deck | Teaching slides pictured | Wrong pictures on a slide | What kept the rest bare |
+|---|---|---|---|
+| *Howl* | 3 of 7 (43%) | none | Levittown's lead picture is a county map; the Beat Generation photo was turned down by the look (one man, not the group) |
+| *The Grapes of Wrath* | deck lost | — | three slides without a title, and the repair turn ran out of time: fixed, a slide takes its layout's heading |
+| *The Leopard* | 2 of 6 (33%) | none | two words slides (no place for a picture); 1 of 5 timeline events found |
+| *Frankenstein* | 4 of 6 (67%) | none | the words slide; an abstract big idea |
+| *The Great Gatsby* | 3 of 7 (43%) | none | two words slides; the people are fictional (rightly empty) |
+| *Night* | 4 of 5 (80%) | **one, serious**: the Auschwitz selection ramp, on "What do you already know?" | the look ran out of time and unchecked pictures were kept: fixed, above |
+
+Across the five decks that built: **16 of 31 teaching slides (52%)**, against
+about 40% before the editor. The editor named a subject on 2–3 slides per
+deck and left the rest empty on purpose ("a discussion prompt about
+responsibility": no real thing stands for it). The look turned down a WWI
+combat photo for "1918: the war ends", a different Byron poem's title page,
+the *Frankenstein* title page (small type), a city aerial for the Six Gallery,
+and one man for "the Beat Generation", and wrote alt text for every picture.
+
+Calls: the editor ~2.5 s (about 1,000 tokens in, 200–500 out), the look
+3–7 s for four to seven pictures (4,000–14,000 in, 450–1,200 out). Both well
+under a cent per deck.
+
+What the numbers say comes next, by the slides they would fill:
+
+1. **More than one candidate per subject.** Most empty slides have a good
+   subject whose Wikipedia lead picture is missing or unusable (Levittown,
+   timeline events). Offer the look the article's other pictures too, and let
+   it pick one or none.
+2. **A picture on the words slide (D1).** Two of the six decks had two words
+   slides each, and the slide has no place for a picture.
+3. **The Library of Congress** for American subjects (Levittown, the Dust
+   Bowl, the 1920s), through the same look.
+4. **The silent repair turn.** On *The Leopard* the browser lost the
+   connection during the minute-long repair pass (the lesson was saved; the
+   teacher saw "That lesson did not come back"). The stream needs a heartbeat.

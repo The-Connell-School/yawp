@@ -133,25 +133,42 @@ export function readSecondLookAnswer(
   return verdicts;
 }
 
+/** Pictures per request: a few at a time, side by side, so one slow answer costs only its own (Night, Nov 22: one request for every picture ran out of time). */
+const BATCH = 4;
+
 /**
- * Each picture's verdict, by its number; or null when the look could not be
- * had (the pictures then stand as the rules left them). A picture the answer
- * says nothing about is kept: it passed the rules.
+ * Each picture's verdict, by its number, for the pictures the model answered
+ * for. A picture with no verdict (its request failed, ran out of time, or its
+ * answer left it out) was not looked at, and the caller does not keep it:
+ * on the preview a look that ran out of time let a photograph of the
+ * Auschwitz selection ramp onto a slide.
  */
 export async function secondLook(
   candidates: LookCandidate[],
   look: LookAt
-): Promise<Map<number, LookVerdict> | null> {
-  if (!candidates.length) return new Map();
-  let answer: string;
-  try {
-    answer = await look(SECOND_LOOK_SYSTEM, secondLookContent(candidates));
-  } catch {
-    return null;
-  }
-  const verdicts = readSecondLookAnswer(answer);
-  if (!verdicts) return null;
-  for (const candidate of candidates)
-    if (!verdicts.has(candidate.n)) verdicts.set(candidate.n, { keep: true });
-  return verdicts;
+): Promise<{ verdicts: Map<number, LookVerdict>; unchecked: number }> {
+  const verdicts = new Map<number, LookVerdict>();
+  const batches: LookCandidate[][] = [];
+  for (let i = 0; i < candidates.length; i += BATCH)
+    batches.push(candidates.slice(i, i + BATCH));
+  await Promise.all(
+    batches.map(async (batch) => {
+      let answer: string;
+      try {
+        answer = await look(SECOND_LOOK_SYSTEM, secondLookContent(batch));
+      } catch {
+        return;
+      }
+      const read = readSecondLookAnswer(answer);
+      if (!read) return;
+      const asked = new Set(batch.map((candidate) => candidate.n));
+      for (const [n, verdict] of read)
+        if (asked.has(n)) verdicts.set(n, verdict);
+    })
+  );
+  return {
+    verdicts,
+    unchecked: candidates.filter((candidate) => !verdicts.has(candidate.n))
+      .length,
+  };
 }
