@@ -22,6 +22,8 @@ const PAGES = {
       '4': { title: 'Unification of Italy', pageimage: 'Episodio_delle_cinque_giornate.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Episodio.jpg', width: 1280, height: 1827 } },
       '5': { title: 'Mary Shelley', pageimage: 'Mary_Wollstonecraft_Shelley_Rothwell.tif', thumbnail: { source: 'https://thumb.wikimedia.org/a/Shelley.tif.jpg', width: 1280, height: 1558 } },
       '6': { title: 'Allen ginsberg', pageimage: 'Allen_Ginsberg_1979.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Ginsberg.jpg', width: 1280, height: 1707 } },
+      '8': { title: 'Levittown, Pennsylvania', description: 'Census-designated place in Pennsylvania, United States', pageimage: 'BristolPA_PhineasPembertonHouse.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Pemberton.jpg', width: 1280, height: 850 } },
+      '9': { title: 'Palermo', description: 'City in Sicily, Italy', pageimage: 'Sicilia_Palermo5_tango7174.jpg', thumbnail: { source: 'https://thumb.wikimedia.org/a/Palermo.jpg', width: 1280, height: 900 } },
       '7': { title: 'Jack Kerouac', pageimage: 'Kerouac_by_Palumbo.png', thumbnail: { source: 'https://thumb.wikimedia.org/a/Kerouac.png', width: 388, height: 518 } },
     },
   },
@@ -46,6 +48,8 @@ const FILES = {
       b: info('Episodio_delle_cinque_giornate.jpg', 'Public domain', 'Baldassare Verazzi'),
       c: info('Mary_Wollstonecraft_Shelley_Rothwell.tif', 'Public domain', 'Richard Rothwell', 'image/tiff'),
       d: info('Allen_Ginsberg_1979.jpg', 'CC BY-SA 3.0', 'Hans van Dijk'),
+      e: info('BristolPA_PhineasPembertonHouse.jpg', 'CC BY-SA 4.0', 'Magicpiano'),
+      f: info('Sicilia_Palermo5_tango7174.jpg', 'CC BY-SA 3.0', 'Tango7174'),
     },
   },
 };
@@ -133,6 +137,21 @@ describe('resolveDeckPictures', () => {
     expect(result.deck.slides[3]!.events![3]!.image).toBeUndefined();
     expect(result.counts).toEqual({ wanted: 7, filled: 4, reused: 0, empty: 3 });
     expect(result.empty.map((miss) => miss.subject).sort()).toEqual(['Brown v. Board of Education', 'Jack Kerouac', 'Levittown, New York']);
+  });
+
+  test('a town’s lead picture is often some landmark in it: kept only when the file is named for the town (live run, Nov 22)', async () => {
+    const towns = {
+      title: 'Places',
+      slides: [
+        { layout: 'notes', title: 'Levittown', facts: ['Identical houses.'], wants: want('Levittown, Pennsylvania', 'the rows of identical houses'), speakerNotes: 'n' },
+        { layout: 'notes', title: 'Palermo', facts: ['Sicily’s capital.'], wants: want('Palermo'), speakerNotes: 'n' },
+      ] as Slide[],
+    };
+    const result = await resolveDeckPictures(towns, owner, { fetch: wikipedia().fetcher, shelf: shelf() });
+    // The Phineas Pemberton House is in Levittown, Pennsylvania; it is not a picture of Levittown.
+    expect(result.deck.slides[0]!.image).toBeUndefined();
+    expect(result.empty).toEqual([{ subject: 'Levittown, Pennsylvania', why: 'not a picture' }]);
+    expect(result.deck.slides[1]!.image).toBeTruthy();
   });
 
   test('a picture already kept for a subject is reused without asking Wikipedia for it', async () => {

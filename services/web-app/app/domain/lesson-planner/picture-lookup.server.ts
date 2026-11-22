@@ -28,6 +28,19 @@ const MIN_WIDTH = 480;
 /** A lead "image" that is not a picture of the thing: a map of where it is, a flag, a logo, a chart. */
 const NOT_A_PICTURE = /\.svg$|(^|[\s_\-(])(map|maps|locator|location|flag|logo|seal|icon|diagram|chart|coat[\s_]of[\s_]arms|incorporated[\s_]and[\s_]unincorporated)([\s_\-).]|$)/i;
 
+/** Wikipedia's own one-line description of an article says when it is a place people live. */
+const A_PLACE = /\b(city|town|village|hamlet|suburb|borough|township|municipality|commune|census-designated place|neighbou?rhood|district|county|capital)\b/i;
+
+/**
+ * A town's lead picture is often some landmark in it (for Levittown,
+ * Pennsylvania, a colonial house: live run, Nov 22). It is kept only when the
+ * file is named for the town, as a skyline or a street of it is.
+ */
+function namedFor(file: string, article: string): boolean {
+  const name = pictureKey(article.split(/[,(]/)[0] ?? article);
+  return name.length > 2 && pictureKey(file).includes(name);
+}
+
 type Owner = { membershipId: string; conversationId: string | null };
 type Fetch = typeof fetch;
 
@@ -75,7 +88,7 @@ async function lookUp(
   const found = new Map<string, FoundCandidate>();
   const why = new Map<string, 'none' | 'not a picture' | 'unavailable'>();
   const pages = await ask(
-    { redirects: '1', titles: wanted.map((want) => want.subject).join('|'), prop: 'pageimages', piprop: 'thumbnail|name', pithumbsize: '1280', pilicense: 'free' },
+    { redirects: '1', titles: wanted.map((want) => want.subject).join('|'), prop: 'pageimages|description', piprop: 'thumbnail|name', pithumbsize: '1280', pilicense: 'free' },
     fetcher,
     timeoutMs,
     retryMs
@@ -92,16 +105,18 @@ async function lookUp(
     for (let i = 0; i < 4 && hops.has(pictureKey(title)); i += 1) title = hops.get(pictureKey(title))!;
     return pictureKey(title);
   };
-  const leads = new Map<string, { file: string; width: number }>();
-  for (const page of Object.values(pages.query.pages) as Array<{ title?: string; pageimage?: string; thumbnail?: { width?: number } }>) {
-    if (page.title && page.pageimage) leads.set(pictureKey(page.title), { file: page.pageimage, width: page.thumbnail?.width ?? 0 });
+  const leads = new Map<string, { file: string; width: number; fits: boolean }>();
+  for (const page of Object.values(pages.query.pages) as Array<{ title?: string; description?: string; pageimage?: string; thumbnail?: { width?: number } }>) {
+    if (!page.title || !page.pageimage) continue;
+    const fits = !A_PLACE.test(page.description ?? '') || namedFor(page.pageimage, page.title);
+    leads.set(pictureKey(page.title), { file: page.pageimage, width: page.thumbnail?.width ?? 0, fits });
   }
   const fileFor = new Map<string, string>();
   for (const want of wanted) {
     const key = pictureKey(want.subject);
     const lead = leads.get(articleOf(want.subject));
     if (!lead) why.set(key, 'none');
-    else if (NOT_A_PICTURE.test(lead.file) || lead.width < MIN_WIDTH) why.set(key, 'not a picture');
+    else if (NOT_A_PICTURE.test(lead.file) || lead.width < MIN_WIDTH || !lead.fits) why.set(key, 'not a picture');
     else fileFor.set(key, lead.file);
   }
   if (!fileFor.size) return { found, why };
