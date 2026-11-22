@@ -296,7 +296,41 @@ function blocksFromTokens(tokens: any[]): Block[] {
 
 /** The whole document, as blocks to lay out in order. */
 export function markdownBlocks(markdown: string): Block[] {
-  return blocksFromTokens(marked.lexer(markdown ?? ''));
+  return blocksFromTokens(marked.lexer(withVerseLineBreaks(markdown ?? '')));
+}
+
+const NOT_VERSE_LINE = /^\s*(?:[-*+]\s|\d+[.)]\s|#|>|\||```|~~~|---|___|\*\*\*\s*$)/;
+
+/**
+ * A poem or a speech keeps its lines (re-test, Nov 22: Hamlet's soliloquy
+ * printed for students as one paragraph, so no one could find line 15).
+ * Markdown joins the lines of a paragraph; a paragraph of four or more short
+ * lines that mostly begin with a capital, as verse does, gets a hard break at
+ * the end of each line. Prose, written a paragraph to a line, is untouched.
+ */
+export function withVerseLineBreaks(markdown: string): string {
+  const lines = markdown.split('\n');
+  const out: string[] = [];
+  let run: string[] = [];
+  let inFence = false;
+  const flush = () => {
+    const visible = run.map((line) => line.replace(/[*_]/g, '').trim());
+    const verse =
+      run.length >= 4 &&
+      visible.every((line) => line.length > 0 && line.length <= 90) &&
+      visible.filter((line) => /^[\p{Lu}"“‘'(]/u.test(line)).length >= run.length * 0.75;
+    run.forEach((line, i) => out.push(verse && i < run.length - 1 && !/(\\|\s{2})$/.test(line) ? `${line}\\` : line));
+    run = [];
+  };
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+    if (inFence || !line.trim() || NOT_VERSE_LINE.test(line)) {
+      flush();
+      out.push(line);
+    } else run.push(line);
+  }
+  flush();
+  return out.join('\n');
 }
 
 /** Every word in a block, for tests and for measuring. */

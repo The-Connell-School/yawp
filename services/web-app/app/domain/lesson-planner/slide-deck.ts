@@ -74,6 +74,8 @@ const MAX_LINE_CHARS = 200;
 const MAX_BODY_CHARS = 320;
 /** A passage students annotate: eight lines of verse or a short paragraph. */
 const MAX_EXCERPT_CHARS = 700;
+/** The most parts an agenda slide lists. */
+export const MAX_AGENDA_ITEMS = 6;
 // Wider than a bullet on purpose: "here is a weak conclusion next to a strong
 // one" is two paragraphs, and that is a slide worth projecting.
 const MAX_COLUMN_CHARS = 320;
@@ -128,7 +130,7 @@ const slideSchema = z
         })
       )
       .min(1)
-      .max(6)
+      .max(MAX_AGENDA_ITEMS)
       .optional(),
     question: z.string().trim().min(1).max(MAX_BODY_CHARS).optional(),
     stem: z.string().trim().min(1).max(160).optional(),
@@ -639,6 +641,13 @@ function normalizeSlide(raw: unknown): unknown {
   // An agenda and an exit have the layout's own heading; a deck is not lost
   // for leaving it out (preview, Nov 22: a Grapes of Wrath deck failed twice
   // over the two missing titles).
+  // An excerpt slide without its passage still says where the passage is
+  // (work, lines or page) and what to do with it: it is a reading slide, not a
+  // lost deck (re-test, Nov 22: "Dulce et Decorum Est" lost its deck over two).
+  if (slide.layout === 'excerpt' && (typeof slide.body !== 'string' || !slide.body.trim()) && (slide.page || slide.work)) {
+    slide.layout = 'read';
+    delete slide.body;
+  }
   const ownTitle = OWN_TITLES[slide.layout as string];
   if (ownTitle && (typeof slide.title !== 'string' || !slide.title.trim())) slide.title = ownTitle;
   if (slide.choices !== undefined) slide.choices = normalizeChoices(slide.choices);

@@ -56,7 +56,27 @@ export function keepAllPlan(content: string): { keys: string[]; minutes: Record<
         kept.push(block);
       }
     }
-    if (piece.minutes == null || !kept.length) return;
+    if (!kept.length) return;
+    if (piece.minutes == null) {
+      // An untimed step ("## Passage handout") holding a printable: the page
+      // is used in the timed steps, and takes none of the class's minutes
+      // (re-test, Nov 22: Macbeth's passage handout added 20 minutes, filed
+      // as its step and as itself). With nothing else to say, the step is
+      // the printable.
+      for (const block of kept) if (block.block === 'yawp-material') minutes[block.key] = 0;
+      if (!piece.emptyStep && kept.length === 1 && kept[0]!.block === 'yawp-material') skip.add(piece.key);
+      return;
+    }
+    // A step that is one writing assignment and its directions ("Quick write:
+    // pick one of the three…") is that assignment: filing both reads as the
+    // starter twice, once at 0 minutes (re-test, Nov 22). The assignment
+    // stands for the step and takes its minutes.
+    const sole = kept.length === 1 ? kept[0]! : null;
+    if (!piece.emptyStep && sole && (sole.block === 'yawp-daily-pages' || sole.key === EXIT_TICKET_BLOCK_KEY)) {
+      skip.add(piece.key);
+      minutes[sole.key] = piece.minutes;
+      return;
+    }
     if (!piece.emptyStep) for (const block of kept) minutes[block.key] = 0;
     else {
       const share = Math.max(1, Math.floor(piece.minutes / kept.length));

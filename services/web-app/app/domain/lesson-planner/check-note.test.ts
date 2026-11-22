@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { withCheckNote } from './check-note';
+import { checkNoteWords, withCheckNote } from './check-note';
 
 describe('withCheckNote', () => {
   test('goes just before the closing question, outside any block', () => {
@@ -31,5 +31,14 @@ describe('withCheckNote', () => {
   test('five at most, no repeats', () => {
     const out = withCheckNote('x', ['a', 'a', 'b', 'c', 'd', 'e', 'f']);
     expect(out.match(/^- /gm)?.length).toBe(5);
+  });
+});
+
+describe('checkNoteWords', () => {
+  test('a fact found inside a slide is shown as its words, not the deck\'s JSON', () => {
+    expect(checkNoteWords('"date": "Sep 1692",\n          "title": "19 hanged",')).toBe('Sep 1692 · 19 hanged');
+  });
+  test('prose is left as it is', () => {
+    expect(checkNoteWords('The trials end in  October 1692.')).toBe('The trials end in October 1692.');
   });
 });

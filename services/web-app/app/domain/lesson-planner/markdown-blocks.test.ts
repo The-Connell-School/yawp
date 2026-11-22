@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   blockText,
+  withVerseLineBreaks,
   decodeEntities,
   inlineRuns,
   markdownBlocks,
@@ -168,5 +169,31 @@ describe('decodeEntities — machinery never reaches the page', () => {
   test('decodes inside emphasis too', () => {
     const [block] = markdownBlocks('**"Evidence"** matters.');
     expect((block as any).runs[0]).toEqual({ text: '"Evidence"', bold: true });
+  });
+});
+
+describe('verse keeps its lines (re-test, Nov 22)', () => {
+  const soliloquy = [
+    '**To be, or not to be — that is the question:**',
+    "**Whether 'tis nobler in the mind to suffer**",
+    '**The slings and arrows of outrageous fortune,**',
+    '**Or to take arms against a sea of troubles**',
+    '**And by opposing end them.**',
+  ].join('\n');
+
+  test('a speech printed line by line is drawn line by line', () => {
+    const blocks = markdownBlocks(`Read the soliloquy.\n\n${soliloquy}\n\n*(Hamlet, 3.1)*`);
+    const verse = blocks.find((block) => block.kind === 'paragraph' && block.runs.some((run) => run.text.includes('To be')))!;
+    if (verse.kind !== 'paragraph') throw new Error('not a paragraph');
+    const text = verse.runs.map((run) => run.text).join('');
+    expect(text.split('\n')).toHaveLength(5);
+    expect(text.split('\n')[1]).toBe("Whether 'tis nobler in the mind to suffer");
+  });
+
+  test('prose and lists are left as they are', () => {
+    const prose = 'This is a sentence that goes on.\nand continues here in the same paragraph.';
+    expect(withVerseLineBreaks(prose)).toBe(prose);
+    const list = '- One\n- Two\n- Three\n- Four';
+    expect(withVerseLineBreaks(list)).toBe(list);
   });
 });

@@ -61,8 +61,8 @@ import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.ser
 import { withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
-import { fetchWorkText, workForText } from '~/domain/lesson-planner/source-texts.server';
-import { withCheckNote } from '~/domain/lesson-planner/check-note';
+import { fetchWorkText, sourceTextFailure, workForText } from '~/domain/lesson-planner/source-texts.server';
+import { checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
 import { isExitTicketBuilderV3Enabled } from '~/domain/assignment-types/exit-ticket-builder-v3-gate.server';
@@ -845,7 +845,12 @@ export async function action({ request }: ActionFunctionArgs) {
       let checks: Record<string, string | number> | null = null;
       try {
         const checkedAt = Date.now();
-        const quoted = await withQuotationCheck(reply);
+        // The work the teacher named; a short follow-up ("now the handout")
+        // names none, and the reply's own words say which. A long request that
+        // names no registered work is about one that is not registered (Things
+        // Fall Apart is not Heart of Darkness, though its lesson names both).
+        const followUp = turn.message.trim().split(/\s+/).length < 15;
+        const quoted = await withQuotationCheck(reply, { work: workAsked ?? (followUp ? workForText(reply) : null) });
         reply = quoted.reply;
         const askFacts = factCheckCall(() => ({
           organizationId: ctx.organizationId,
@@ -857,12 +862,16 @@ export async function action({ request }: ActionFunctionArgs) {
         const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: quoted.verified }) : { reply, applied: [], flagged: [] };
         reply = withCheckNote(facts.reply, [
           ...quoted.misplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
-          ...facts.flagged.map((error) => `“${error.wrong.slice(0, 80)}${error.wrong.length > 80 ? '…' : ''}”: ${error.why}`),
+          ...facts.flagged.map((error) => {
+            const words = checkNoteWords(error.wrong);
+            return `“${words.slice(0, 80)}${words.length > 80 ? '…' : ''}”: ${error.why}`;
+          }),
         ]);
         // Counts only, never the lesson: in the log, and to the client, which
         // shows nothing of it (it lets a test see the checks ran).
         checks = {
           work: quoted.work?.id ?? 'none',
+          ...(quoted.work && sourceTextFailure(quoted.work) ? { source: sourceTextFailure(quoted.work)! } : {}),
           quotationsCorrected: quoted.corrections.length,
           quotationsVerified: quoted.verified.length,
           quotationsUnverified: quoted.unverified.length,

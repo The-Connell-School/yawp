@@ -49,10 +49,19 @@ describe('keepAllPlan: one lesson, not every option', () => {
     expect(ticket.key).toBe('ticket');
   });
 
-  test('a step with directions keeps its minutes; its prompt is filed inside it, at 0', () => {
+  test('a step that is one writing prompt and its directions is filed as the prompt, with the step’s minutes (re-test: no 0-minute twin)', () => {
     const pieces = filed(MACBETH);
     const writing = pieces.filter((piece) => /ambition costs|short response/i.test(piece.title));
-    expect(writing.map((piece) => piece.minutes)).toEqual([12, 0]);
+    expect(writing.map((piece) => piece.minutes)).toEqual([12]);
+    expect(writing[0]!.kind).not.toBe('step');
+  });
+
+  test('no assignment is filed twice, and none at 0 minutes beside its own step', () => {
+    for (const content of [MACBETH, ACHEBE, GATSBY]) {
+      const pieces = filed(content);
+      const starters = pieces.filter((piece) => piece.kind === 'class-starter');
+      expect(starters.every((piece) => (piece.minutes ?? 0) > 0)).toBe(true);
+    }
   });
 });
 

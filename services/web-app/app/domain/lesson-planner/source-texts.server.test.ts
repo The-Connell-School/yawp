@@ -11,6 +11,7 @@ import {
   clearSourceTextCache,
   fetchWorkText,
   gutenbergTextUrl,
+  sourceTextFailure,
   registeredWork,
   stripGutenberg,
   workForText,
@@ -126,6 +127,23 @@ describe('the text', () => {
     expect(asked).toEqual([gutenbergTextUrl(work.gutenbergId)]);
   });
 
+  test('when gutenberg.org will not answer, its mirror is asked; the reason is kept when none does', async () => {
+    const asked: string[] = [];
+    const work = registeredWork('wilfred-owen')!;
+    clearSourceTextCache();
+    const text = await fetchWorkText(work, {
+      fetch: async (url: string) => {
+        asked.push(url);
+        return url.includes('www.gutenberg.org') ? new Response('', { status: 403 }) : new Response(OWEN);
+      },
+    });
+    expect(text).toContain('My friend, you would not tell with such high zest');
+    expect(asked.length).toBe(2);
+    clearSourceTextCache();
+    expect(await fetchWorkText(work, { fetch: async () => new Response('', { status: 403 }) })).toBeNull();
+    expect(sourceTextFailure(work)).toBe('www.gutenberg.org 403, gutenberg.pglaf.org 403, aleph.pglaf.org 403');
+  });
+
   test('a text that is not the work (a wrong ebook number) is no text', async () => {
     const fetch = async () => new Response(OWEN);
     expect(
@@ -158,6 +176,6 @@ describe('the text', () => {
     expect(
       await fetchWorkText(work, { fetch: async () => new Response(OWEN) })
     ).toContain('Bent double');
-    expect(calls).toBe(1);
+    expect(calls).toBe(3); // gutenberg.org and its two mirrors
   });
 });

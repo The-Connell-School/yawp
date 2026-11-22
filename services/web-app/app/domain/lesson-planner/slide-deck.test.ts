@@ -789,3 +789,18 @@ describe('the exit slide never says a thing twice (the Leopard deck, Nov 21)', (
     expect(parseSlideDeck(fenced(exitDeck({ nextLesson: 'Lampedusa and his palace' })))?.deck?.slides[0]?.nextLesson).toBe('Lampedusa and his palace');
   });
 });
+
+describe('an excerpt slide without its passage (re-test, Nov 22)', () => {
+  test('becomes a reading slide that says where the lines are; the deck is kept', () => {
+    const json = JSON.stringify({
+      title: 'Dulce',
+      slides: [
+        { layout: 'title', title: 'Dulce et Decorum Est', speakerNotes: 'n' },
+        { layout: 'excerpt', title: 'Stanza 1', work: 'Dulce et Decorum Est', page: 'lines 1–8', bullets: ['Circle every simile.'], speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.deck.slides[1]!.layout).toBe('read');
+  });
+});

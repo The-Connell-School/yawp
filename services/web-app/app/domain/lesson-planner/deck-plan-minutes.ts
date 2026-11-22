@@ -7,7 +7,7 @@
  * a timed writing slide.
  */
 import { readPlanSteps } from './plan-steps';
-import { fenceSlideDeck, readSlideDeck, type Slide, type SlideDeck } from './slide-deck';
+import { fenceSlideDeck, MAX_AGENDA_ITEMS, readSlideDeck, validateSlideDeck, type Slide, type SlideDeck } from './slide-deck';
 
 /** The deck with its agenda and minutes matching the plan's steps. */
 export function deckMatchingPlan<T extends SlideDeck>(deck: T, steps: Array<{ title: string; minutes: number | null }>): T {
@@ -15,7 +15,7 @@ export function deckMatchingPlan<T extends SlideDeck>(deck: T, steps: Array<{ ti
   if (timed.length < 2) return deck;
   const planTotal = timed.reduce((sum, step) => sum + step.minutes, 0);
   let slides: Slide[] = deck.slides.map((slide) =>
-    slide.layout === 'agenda' ? { ...slide, agenda: timed.slice(0, 8).map((step) => ({ title: shortTitle(step.title), minutes: step.minutes })) } : slide
+    slide.layout === 'agenda' ? { ...slide, agenda: agendaOf(timed) } : slide
   );
   const deckTotal = slides.reduce((sum, slide) => sum + (slide.layout === 'agenda' ? 0 : (slide.minutes ?? 0)), 0);
   const gap = planTotal - deckTotal;
@@ -36,6 +36,27 @@ export function deckMatchingPlan<T extends SlideDeck>(deck: T, steps: Array<{ ti
   return { ...deck, slides };
 }
 
+/**
+ * The plan's steps as agenda lines, no more than an agenda slide holds: past
+ * that, the two neighbouring steps with the fewest minutes between them share
+ * a line, so every step is still there and the minutes still add up
+ * (re-test, Nov 22: a nine-step plan made an agenda the deck could not hold,
+ * and the deck was lost).
+ */
+function agendaOf(steps: Array<{ title: string; minutes: number }>): Array<{ title: string; minutes: number }> {
+  let lines = steps.map((step) => ({ title: shortTitle(step.title), minutes: step.minutes }));
+  while (lines.length > MAX_AGENDA_ITEMS) {
+    let at = 0;
+    for (let i = 1; i < lines.length - 1; i += 1) {
+      if (lines[i]!.minutes + lines[i + 1]!.minutes < lines[at]!.minutes + lines[at + 1]!.minutes) at = i;
+    }
+    const [a, b] = [lines[at]!, lines[at + 1]!];
+    const joined = `${a.title}, ${b.title.charAt(0).toLowerCase()}${b.title.slice(1)}`;
+    lines = [...lines.slice(0, at), { title: joined.length <= 70 ? joined : a.title, minutes: a.minutes + b.minutes }, ...lines.slice(at + 2)];
+  }
+  return lines;
+}
+
 /** "Context: Igbo society and Achebe's purpose" → "Context", for an agenda line. */
 function shortTitle(title: string): string {
   const cut = title.split(/[:—–]/)[0]!.trim();
@@ -50,5 +71,7 @@ export function withDeckMatchingPlan(reply: string): string {
   if (steps.length < 2) return reply;
   const matched = deckMatchingPlan(outcome.deck, steps);
   if (matched === outcome.deck) return reply;
+  // Never trade a deck that builds for one that does not.
+  if (!validateSlideDeck(JSON.stringify(matched)).ok) return reply;
   return `${outcome.body.trim()}\n\n${fenceSlideDeck(matched)}`;
 }

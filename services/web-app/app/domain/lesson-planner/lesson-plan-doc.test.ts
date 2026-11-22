@@ -58,7 +58,7 @@ describe("buildLessonPlanDoc (Brian's run 2, D1)", () => {
 
   test('a short summary, never the full text of a framing or prompt', () => {
     for (const step of doc.instructions) {
-      expect(step.summary.length).toBeLessThanOrEqual(220);
+      expect(step.summary.length).toBeLessThanOrEqual(320);
     }
     expect(doc.instructions[1]!.summary).not.toContain('Long framing text Long framing text');
   });

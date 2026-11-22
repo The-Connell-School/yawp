@@ -29,12 +29,12 @@ List only errors of fact about the literary work, its author and its history:
 - a famous line misquoted, when you are certain of the exact words
 - wrong historical or biographical context
 
-Do not list: teaching choices, style, tone, interpretations or debatable readings, line or page numbers that depend on the edition, spelling variants between editions, or anything you are not sure is wrong.
+Do not list anything that is right as written, even to add a detail. Do not list: teaching choices, style, tone, interpretations or debatable readings, line or page numbers that depend on the edition, spelling variants between editions, or anything you are not sure is wrong.
 
 For each error:
 - "wrong": the words of the lesson that are wrong, copied exactly, character for character, as short as possible (a phrase, at most one sentence) but long enough to occur only once in the lesson. Never the lesson's code-fence lines, links or JSON keys.
 - "right": the words to put in their place: the same passage corrected, in the lesson's own voice and format, so it can replace "wrong" directly.
-- "confidence": "high" only when you are certain and any scholar of the work would agree; otherwise "medium".
+- "confidence": "high" when you are certain of both the error and the correction and any scholar of the work would agree (most wrong dates, names, chapters and speakers are this); "medium" when the correction itself is uncertain.
 - "why": one short sentence a teacher can check, naming where in the work the fact is (chapter, act and scene, book).
 
 Answer with JSON only, no other text:
@@ -221,15 +221,18 @@ export async function withFactCheck(
     for (const error of errors) {
       const { confidence, ...fact } = error;
       if (confidence === 'low') continue;
-      const edit =
-        confidence === 'high' ? placeEdit(reply, fact, fences) : null;
+      if (notAnError(fact)) continue;
+      const placed =
+        confidence === 'high' ? placeEdits(reply, fact, fences) : null;
       const clashes =
-        edit &&
-        [...kept, ...edits].some(
-          (span) => edit.start < span.end && span.start < edit.end
+        placed &&
+        placed.some((edit) =>
+          [...kept, ...edits].some(
+            (span) => edit.start < span.end && span.start < edit.end
+          )
         );
-      if (edit && !clashes) {
-        edits.push(edit);
+      if (placed && !clashes) {
+        edits.push(...placed);
         applied.push(fact);
       } else flagged.push(fact);
     }
@@ -242,12 +245,28 @@ export async function withFactCheck(
   }
 }
 
-/** Where a sure correction goes, as the reply writes its words there; or null when it cannot be placed safely. */
-function placeEdit(
+/**
+ * A "fact" the checker itself says is right as written ("the 1956 date is
+ * correct… only a clarification"): not an error, so neither made nor shown
+ * (re-test, Nov 22: such notes filled the teacher's "check before class").
+ */
+function notAnError({ why }: FactError): boolean {
+  return /\b(?:is|are) (?:correct|accurate|right) as written\b|\bwording is fine\b|\bonly a clarification\b|\bno (?:change|correction) (?:is )?needed\b|\bthis is accurate\b/i.test(why);
+}
+
+/** The most places one sure correction is made: the plan and its slide often say the same thing. */
+const MAX_PLACES = 3;
+
+/**
+ * Where a sure correction goes, as the reply writes its words at each place
+ * (the plan's prose and the deck's JSON often both say it: re-test, Nov 22,
+ * a fact flagged and left on the slide); or null when any place is unsafe.
+ */
+function placeEdits(
   reply: string,
   { wrong, right }: FactError,
   fences: Fence[]
-): { start: number; end: number; text: string } | null {
+): Array<{ start: number; end: number; text: string }> | null {
   if (wrong.length >= MAX_WRONG || right.length > MAX_RIGHT || !right.trim())
     return null;
   if (/```/.test(right) || /```/.test(wrong)) return null;
@@ -266,14 +285,18 @@ function placeEdit(
           (q) => Math.abs(q.at - p.at) < Math.max(q.form.length, p.form.length)
         )
   );
-  if (distinct.length !== 1) return null;
-  const [{ at, form }] = distinct;
-  if (inFurniture(reply, at, form.length, fences)) return null;
-  const fence = fenceAt(fences, at);
-  const json = fence?.lang === 'yawp-slides';
-  if (json && form === wrong && wrong !== escaped) return null;
-  const text = json ? JSON.stringify(right).slice(1, -1) : right;
-  // A correction inside JSON may not break out of its string.
-  if (json && /\n/.test(right)) return null;
-  return { start: at, end: at + form.length, text };
+  if (!distinct.length || distinct.length > MAX_PLACES) return null;
+  // Short words found more than once may mean different things in different places.
+  if (distinct.length > 1 && wrong.trim().split(/\s+/).length < 4) return null;
+  const edits: Array<{ start: number; end: number; text: string }> = [];
+  for (const { at, form } of distinct) {
+    if (inFurniture(reply, at, form.length, fences)) return null;
+    const fence = fenceAt(fences, at);
+    const json = fence?.lang === 'yawp-slides';
+    if (json && form === wrong && wrong !== escaped) return null;
+    // A correction inside JSON may not break out of its string.
+    if (json && /\n/.test(right)) return null;
+    edits.push({ start: at, end: at + form.length, text: json ? JSON.stringify(right).slice(1, -1) : right });
+  }
+  return edits;
 }

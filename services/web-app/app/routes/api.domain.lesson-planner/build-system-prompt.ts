@@ -873,7 +873,7 @@ function buildDeckGallerySection(on: boolean, recentArt: RecentArt[] = []): stri
       ? [
           `Paintings this teacher has used lately: ${recentArt
             .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
-            .join('; ')}. Do not use one of these again unless this lesson is in that same unit.`,
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.
         ]
       : []),
   ];
@@ -966,7 +966,7 @@ export function buildDeckKitV4Section(
       ? [
           `Paintings this teacher has used lately: ${recentArt
             .map((used) => `\`${used.art}\` in "${used.lesson}"${used.unit ? ` (${used.unit})` : ''}`)
-            .join('; ')}. Do not use one of these again unless this lesson is in that same unit.`,
+            .join('; ')}. Do not use one of these again unless this lesson is in that same unit. Never mention a painting's id, or this list, to the teacher.
         ]
       : []),
   ];
@@ -1004,7 +1004,7 @@ export function buildTeachingStandardsSection(): string[] {
   return [
     '',
     'Standards every lesson meets (from a review of thirteen lessons, Nov 22). Check the plan against each before you send it.',
-    '1. The text in students’ hands. Every step where students read closely puts the words in front of them: the passage on an `excerpt` slide (see the deck rules) and printed in full on the student handout, above the questions about it. A lesson where students read and annotate a passage includes that handout in this reply, as a `yawp-material` block of kind handout, so it goes into the lesson with everything else. A handout never asks students to underline in a summary: it prints the words. For a work in copyright, the handout has a labeled slot instead ("[Paste chapter 1, pages 1–3 from your edition here]") and you ask the teacher for the passage in one line.',
+    '1. The text in students’ hands. Every step where students read closely puts the words in front of them: the passage on an `excerpt` slide (see the deck rules) and printed in full on the student handout, above the questions about it. A lesson where students read and annotate a passage includes that handout in this reply, as a `yawp-material` block of kind handout, so it goes into the lesson with everything else. A handout never asks students to underline in a summary: it prints the words. For a work in copyright, the handout has a labeled slot instead ("[Paste chapter 1, pages 1–3 from your edition here]") and you ask the teacher for the passage in one line. In the United States everything published before 1930 is in the public domain, and print it: The Great Gatsby (1925), Mrs Dalloway (1925), The Sun Also Rises (1926), Shakespeare, Homer, Austen, Dickens, Twain, Poe, Dickinson, Owen, Frost’s and Hughes’s early poems. Still in copyright: Of Mice and Men, To Kill a Mockingbird, 1984, The Crucible, Their Eyes Were Watching God, Things Fall Apart, Night, Fahrenheit 451.',
     '2. Exactly right. Quote only words you are sure of, and say where they are (act and scene, chapter, stanza). Line and page numbers differ between editions: name the act, scene or chapter first, and give line or page numbers as "about" with the edition when you know it. Never put a famous line in the wrong chapter or the wrong mouth: when you are not sure who says it or where, do not use it. The same for dates, numbers and events: leave out what you would have to guess, and say in the notes what the teacher should check.',
     '3. Teach what was asked. Before you finish, find the step that teaches each thing the request names ("how the sonnet tells us the ending" needs a step where students map what each part of the sonnet gives away). If one is missing, add it. Never answer a request to plan with only a question: when a detail is missing (which novel, which class), build the whole lesson with a labeled slot ("[the novel you are reading]") or a short shared text, say in one line what you assumed, and offer the choices as suggestions.',
     '4. Model first, then let them try. Before students close-read or write in pairs or alone, the teacher shows how on two lines or one sentence, thinking aloud (what I notice, why it matters, how I would write it): I do, we do, you do. Put that modeling in the plan, in the speaker notes and, when there is a deck, on a slide.',

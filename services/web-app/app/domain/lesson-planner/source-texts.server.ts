@@ -14,6 +14,25 @@ export { SOURCE_TEXT_WORKS, type RegisteredWork } from './source-texts-data';
 export const gutenbergTextUrl = (id: number) =>
   `https://www.gutenberg.org/cache/epub/${id}/pg${id}.txt`;
 
+/**
+ * Where else the same file is (Project Gutenberg's own mirrors), tried in turn
+ * when gutenberg.org will not answer a server (re-test, Nov 22: no text was
+ * had on the preview for any of the 13 lessons).
+ */
+export const gutenbergTextUrls = (id: number) => [
+  gutenbergTextUrl(id),
+  `https://gutenberg.pglaf.org/cache/epub/${id}/pg${id}.txt`,
+  `https://aleph.pglaf.org/cache/epub/${id}/pg${id}.txt`,
+];
+
+// Why the last fetch of each work failed (a status, "timeout", "not the work"), for the planner's counts.
+const failures = new Map<string, string>();
+
+/** Why the work's text could not be had last time, or null. No lesson text: a status word. */
+export function sourceTextFailure(work: RegisteredWork): string | null {
+  return failures.get(work.id) ?? null;
+}
+
 /** The registered work by id, or null. */
 export function registeredWork(id: string): RegisteredWork | null {
   return SOURCE_TEXT_WORKS.find((work) => work.id === id) ?? null;
@@ -124,20 +143,32 @@ async function fetchText(
   fetcher: Fetch,
   timeoutMs: number
 ): Promise<string | null> {
-  try {
-    const response = await fetcher(gutenbergTextUrl(work.gutenbergId), {
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { accept: 'text/plain' },
-    });
-    if (!response.ok) return null;
-    const raw = await response.text();
-    if (raw.length > MAX_BYTES) return null;
-    const text = stripGutenberg(raw);
-    if (text.length < MIN_LENGTH || !isTextOfWork(text, work)) return null;
-    return text;
-  } catch {
-    return null;
+  const why: string[] = [];
+  for (const url of gutenbergTextUrls(work.gutenbergId)) {
+    try {
+      const response = await fetcher(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { accept: 'text/plain' },
+      });
+      if (!response.ok) {
+        why.push(`${new URL(url).hostname} ${response.status}`);
+        continue;
+      }
+      const raw = await response.text();
+      if (raw.length > MAX_BYTES) return null;
+      const text = stripGutenberg(raw);
+      if (text.length < MIN_LENGTH || !isTextOfWork(text, work)) {
+        failures.set(work.id, 'not the work');
+        return null;
+      }
+      failures.delete(work.id);
+      return text;
+    } catch (error) {
+      why.push(`${new URL(url).hostname} ${error instanceof Error && /abort|timeout/i.test(error.name + error.message) ? 'timeout' : 'error'}`);
+    }
   }
+  failures.set(work.id, why.join(', ').slice(0, 160));
+  return null;
 }
 
 /**

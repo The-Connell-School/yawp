@@ -63,6 +63,31 @@ describe('deckMatchingPlan', () => {
     ]);
   });
 
+  test('a plan of more steps than an agenda holds: the shortest neighbours share a line, the minutes still add up', () => {
+    const plan = [
+      { title: 'Class starter', minutes: 5 },
+      { title: 'Context: Salem in 1692', minutes: 8 },
+      { title: 'Map', minutes: 2 },
+      { title: 'Timeline', minutes: 2 },
+      { title: 'Miller in 1953', minutes: 8 },
+      { title: 'Talk', minutes: 7 },
+      { title: 'Short response', minutes: 12 },
+      { title: 'Share', minutes: 3 },
+      { title: 'Exit ticket', minutes: 3 },
+    ];
+    const out = deckMatchingPlan(deck([{ layout: 'agenda', agenda: [{ title: 'Old', minutes: 9 }] }, { layout: 'discuss', minutes: 50 }]), plan);
+    const agenda = out.slides[0]!.agenda!;
+    expect(agenda.length).toBe(6);
+    expect(agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0)).toBe(50);
+    expect(agenda.map((item) => item.title)).toEqual(['Class starter', 'Context, map, timeline', 'Miller in 1953', 'Talk', 'Short response', 'Share, exit ticket']);
+  });
+
+  test('the Crucible reply from the re-test keeps its deck', () => {
+    const reply = fixture('reply-crucible-day-1.md');
+    const after = readSlideDeck(withDeckMatchingPlan(reply));
+    expect(after.kind).toBe('deck');
+  });
+
   test('a plan without timed steps changes nothing', () => {
     const d = deck([{ layout: 'discuss', minutes: 7 }]);
     expect(deckMatchingPlan(d, [{ title: 'A', minutes: null }])).toBe(d);

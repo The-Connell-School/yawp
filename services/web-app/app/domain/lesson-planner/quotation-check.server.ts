@@ -1554,7 +1554,7 @@ export async function withQuotationCheck(
     work: null,
   };
   try {
-    const work = options.work ?? workForText(reply);
+    const work = options.work !== undefined ? options.work : workForText(reply);
     if (!work) return unchanged;
     const source = await preparedWork(work, options);
     if (!source) return { ...unchanged, work };

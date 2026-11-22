@@ -5,6 +5,17 @@
  */
 const FENCE = /^\s*(```|~~~)/;
 
+/**
+ * Words quoted from the lesson as a teacher reads them: a fact the checker
+ * found inside a slide comes as the deck's JSON (`"date": "Sep 1692",
+ * "title": "19 hanged"`), shown as its values ("Sep 1692 · 19 hanged").
+ */
+export function checkNoteWords(words: string): string {
+  if (!/"\s*:\s*"/.test(words)) return words.replace(/\s+/g, ' ').trim();
+  const values = [...words.matchAll(/"[\w-]+"\s*:\s*"((?:[^"\\]|\\.)*)"?/g)].map((m) => m[1]!.replace(/\\"/g, '"'));
+  return values.length ? values.join(' · ') : words.replace(/[{}"[\],]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export function withCheckNote(reply: string, items: string[]): string {
   const list = [
     ...new Set(items.map((item) => item.trim()).filter(Boolean)),

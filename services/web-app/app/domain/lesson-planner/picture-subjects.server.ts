@@ -33,7 +33,9 @@ Rules:
 - Real things only. A character in a novel has no photograph: name the real person, place or event the slide points to, a well-known painting or engraving of the scene by the title of its own article (a Romantic painting of Macbeth's witches, an illustration from the first edition), or nothing.
 - Never the film of the book being taught.
 - For a slide about the Holocaust, a genocide, a massacre, a lynching or other mass death or cruelty, give null: those pictures are always the teacher's choice.
-- When the slide is about an idea, a feeling, the students or the lesson itself, and no real thing stands for it, give null. A wrong picture is worse than none.
+- A lesson on a book, play or poem has a real world to show, so a slide about an idea in the work still has a picture. Look for, in this order: a well-known painting, engraving or illustration of the scene or the character's moment (by its article's title); the real place or period the work is set in, as it was then ("Trench warfare", "Western Front (World War I)", "Harlem Renaissance"); the real object or practice the slide names ("Gas mask", "Elizabethan theatre"); the work's first edition or first performance; the author (once in a deck). A slide on a sonnet, a soliloquy or an aside can show the theatre, the play's famous staging in art, or the poet.
+- Give each slide a different subject; never the same picture twice in a deck.
+- Give null only when the slide is a routine instruction (find a word, write a sentence, talk to a partner) or about the students themselves, or when nothing real fits. A wrong picture is worse than none, but most slides about a work have a right one.
 - "shows": a few words on what the picture should show.
 
 Answer with JSON only, no other text:

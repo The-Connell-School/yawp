@@ -155,6 +155,8 @@ export function applyDeckOps(sent: SlideDeck, ops: DeckOp[]): DeckOpsOutcome {
       const given = Object.fromEntries(Object.entries(op.with).filter(([, value]) => value !== null));
       // With no layout named, the slide keeps its own: nothing is guessed from the fields.
       const next = normalizeSlideFields('layout' in given ? given : { ...given, layout: was.layout });
+      // A heading the layout gives a slide without one is not a change the model asked for.
+      if (!('title' in given) && !('heading' in given)) delete next.title;
       // A slide that becomes another kind of slide starts again from what every slide has.
       const kept = next.layout === was.layout ? was : { title: was.title, speakerNotes: was.speakerNotes, minutes: was.minutes, step: was.step, image: was.image };
       const merged: Record<string, unknown> = { ...kept, ...next };

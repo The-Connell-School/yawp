@@ -32,7 +32,7 @@ const deckOf = (reply: string) =>
   );
 
 describe('the Odyssey reply (a3)', () => {
-  test('a sure error said once in the prose is corrected in place; one said twice goes to the teacher', async () => {
+  test('a sure error is corrected in place, in the plan and on its slide alike (re-test, Nov 22: flagged and left on the slide)', async () => {
     const result = await withFactCheck(
       ODYSSEY,
       answering([
@@ -58,12 +58,11 @@ describe('the Odyssey reply (a3)', () => {
     );
     expect(result.applied.map((e) => e.right)).toEqual([
       'Escaping by ship, Odysseus shouts his name',
+      'one of the six men left in that ship',
     ]);
-    // Twice in the reply (the plan and slide 11): which one is meant is the teacher's call.
-    expect(result.flagged.map((e) => e.wrong)).toEqual([
-      'one of the twelve men on that raft',
-    ]);
-    expect(result.reply.split('twelve men on that raft').length - 1).toBe(2);
+    // Twice in the reply (the plan and slide 11): both say the same wrong thing; both are corrected.
+    expect(result.reply).not.toContain('one of the twelve men on that raft');
+    expect(result.flagged).toEqual([]);
   });
 
   test('a correction inside the slide deck keeps the deck JSON whole', async () => {
@@ -163,7 +162,7 @@ describe('what is never changed', () => {
     expect(result.flagged).toHaveLength(4);
   });
 
-  test('the same words twice (prose and handout title) are flagged, not guessed at', async () => {
+  test('the same sentence twice (prose and handout title) is corrected in both', async () => {
     const result = await withFactCheck(
       reply,
       answering([
@@ -175,8 +174,26 @@ describe('what is never changed', () => {
         },
       ])
     );
+    expect(result.reply).not.toContain('The trials end in October 1692');
+    expect(result.applied).toHaveLength(1);
+  });
+
+  test('a short phrase found in several places is flagged, not guessed at', async () => {
+    const result = await withFactCheck(
+      reply,
+      answering([{ wrong: 'October 1692', right: 'May 1693', confidence: 'high', why: 'The last trials were in May 1693.' }])
+    );
     expect(result.reply).toBe(reply);
     expect(result.flagged).toHaveLength(1);
+  });
+
+  test('what the checker itself calls right as written is neither made nor shown', async () => {
+    const result = await withFactCheck(
+      reply,
+      answering([{ wrong: 'The trials end in October 1692', right: 'The trials end in October 1692 (the court)', confidence: 'medium', why: 'The 1956 date is correct; this is only a clarification.' }])
+    );
+    expect(result.reply).toBe(reply);
+    expect(result.flagged).toEqual([]);
   });
 
   test('a quotation the quotation check verified is protected', async () => {

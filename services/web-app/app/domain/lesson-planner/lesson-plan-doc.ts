@@ -94,7 +94,11 @@ export type LessonPlanSummaries = {
   closing?: string;
 };
 
-const MAX_SUMMARY_CHARS = 220;
+// A step's directions as the teacher needs them in class: its first few
+// sentences, never cut mid-sentence when one fits (re-test, Nov 22: the
+// printed plan cut every direct-teaching step off with "…").
+const MAX_SUMMARY_CHARS = 320;
+const ENOUGH_SUMMARY_CHARS = 160;
 
 /** What a writing piece or framing is for, when nothing better was written. */
 const DEFAULT_PURPOSE: Record<string, string> = {
@@ -155,9 +159,9 @@ function firstSentences(markdown: string): string {
     const next = `${summary} ${sentence.trim()}`.trim();
     if (next.length > MAX_SUMMARY_CHARS) break;
     summary = next;
-    if (summary.length > 90) break;
+    if (summary.length > ENOUGH_SUMMARY_CHARS) break;
   }
-  if (!summary) summary = `${text.slice(0, MAX_SUMMARY_CHARS - 1).trimEnd()}…`;
+  if (!summary) summary = `${text.slice(0, MAX_SUMMARY_CHARS - 1).replace(/\s+\S*$/, '').trimEnd()}…`;
   return summary;
 }
 
