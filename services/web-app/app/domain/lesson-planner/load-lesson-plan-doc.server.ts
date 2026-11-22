@@ -15,9 +15,13 @@ import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { loadLessonPacket } from './load-lesson-packet.server';
 import {
   buildLessonPlanDoc,
+  buildUnitPlanDoc,
   entriesFromPacket,
+  newestUnitMap,
+  objectivesForStack,
   planStepsForSummary,
   planSummaryKey,
+  stackSourceIds,
   type LessonPlanDoc,
   type LessonPlanSummaries,
   withTeacherNotes,
@@ -49,6 +53,29 @@ export async function loadLessonPlan({
 
   const loaded = await loadLessonPacket({ request, conversationId, withStackDetails: false });
   const entries = entriesFromPacket(loaded.packet, loaded.materialKinds);
+
+  // What the teacher asked (the standards they named: never inferred) and
+  // what the planner said (its objective; a unit's map).
+  const messages = await prisma.lessonPlanMessage.findMany({
+    where: { conversationId: loaded.conversationId, role: { in: ['user', 'assistant'] } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, role: true, content: true },
+  });
+  const standards = teacherStandards(messages.filter((message) => message.role === 'user').map((message) => message.content));
+  const replies = messages.filter((message) => message.role === 'assistant');
+
+  // A unit planned in the chat, with no lesson in its stack, prints as its
+  // unit map (Nov 22 review: an empty lesson template, "0 parts").
+  const unitMap = planStepsForSummary(entries).length ? null : newestUnitMap(replies);
+  if (unitMap) {
+    const doc = buildUnitPlanDoc({
+      map: unitMap,
+      className: loaded.packet.className,
+      periodMinutes: loaded.periodMinutes,
+      standards,
+    });
+    return { doc, kit: deckGallery ? buildKitPlan({ doc, entries, deckKitV4, deckKitV41 }) : null };
+  }
   // The kit's plan asks for short step titles, which a summary written before
   // it does not have.
   const key = `${planSummaryKey(entries)}${deckGallery ? '-kit1' : ''}`;
@@ -105,20 +132,19 @@ export async function loadLessonPlan({
     }
   }
 
-  // The standards the teacher named in the chat: never inferred.
-  const asked = await prisma.lessonPlanMessage.findMany({
-    where: { conversationId: loaded.conversationId, role: 'user' },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { content: true },
-  });
   const built = buildLessonPlanDoc({
     title: loaded.packet.title,
     className: loaded.packet.className,
     periodMinutes: loaded.periodMinutes,
     entries,
     summaries,
-    standards: teacherStandards(asked.map((message) => message.content)),
+    standards,
     extensionIds: teachNotes ? readExtensionIds(stored?.extensionStepIds) : [],
+    // The objective the planner stated is the plan's goals (Nov 22 review).
+    objectives: objectivesForStack({
+      replies,
+      sourceIds: stackSourceIds(loaded.packet, loaded.materialTokens),
+    }),
   });
   // The teacher's notes print under their steps (Oct 24 handoff, task 7).
   const doc = teachNotes ? withTeacherNotes(built, await storedTeacherNotes(loaded.conversationId)) : built;

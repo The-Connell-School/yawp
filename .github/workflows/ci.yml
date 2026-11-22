@@ -1357,6 +1357,7 @@ jobs:
             app/domain/lesson-planner/keep-all-plan.test.ts \
             app/domain/lesson-planner/deck-plan-minutes.test.ts \
             app/domain/lesson-planner/file-later-handout.server.test.ts \
+            app/domain/lesson-planner/pdf-text.server.test.ts \
             app/components/lesson-planner/slide-picture.test.tsx \
             app/routes/api.domain.lesson-planner.places/route.test.ts \
             'app/routes/api.lesson-planner-map[.]svg/route.test.ts' \

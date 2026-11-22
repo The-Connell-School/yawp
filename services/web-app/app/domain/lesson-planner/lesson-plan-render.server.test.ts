@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { inflateRawSync } from 'node:zlib';
 import { renderLessonPlanDocx, renderLessonPlanPdf } from './lesson-plan-render.server';
-import type { LessonPlanDoc } from './lesson-plan-doc';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { extractText, getDocumentProxy } from 'unpdf';
+import { buildUnitPlanDoc, unitMapFromReply, type LessonPlanDoc } from './lesson-plan-doc';
 
 /** The files inside a zip, by name, read through the central directory. */
 function zipParts(bytes: Uint8Array): Map<string, string> {
@@ -68,9 +71,12 @@ describe("renderLessonPlanDocx (Brian's run 2, D2)", () => {
     // Step titles are real headings a teacher can restyle, not bold runs.
     expect(xml).toContain('Heading3');
     expect(xml).not.toContain('w:txbx');
-    for (const heading of ['Standards', 'Differentiation / accommodations', 'Assessment']) {
+    for (const heading of ['Differentiation / accommodations', 'Assessment']) {
       expect(xml).toContain(`>${heading}<`);
     }
+    // No standards named: no Standards section to fill (Nov 22 review).
+    expect(xml).not.toContain('>Standards<');
+    expect(xml).not.toContain('Add the standards this lesson meets.');
     expect(xml).toContain('The exit ticket: one object, one sentence.');
     expect(xml.match(/>Exit ticket \(3 min\)</g)?.length).toBe(1);
   });
@@ -142,5 +148,32 @@ describe("If you have more time (Kevin's note 10c)", () => {
 
   test('and in the PDF', async () => {
     expect((await renderLessonPlanPdf(extended)).length).toBeGreaterThan((await renderLessonPlanPdf(DOC)).length);
+  });
+});
+
+describe('a unit plan prints its map (Nov 22 review)', () => {
+  const map = unitMapFromReply(readFileSync(join(import.meta.dir, 'fixtures', 'printables-mice-unit-reply.md'), 'utf8'))!;
+  const unit = buildUnitPlanDoc({ map, className: 'English 10', periodMinutes: 50 });
+
+  test('the Word file: the unit’s title, each day with its parts, no lesson template', async () => {
+    const xml = zipParts(await renderLessonPlanDocx(unit)).get('word/document.xml')!;
+    expect(xml).toContain('>Of Mice and Men<');
+    expect(xml).toContain('>Unit map<');
+    expect(xml).toContain('Day 1: Dreams and destiny (50 min)');
+    expect(xml).toContain('Day 15: Final essay due (50 min)');
+    expect(xml).toContain('Reading: Chapter 1 (pp. 1–16), read aloud in class');
+    expect(xml).not.toContain('>Instructions<');
+    expect(xml).not.toContain('>Closing<');
+    expect(xml).not.toContain('Add this lesson');
+    expect(xml).not.toContain('0 parts');
+  });
+
+  test('the PDF too', async () => {
+    const pdf = await getDocumentProxy(await renderLessonPlanPdf(unit));
+    const { text } = await extractText(pdf, { mergePages: true });
+    expect(text).toContain('Of Mice and Men');
+    expect(text).toContain('Day 9: The ending');
+    expect(text).toContain('In class: Read Chapter 6 together');
+    expect(text).not.toContain('Instructions');
   });
 });

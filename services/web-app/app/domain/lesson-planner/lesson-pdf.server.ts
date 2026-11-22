@@ -28,6 +28,7 @@ import type { MapSpec } from '~/domain/geo/map-view';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitDisplayFont, registerKitFonts } from './kit-fonts.server';
+import { guardPdfText } from './pdf-text.server';
 
 /** The kit's ink and stone (lesson plan spec v1, "Type and color"). */
 const KIT_PLAN_COLORS_HEX = { ink: '#1B1B1B', stone: '#6F6A63' } as const;
@@ -732,6 +733,8 @@ function newDocument(title: string, kit?: HandoutKit | null): Doc {
     info: { Title: title, Creator: 'Yawp! Lesson Planner' },
     autoFirstPage: true,
   });
+  // Any character prints as itself ("mētis", not "m7F—2…"; Nov 22 review).
+  guardPdfText(doc);
   if (kit) {
     const fonts = registerKitFonts(doc);
     STYLES.set(doc, {

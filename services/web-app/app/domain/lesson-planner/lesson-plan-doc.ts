@@ -13,7 +13,9 @@ import { createHash } from 'node:crypto';
 import { fenceSlideDeck, readSlideDeck } from './slide-deck';
 import type { LessonPacket } from './lesson-packet';
 import { readPlanSteps } from './plan-steps';
+import { multiDayTitle, readPlanDays } from './plan-days';
 import { hidePromptIds } from './prompt-ids';
+import { readUnitPlan } from './unit-plan';
 
 /** One piece of the stack, in stack order. */
 export type LessonPlanEntry = {
@@ -45,6 +47,8 @@ export type LessonPlanStep = {
   stepId?: string;
   /** The teacher's notes for it, printed under it, as "Open with: …" lines. */
   teacherNotes?: string;
+  /** A unit's day: what happens in it, one line each (Nov 22: units printed empty). */
+  parts?: string[];
 };
 
 export type LessonPlanDoc = {
@@ -73,6 +77,11 @@ export type LessonPlanDoc = {
   assessment: string | null;
   /** The standards the teacher named in the planner, never inferred. */
   standards: string[];
+  /**
+   * A unit plan, printed as its unit map: each instruction is a day (Nov 22
+   * review: a 15-day unit printed as an empty lesson with "0 parts").
+   */
+  unit?: { subtitle: string | null; endsWith: string | null; days: number };
 };
 
 /** What the model writes for a plan (see plan-summary.server.ts). */
@@ -128,11 +137,19 @@ function plain(markdown: string): string {
     .trim();
 }
 
+/**
+ * Where one sentence ends and the next begins: after its stop, and after the
+ * quotation mark or bracket that closes on it ("…a promise?" Cold-call…).
+ * Matching sentences instead dropped a first sentence that ended inside a
+ * quotation and started the summary on its closing mark (Nov 22 review).
+ */
+const SENTENCE_BREAK = /(?<=[.!?]["'”’)\]]*)\s+/;
+
 /** The first sentence or so, never the whole text. */
 function firstSentences(markdown: string): string {
   const text = plain(markdown);
   if (!text) return '';
-  const sentences = text.match(/[^.!?]+[.!?]+(?=\s|$)/g) ?? [text];
+  const sentences = text.split(SENTENCE_BREAK).filter(Boolean);
   let summary = '';
   for (const sentence of sentences) {
     const next = `${summary} ${sentence.trim()}`.trim();
@@ -306,6 +323,7 @@ export function buildLessonPlanDoc({
   summaries,
   standards = [],
   extensionIds = [],
+  objectives = [],
 }: {
   title: string;
   className: string | null;
@@ -316,6 +334,8 @@ export function buildLessonPlanDoc({
   standards?: string[];
   /** The stack steps set aside as extensions, in the order set aside. */
   extensionIds?: string[];
+  /** The objective the planner's reply states (replyObjectives): the goals. */
+  objectives?: string[];
 }): LessonPlanDoc {
   const expanded = expandAll(entries);
   const materials = expanded.flatMap((item) =>
@@ -366,9 +386,13 @@ export function buildLessonPlanDoc({
     overview:
       summaries?.overview?.trim() ||
       `${length}${forClass}: ${title}. ${instructions.length} ${instructions.length === 1 ? 'part' : 'parts'}, in the order below.`,
-    goals: summaries?.goals?.length
-      ? summaries.goals
-      : ['Add this lesson’s goals and any standards it meets.'],
+    // The objective the reply stated, as the teacher saw it (Nov 22 review:
+    // the plan said "Add this lesson's goals" under a stated objective).
+    goals: objectives.length
+      ? objectives
+      : summaries?.goals?.length
+        ? summaries.goals
+        : ['Add this lesson’s goals and any standards it meets.'],
     teacherWill: summaries?.teacherWill?.length ? summaries.teacherWill : [],
     materials,
     instructions: steps,
@@ -480,4 +504,215 @@ export function withTeacherNotes(doc: LessonPlanDoc, notes: Record<string, strin
     closingStep: doc.closingStep ? attach(doc.closingStep) : null,
     extensions: doc.extensions.map(attach),
   };
+}
+
+const FENCE = /```[\s\S]*?```/g;
+const OBJECTIVE_LEAD =
+  /^\s{0,3}(#{1,6}\s+)?(?:[-*+]\s+)?(?:\*\*|__)?\s*(?:learning\s+|lesson\s+)?objectives?\b(.*)$/i;
+const LIST_ITEM = /^\s{0,6}(?:[-*+]|\d{1,2}[.)])\s+(.*)$/;
+
+/** A line of Markdown as words: no emphasis marks. */
+function plainLine(text: string): string {
+  return text
+    .replace(/\*\*|__/g, '')
+    .replace(/(^|[^\w*])[*_]([^*_]+)[*_](?=[^\w*]|$)/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The objective a planner's reply states ("**Objective:** Students will …",
+ * an "Objectives" heading over a list), in its own words; empty when it
+ * states none. Text inside fences (a deck, a unit map) is never read.
+ */
+export function replyObjectives(content: string): string[] {
+  const lines = content.replace(FENCE, (fence) => fence.replace(/[^\n]/g, ' ')).split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = OBJECTIVE_LEAD.exec(lines[index]!);
+    if (!match) continue;
+    const heading = Boolean(match[1]);
+    const tail = match[2] ?? '';
+    const rest = /^\s*(?:\*\*|__)?\s*(:)?\s*(?:\*\*|__)?\s*(.*)$/.exec(tail)!;
+    // "Objective: …", a heading, or the word alone over a list; never a
+    // sentence that happens to start with the word.
+    const alone = !tail.trim() || /^\s*(?:\*\*|__)\s*$/.test(tail);
+    if (!rest[1] && !heading && !alone) continue;
+    const inline = plainLine(rest[2] ?? '');
+    if (inline) return [inline];
+    // The objectives under it: a list, or one paragraph.
+    const found: string[] = [];
+    for (const line of lines.slice(index + 1)) {
+      if (!line.trim()) {
+        if (found.length) break;
+        continue;
+      }
+      if (/^\s{0,3}#{1,6}\s/.test(line) || /^\s*(?:-{3,}|\*{3,})\s*$/.test(line)) break;
+      const item = LIST_ITEM.exec(line);
+      const text = plainLine(item ? item[1]! : line);
+      if (!text) continue;
+      if (item || !found.length) found.push(text);
+      else found[found.length - 1] = `${found[found.length - 1]} ${text}`;
+    }
+    return found;
+  }
+  return [];
+}
+
+/**
+ * The goals for a stack: the objective of the reply its pieces came from, in
+ * stack order; with none, the newest reply that states one.
+ */
+export function objectivesForStack({
+  replies,
+  sourceIds,
+}: {
+  /** The conversation's assistant replies, oldest first. */
+  replies: Array<{ id: string; content: string }>;
+  /** The replies the stack's pieces came from, in stack order. */
+  sourceIds: string[];
+}): string[] {
+  const byId = new Map(replies.map((reply) => [reply.id, reply.content]));
+  for (const id of new Set(sourceIds)) {
+    const content = byId.get(id);
+    const found = content ? replyObjectives(content) : [];
+    if (found.length) return found;
+  }
+  for (const reply of [...replies].reverse()) {
+    const found = replyObjectives(reply.content);
+    if (found.length) return found;
+  }
+  return [];
+}
+
+export type UnitMapDay = {
+  day: number;
+  title: string;
+  minutes: number | null;
+  objective: string | null;
+  /** What the day hands to the next one. */
+  purpose: string | null;
+  /** What happens in the day, one line each. */
+  parts: string[];
+};
+
+export type UnitMap = {
+  title: string;
+  subtitle: string | null;
+  endsWith: string | null;
+  days: UnitMapDay[];
+};
+
+/**
+ * A reply that plans several days (a `yawp-unit` map, or "## Day 1 …"
+ * headings, read as plan-days reads them), as the days to print; null for a
+ * single lesson.
+ */
+export function unitMapFromReply(content: string): UnitMap | null {
+  const outcome = readUnitPlan(content);
+  if (outcome.kind === 'unit' && outcome.unit.days.length >= 2) {
+    const { unit } = outcome;
+    return {
+      title: unit.title,
+      subtitle: unit.subtitle ?? null,
+      endsWith: unit.endsWith ?? null,
+      days: [...unit.days]
+        .sort((a, b) => a.day - b.day)
+        .map((day) => ({
+          day: day.day,
+          title: day.title,
+          minutes: day.minutes ?? null,
+          objective: day.objective,
+          purpose: day.buildsTo ?? null,
+          parts: [
+            day.reading ? `Reading: ${day.reading}` : null,
+            `In class: ${day.students}`,
+            day.check ? `Check: ${day.check}` : null,
+          ].filter((part): part is string => Boolean(part)),
+        })),
+    };
+  }
+  const days = readPlanDays(content);
+  if (days.length < 2) return null;
+  return {
+    title: multiDayTitle(content, days),
+    subtitle: null,
+    endsWith: null,
+    days: days.map((day) => ({
+      day: day.day,
+      title: day.title,
+      minutes: day.minutes,
+      objective: replyObjectives(day.content)[0] ?? null,
+      purpose: null,
+      parts: readPlanSteps(day.content).map((step) =>
+        step.minutes !== null ? `${step.title} (${step.minutes} min)` : step.title
+      ),
+    })),
+  };
+}
+
+/** A unit's plan: its map, a numbered day for each day (Nov 22 review). */
+export function buildUnitPlanDoc({
+  map,
+  className,
+  periodMinutes,
+  objectives = [],
+  standards = [],
+}: {
+  map: UnitMap;
+  className: string | null;
+  periodMinutes: number | null;
+  /** The unit's own objective, when the reply states one outside its days. */
+  objectives?: string[];
+  standards?: string[];
+}): LessonPlanDoc {
+  const count = map.days.length;
+  const forClass = className ? ` for ${className}` : '';
+  const ends = map.endsWith ? ` It ends with ${map.endsWith.replace(/[.!?]?$/, (stop) => stop || '.')}` : '';
+  return {
+    title: map.title,
+    className,
+    periodMinutes,
+    overview: `A ${count}-day unit${forClass}: ${map.title}.${ends}`,
+    goals: objectives,
+    teacherWill: [],
+    materials: [],
+    instructions: map.days.map((day) => ({
+      title: `Day ${day.day}: ${day.title}`,
+      // The kit's plan numbers each day already.
+      shortTitle: day.title,
+      minutes: day.minutes,
+      summary: hidePromptIds(day.objective ?? ''),
+      purpose: hidePromptIds(day.purpose ?? ''),
+      parts: day.parts.map(hidePromptIds),
+    })),
+    closing: '',
+    closingStep: null,
+    closingInStack: false,
+    extensions: [],
+    assessment: map.endsWith ? `Ends with: ${map.endsWith}` : null,
+    standards,
+    unit: { subtitle: map.subtitle, endsWith: map.endsWith, days: count },
+  };
+}
+
+/** The newest reply that plans several days, as its map; null when none does. */
+export function newestUnitMap(replies: Array<{ content: string }>): UnitMap | null {
+  for (const reply of [...replies].reverse()) {
+    const map = unitMapFromReply(reply.content);
+    if (map) return map;
+  }
+  return null;
+}
+
+/** The replies a stack's pieces came from, in stack order: kept replies and filed pieces' sources. */
+export function stackSourceIds(
+  packet: Pick<LessonPacket, 'sections'>,
+  materialTokens: Record<string, string>
+): string[] {
+  return packet.sections.flatMap((section) => {
+    if (section.origin !== 'material') return [section.id];
+    const token = materialTokens[section.id];
+    const at = token ? token.indexOf(':') : -1;
+    return token ? [at > 0 ? token.slice(0, at) : token] : [];
+  });
 }

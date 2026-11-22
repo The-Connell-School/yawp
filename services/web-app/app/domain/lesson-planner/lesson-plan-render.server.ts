@@ -18,6 +18,7 @@ import {
 import PDFDocument from 'pdfkit';
 import type { LessonPlanDoc } from './lesson-plan-doc';
 import { noteSections } from './teacher-notes';
+import { guardPdfText } from './pdf-text.server';
 
 function subtitle(doc: LessonPlanDoc): string {
   return [doc.className, doc.periodMinutes ? `${doc.periodMinutes} minutes` : null]
@@ -32,7 +33,6 @@ function stepHeading(step: LessonPlanDoc['instructions'][number]): string {
 const NUMBERING = 'lesson-plan-steps';
 
 const BLANK_HINTS = {
-  standards: 'Add the standards this lesson meets.',
   moreStandards: 'Add any others this lesson meets.',
   differentiation: 'Add supports, extensions and accommodations for your students.',
   assessment: 'Add how you will check what students learned.',
@@ -56,6 +56,10 @@ function stepParagraphs(step: LessonPlanDoc['instructions'][number], numbered: b
         children: [new TextRun({ text: `Why: ${step.purpose}`, italics: true })],
       })
     );
+  }
+  // A unit's day: what happens in it (Nov 22 review).
+  for (const part of step.parts ?? []) {
+    paragraphs.push(new Paragraph({ text: part, bullet: { level: 1 } }));
   }
   if (step.teacherNotes) {
     paragraphs.push(
@@ -93,24 +97,26 @@ export async function renderLessonPlanDocx(doc: LessonPlanDoc): Promise<Uint8Arr
   const hint = (text: string) =>
     new Paragraph({ children: [new TextRun({ text, italics: true, color: '6B7280' })], spacing: { after: 80 } });
   children.push(heading('Overview'), body(doc.overview));
-  // The ones the teacher named, then room for more; never inferred.
-  children.push(
-    heading('Standards'),
-    ...doc.standards.map(bullet),
-    hint(doc.standards.length ? BLANK_HINTS.moreStandards : BLANK_HINTS.standards)
-  );
-  children.push(heading('Learning objectives'), ...doc.goals.map(bullet));
+  // The ones the teacher named, then room for more; never inferred. None
+  // named: no section (Nov 22 review), never a placeholder.
+  if (doc.standards.length) {
+    children.push(heading('Standards'), ...doc.standards.map(bullet), hint(BLANK_HINTS.moreStandards));
+  }
+  if (doc.goals.length) children.push(heading('Learning objectives'), ...doc.goals.map(bullet));
   if (doc.teacherWill.length) children.push(heading('Teacher will'), ...doc.teacherWill.map(bullet));
   if (doc.materials.length) children.push(heading('Materials'), ...doc.materials.map(bullet));
 
-  children.push(heading('Instructions'));
+  // A unit is its map: each day, numbered by the day (Nov 22 review).
+  children.push(heading(doc.unit ? 'Unit map' : 'Instructions'));
   for (const step of doc.instructions) {
-    children.push(...stepParagraphs(step, true));
+    children.push(...stepParagraphs(step, !doc.unit));
   }
 
-  children.push(heading('Closing'));
-  if (doc.closingStep) children.push(...stepParagraphs(doc.closingStep, false));
-  else children.push(body(doc.closing));
+  if (!doc.unit) {
+    children.push(heading('Closing'));
+    if (doc.closingStep) children.push(...stepParagraphs(doc.closingStep, false));
+    else children.push(body(doc.closing));
+  }
   // Set aside for a class that finishes early (Kevin's note 10c); no section when none.
   if (doc.extensions.length) {
     children.push(heading('If you have more time'));
@@ -156,6 +162,8 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
     margin: 54,
     info: { Title: doc.title, Creator: 'Yawp! Lesson Planner' },
   });
+  // Any character prints as itself ("mētis", not "m7F—2…"; Nov 22 review).
+  guardPdfText(pdf);
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => {
     pdf.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -190,11 +198,15 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
   };
   section('Overview');
   pdf.text(doc.overview, { width });
-  section('Standards');
-  list(doc.standards);
-  hint(doc.standards.length ? BLANK_HINTS.moreStandards : BLANK_HINTS.standards);
-  section('Learning objectives');
-  list(doc.goals);
+  if (doc.standards.length) {
+    section('Standards');
+    list(doc.standards);
+    hint(BLANK_HINTS.moreStandards);
+  }
+  if (doc.goals.length) {
+    section('Learning objectives');
+    list(doc.goals);
+  }
   if (doc.teacherWill.length) {
     section('Teacher will');
     list(doc.teacherWill);
@@ -203,7 +215,7 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
     section('Materials');
     list(doc.materials);
   }
-  section('Instructions');
+  section(doc.unit ? 'Unit map' : 'Instructions');
   const pdfStep = (step: LessonPlanDoc['instructions'][number], label: string) => {
     pdf.moveDown(0.3).font('Helvetica-Bold').text(label, { width });
     pdf.font('Helvetica');
@@ -216,6 +228,7 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
         .text(`Why: ${step.purpose}`, 72, pdf.y, { width: width - 18 });
       pdf.font('Helvetica').fillColor(INK);
     }
+    for (const part of step.parts ?? []) pdf.text(`•  ${part}`, 80, pdf.y, { width: width - 26 });
     if (step.teacherNotes) {
       pdf.moveDown(0.2).font('Helvetica-Bold').text('Teacher notes', 72, pdf.y, { width: width - 18 });
       for (const note of noteSections(step.teacherNotes)) {
@@ -225,10 +238,12 @@ export async function renderLessonPlanPdf(doc: LessonPlanDoc): Promise<Uint8Arra
     }
     pdf.x = 54;
   };
-  doc.instructions.forEach((step, index) => pdfStep(step, `${index + 1}. ${stepHeading(step)}`));
-  section('Closing');
-  if (doc.closingStep) pdfStep(doc.closingStep, stepHeading(doc.closingStep));
-  else pdf.text(doc.closing, { width });
+  doc.instructions.forEach((step, index) => pdfStep(step, doc.unit ? stepHeading(step) : `${index + 1}. ${stepHeading(step)}`));
+  if (!doc.unit) {
+    section('Closing');
+    if (doc.closingStep) pdfStep(doc.closingStep, stepHeading(doc.closingStep));
+    else pdf.text(doc.closing, { width });
+  }
   if (doc.extensions.length) {
     section('If you have more time');
     doc.extensions.forEach((step) => pdfStep(step, stepHeading(step)));

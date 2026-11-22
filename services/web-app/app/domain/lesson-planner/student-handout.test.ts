@@ -134,3 +134,24 @@ describe('buildStudentHandout — material still inside a kept reply', () => {
     expect(trimmed.parts).toEqual([]);
   });
 });
+
+describe('a passage prints above its questions (Nov 22 review)', () => {
+  test('in the packet’s student handout too', () => {
+    const withPassage = buildLessonPacket({
+      title: 'Macbeth 1.3',
+      className: null,
+      sections: [
+        {
+          id: 'h1',
+          content: '1. What does he fear?\n\n> Present fears\n> Are less than horrible imaginings.',
+          keptAudience: 'student',
+          keptTitle: 'The aside',
+          kind: 'handout',
+          origin: 'material',
+        },
+      ],
+    });
+    const [part] = buildStudentHandout({ packet: withPassage }).parts;
+    expect(part!.content.indexOf('Present fears')).toBeLessThan(part!.content.indexOf('What does he fear?'));
+  });
+});

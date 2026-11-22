@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { buildLessonPlanDoc, type LessonPlanEntry } from './lesson-plan-doc';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildLessonPlanDoc, buildUnitPlanDoc, replyObjectives, unitMapFromReply, type LessonPlanEntry } from './lesson-plan-doc';
 import { buildKitPlan, kitRuns, type KitBlock } from './kit-plan';
 import { fenceSlideDeck, type SlideDeck } from './slide-deck';
 
@@ -73,7 +75,8 @@ describe('buildKitPlan: the lesson plan spec v1 data model', () => {
 
   test('sections in the spec order', () => {
     const kinds = plan().body.map((block) => (block.type === 'h2' ? `h2:${block.text}` : block.type));
-    expect(kinds.slice(0, 7)).toEqual(['callout', 'h2:Goals', 'twoCol', 'standards', 'h2:Materials', 'bullets', 'h2:Lesson steps']);
+    // No standards named: no Standards box (Nov 22 review), not a placeholder.
+    expect(kinds.slice(0, 6)).toEqual(['callout', 'h2:Goals', 'twoCol', 'h2:Materials', 'bullets', 'h2:Lesson steps']);
     const overview = plan().body[0] as Extract<KitBlock, { type: 'callout' }>;
     expect(overview.title).toBe('Overview');
   });
@@ -117,12 +120,12 @@ describe('buildKitPlan: the lesson plan spec v1 data model', () => {
 });
 
 describe('buildKitPlan: standards', () => {
-  test('the standards the teacher named go in the Standards box; none, and it is the empty box', () => {
+  test('the standards the teacher named go in the Standards box; none, and there is no box (Nov 22 review)', () => {
     const doc = buildLessonPlanDoc({ title: 'T', className: null, periodMinutes: null, entries: entries.slice(0, 2), standards: ['RL.9-10.1'] });
     const box = buildKitPlan({ doc, entries: entries.slice(0, 2) }).body.find((block) => block.type === 'standards');
     expect(box).toEqual({ type: 'standards', items: ['RL.9-10.1'] });
     const none = buildLessonPlanDoc({ title: 'T', className: null, periodMinutes: null, entries: entries.slice(0, 2) });
-    expect(buildKitPlan({ doc: none, entries: entries.slice(0, 2) }).body.find((block) => block.type === 'standards')).toEqual({ type: 'standards' });
+    expect(buildKitPlan({ doc: none, entries: entries.slice(0, 2) }).body.find((block) => block.type === 'standards')).toBeUndefined();
   });
 });
 
@@ -151,5 +154,46 @@ describe('teacher notes in the kit plan (Oct 24 handoff, task 7)', () => {
     const steps = ofType(buildKitPlan({ doc, entries }).body, 'step');
     expect(steps[0]!.paras.slice(-2)).toEqual(['*Open with:* Ask what is in their bag.', '*Say:* Five minutes.']);
     expect(steps[1]!.paras.join(' ')).not.toContain('Open with');
+  });
+});
+
+describe('buildKitPlan: the reply’s objective and a unit (Nov 22 review)', () => {
+  const fixture = (name: string) => readFileSync(join(import.meta.dir, 'fixtures', name), 'utf8');
+
+  test('the objective is under Students will…, without the placeholder', () => {
+    const doc = buildLessonPlanDoc({
+      title: 'T',
+      className: null,
+      periodMinutes: 50,
+      entries,
+      objectives: replyObjectives(fixture('printables-macbeth-reply.md')),
+    });
+    const [two] = ofType(buildKitPlan({ doc, entries }).body, 'twoCol');
+    expect(two!.cols[0]![0]).toBe('Students will…');
+    expect(two!.cols[0]![1]).toEqual([
+      "read Macbeth's first aside closely, identify what it reveals about his inner state, and write a short response arguing what the prophecy does to him — whether it creates ambition or simply names what was already there.",
+    ]);
+  });
+
+  test('a unit prints its map: the unit’s title, a day per step with its parts, no lesson template', () => {
+    const map = unitMapFromReply(fixture('printables-mice-unit-reply.md'))!;
+    const kit = buildKitPlan({ doc: buildUnitPlanDoc({ map, className: 'English 10', periodMinutes: 50 }), entries: [] });
+    expect(kit.title).toBe('Of Mice and Men');
+    expect(kit.subtitle).toBe('English 10 · Period 3 · 15 periods');
+    expect(kit.kicker).toBe('Yawp! UNIT PLAN');
+    expect(kit.footer).toBe('Of Mice and Men unit plan');
+    const kinds = kit.body.map((block) => (block.type === 'h2' ? `h2:${block.text}` : block.type));
+    expect(kinds).not.toContain('h2:Goals');
+    expect(kinds).not.toContain('standards');
+    expect(kinds).toContain('h2:Unit map');
+    expect(kit.body.some((block) => block.type === 'callout' && block.title === 'Suggested closing')).toBe(false);
+    const days = ofType(kit.body, 'step');
+    expect(days).toHaveLength(15);
+    expect(days.map((day) => day.num)).toEqual(Array.from({ length: 15 }, (_, index) => String(index + 1)));
+    expect(days[0]!.title).toBe('Dreams and destiny');
+    expect(days[0]!.minutes).toBe(50);
+    expect(days[1]!.items?.[0]).toBe('Reading: Chapter 1 (pp. 1–16), read aloud in class');
+    expect(days[1]!.paras[0]).toStartWith('Understand the historical and social context');
+    expect(kit.meta).toContainEqual(['Ends with', 'Thesis-Driven Essay: Was George right to kill Lennie?']);
   });
 });

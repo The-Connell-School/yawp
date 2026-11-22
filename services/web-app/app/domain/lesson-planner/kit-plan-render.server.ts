@@ -29,6 +29,7 @@ import {
 import PDFDocument from 'pdfkit';
 import { KIT_PLAN_MORE_STANDARDS, KIT_PLAN_PROGRAM, KIT_PLAN_STANDARDS_PLACEHOLDER, kitRuns, type KitBlock, type KitListItem, type KitPlan } from './kit-plan';
 import { registerKitFonts } from './kit-fonts.server';
+import { guardPdfText } from './pdf-text.server';
 import { upperKeepingBrand } from '~/domain/brand';
 
 /** Spec "Type and color". */
@@ -414,6 +415,9 @@ export async function renderKitPlanPdf(plan: KitPlan): Promise<Uint8Array> {
     bufferPages: true,
     info: { Title: `${plan.title} lesson plan`, Creator: 'Yawp! Lesson Planner' },
   });
+  // Where a kit font is missing, the built-in stand-in still prints any
+  // character as itself (Nov 22 review).
+  guardPdfText(pdf);
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => {
     pdf.on('data', (chunk: Buffer) => chunks.push(chunk));

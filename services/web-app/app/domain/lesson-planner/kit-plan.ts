@@ -119,6 +119,45 @@ function stepBlock(step: LessonPlanStep, num: number, deck: SlideDeck | null): K
     minutes: step.minutes,
     ...(slides ? { slides } : {}),
     paras,
+    ...(step.parts?.length ? { items: step.parts } : {}),
+  };
+}
+
+/**
+ * A unit's plan (Nov 22 review): its map, one numbered day after another,
+ * each with what happens in it. No lesson template around it: no closing to
+ * suggest, no materials, no standards box unless the teacher named some.
+ */
+function buildUnitKitPlan(doc: LessonPlanDoc, unit: NonNullable<LessonPlanDoc['unit']>): KitPlan {
+  const colors = deckColors({}, null);
+  const title = doc.title;
+  const meta: Array<[string, string]> = [];
+  if (doc.className || doc.periodMinutes) {
+    meta.push(['Class', [doc.className, doc.periodMinutes ? `${doc.periodMinutes} minutes` : null].filter(Boolean).join(' · ')]);
+  }
+  meta.push(['Days', String(unit.days)]);
+  if (unit.endsWith) meta.push(['Ends with', unit.endsWith]);
+  meta.push(['Platform', 'yawp.school']);
+
+  const goals = doc.goals.map((goal) => goal.replace(STUDENTS_WILL, '').trim()).filter(Boolean);
+  const body: KitBlock[] = [{ type: 'callout', title: 'Overview', paras: [doc.overview] }];
+  if (goals.length) body.push({ type: 'h2', text: 'Goals' }, { type: 'twoCol', cols: [['Students will…', goals]] });
+  if (doc.standards?.length) body.push({ type: 'standards', items: doc.standards });
+  body.push({ type: 'h2', text: 'Unit map' });
+  doc.instructions.forEach((step, index) => {
+    const day = /^Day (\d{1,2})\b/.exec(step.title)?.[1];
+    body.push(stepBlock(step, day ? Number(day) : index + 1, null));
+  });
+
+  return {
+    accent: colors[0]!.replace('#', '').toUpperCase(),
+    colors,
+    kicker: upperKeepingBrand('Yawp! Unit Plan'),
+    title,
+    subtitle: unit.subtitle,
+    footer: `${title} unit plan`,
+    meta,
+    body,
   };
 }
 
@@ -135,6 +174,7 @@ export function buildKitPlan({
   /** The Lesson Deck Kit, spec v4.1; needs deckKitV4. */
   deckKitV41?: boolean;
 }): KitPlan {
+  if (doc.unit) return buildUnitKitPlan(doc, doc.unit);
   const found = deckFrom(entries);
   const deck = found ? withDeckKit(found, { deckKitV4, deckKitV41 }) : null;
   // The deck's own colors, in whichever kit it is drawn (v4 included).
@@ -168,7 +208,8 @@ export function buildKitPlan({
     { type: 'callout', title: 'Overview', paras: [doc.overview] },
     { type: 'h2', text: 'Goals' },
     { type: 'twoCol', cols },
-    doc.standards?.length ? { type: 'standards', items: doc.standards } : { type: 'standards' },
+    // Only the standards the teacher named; none, no box (Nov 22 review).
+    ...(doc.standards?.length ? [{ type: 'standards' as const, items: doc.standards }] : []),
     { type: 'h2', text: 'Materials' },
     { type: 'bullets', items: [...new Set(materials)] },
     { type: 'h2', text: 'Lesson steps' },

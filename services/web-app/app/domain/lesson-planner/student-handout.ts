@@ -12,6 +12,7 @@
  * want in students' hands are simply left out.
  */
 import type { LessonPacket } from './lesson-packet';
+import { passageFirst } from './handout-passage';
 
 export type StudentHandoutPart = {
   /** Stable across renders so a teacher's exclusions survive a reload. */
@@ -68,7 +69,8 @@ export function buildStudentHandout({
     className: packet.className,
     parts: candidates
       .filter((candidate) => !leftOut.has(candidate.id))
-      .map((candidate, index) => ({ ...candidate, number: index + 1 })),
+      // The passage above its questions (Nov 22 review).
+      .map((candidate, index) => ({ ...candidate, content: passageFirst(candidate.content), number: index + 1 })),
   };
 }
 
