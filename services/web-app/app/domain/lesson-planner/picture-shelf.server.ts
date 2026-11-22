@@ -7,11 +7,24 @@
 import { prisma } from '~/utils/db.server';
 import type { PictureShelf } from './picture-lookup.server';
 
+/**
+ * Pictures kept before the second look existed (Nov 22, 14:10 UTC) were kept
+ * under weaker rules: the novel's cover for its characters, a disputed
+ * copyright. They stay with the lessons that use them and are never offered
+ * again; judging old mistakes one by one let one through (Jim Casy, the
+ * Grapes rerun).
+ */
+export const SHELF_SINCE = new Date('2026-11-22T14:10:00Z');
+
 export const pictureShelf: PictureShelf = {
   async findKept(keys) {
     if (!keys.length) return [];
     const rows = await prisma.lessonPlanUploadPicture.findMany({
-      where: { origin: 'found', subject: { in: keys } },
+      where: {
+        origin: 'found',
+        subject: { in: keys },
+        createdAt: { gte: SHELF_SINCE },
+      },
       orderBy: { createdAt: 'desc' },
       distinct: ['subject'],
       select: {

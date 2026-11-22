@@ -28,6 +28,18 @@ const CANDIDATES: LookCandidate[] = [
   },
 ];
 
+describe('what the model is told', () => {
+  test('the rules from the live runs are in its instructions', async () => {
+    const { SECOND_LOOK_SYSTEM } = await import('./picture-check.server');
+    expect(SECOND_LOOK_SYSTEM).toContain(
+      'never keep a book cover, a film still, a poster or an illustration for a fictional character'
+    );
+    expect(SECOND_LOOK_SYSTEM).toContain(
+      'Never keep a photograph of an atrocity'
+    );
+  });
+});
+
 describe('what the model is shown', () => {
   test('each picture after what it was found for, then the question', () => {
     const content = secondLookContent(CANDIDATES);

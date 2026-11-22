@@ -204,6 +204,20 @@ Calls: the editor ~2.5 s (about 1,000 tokens in, 200–500 out), the look
 3–7 s for four to seven pictures (4,000–14,000 in, 450–1,200 out). Both well
 under a cent per deck.
 
+Reruns after the fixes (afternoon):
+
+| Deck | Teaching slides pictured | Wrong pictures on a slide | Notes |
+|---|---|---|---|
+| *Night* (2nd) | 4 of 7 (57%) | none placed fresh; a disputed-copyright file came back off the shelf | the editor named nothing for the Holocaust slides, as told. Led to: the shelf held to the rules |
+| *The Grapes of Wrath* (2nd) | 6 of 9 (67%) | the novel's cover for three Joads, off the shelf | the deck built (layout headings). Led to: kept pictures go through the look |
+| *Night* (3rd) | 2 of 5 (40%) | none | the Wiesel portrait came off the shelf through the look, with a new alt text |
+| *The Grapes of Wrath* (3rd) | 5 of 8 (62%) | the cover for Jim Casy, off the shelf, **approved by the look** | Tom and Ma Joad's covers were turned down and left the shelf. Led to: nothing kept before the look existed is reused, and the look is told a fictional character has no photograph |
+
+**The lesson of the afternoon: the shelf.** Every wrong picture after the
+first fixes came off the shelf, kept under older, weaker rules. A shared
+cache needs the same gate as a fresh find, and a clean start when the gate
+changes.
+
 What the numbers say comes next, by the slides they would fill:
 
 1. **More than one candidate per subject.** Most empty slides have a good

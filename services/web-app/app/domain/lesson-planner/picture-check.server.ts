@@ -33,6 +33,7 @@ export const SECOND_LOOK_SYSTEM = `You check pictures before they go on the slid
 For each picture decide "keep": true only if all of these hold:
 - It shows the subject itself: a portrait or photograph of the person; the place; the event or what it left; the object, building, document or artwork. A book's cover only when the subject is the book; a film poster only when the subject is the film. Not a different person, place or thing that shares the name, and not something merely nearby or related.
 - It would read when projected: not a page of small type, a blank, a logo, or a tiny detail.
+- A character in a novel, play or film has no photograph: never keep a book cover, a film still, a poster or an illustration for a fictional character, even when the slide is about the book.
 - It is fit for school: no graphic violence, gore, corpses or nudity. Never keep a photograph of an atrocity or its victims; a teacher chooses those.
 
 For each picture also write "alt": one plain sentence saying what is actually in the picture, for a student who cannot see it. When you do not keep it, write "why": a few words.
