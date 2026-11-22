@@ -111,11 +111,17 @@ const MAX_HISTORY_CHARS = 36_000;
 // Lessons are long: a deck with speaker notes, a handout, and the quoted text
 // of a Quick Writing Lesson run well past a report. A tight ceiling truncates
 // mid-artifact, which a teacher reads as bad material rather than as a cut-off.
-const PLANNER_REQUEST_DEADLINE_MS = 120_000;
+// Raised from 120 s on Nov 22: lessons ran 100 to 115 s, and one with a
+// passage on its slides ran out at 120 s while still writing.
+const PLANNER_REQUEST_DEADLINE_MS = 240_000;
+/** A failure this early is a busy or dropped connection, not the lesson: one more try. */
+const PLANNER_RETRY_WITHIN_MS = 45_000;
+const HEARTBEAT_MS = 10_000;
 // A full lesson plan plus a ten-slide deck with speaker notes runs well past
 // 8k. Hitting the ceiling cuts the deck's JSON mid-object, and a cut-off deck
 // cannot be rendered at all — the teacher just loses it.
-const PLANNER_MAX_TOKENS = 12_000;
+// 16k since Nov 22: the passage now goes on the slide and the handout.
+const PLANNER_MAX_TOKENS = 16_000;
 // The repair pass rewrites one deck and nothing else.
 const DECK_REPAIR_MAX_TOKENS = 6_000;
 const DECK_REPAIR_DEADLINE_MS = 60_000;
@@ -188,10 +194,18 @@ function progressStream(
       };
 
       write({ type: 'progress', ...PLANNING_PROGRESS_START });
+      // A line every ten seconds while nothing else is said: a minute-long
+      // repair pass in silence dropped the teacher's connection on the
+      // preview, and the saved lesson never reached the screen (Nov 22).
+      let last = Date.now();
+      const heartbeat = setInterval(() => {
+        if (Date.now() - last >= HEARTBEAT_MS) write({ type: 'keepalive' });
+      }, HEARTBEAT_MS);
       try {
-        const outcome = await run((progress) =>
-          write({ type: 'progress', ...progress })
-        );
+        const outcome = await run((progress) => {
+          last = Date.now();
+          write({ type: 'progress', ...progress });
+        });
         write({ type: 'done', ...outcome });
       } catch {
         // The turn threw somewhere it was not expected to. The teacher still
@@ -202,6 +216,7 @@ function progressStream(
           payload: { error: PLANNER_FAILED },
         });
       } finally {
+        clearInterval(heartbeat);
         open = false;
         controller.close();
       }
@@ -692,8 +707,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const clock = planningProgressClock(report);
       const deadline = AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS);
       const startedAt = Date.now();
-      try {
-        reply = await getLLMCompletion({
+      const ask = () => getLLMCompletion({
           model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
           system,
           messages,
@@ -729,6 +743,18 @@ export async function action({ request }: ActionFunctionArgs) {
             feature: 'lesson-planner',
           },
         });
+      try {
+        try {
+          reply = await ask();
+        } catch (first) {
+          // Two of three failed turns on the preview (Nov 22) failed in 5 and
+          // 22 seconds: a busy model, not the lesson. One more try, quietly.
+          if (deadline.aborted || isProviderConfigurationError(first) || Date.now() - startedAt > PLANNER_RETRY_WITHIN_MS) throw first;
+          // eslint-disable-next-line no-console
+          console.warn(`[lesson-planner] model call failed early, trying once more: ${describeProviderError(first)}`);
+          toolRound = 0;
+          reply = await ask();
+        }
       } catch (error) {
         // The one place the planner's failures are visible. The LLM log for this
         // feature is metadata-only, so without this line an operator sees that

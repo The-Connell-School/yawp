@@ -637,6 +637,27 @@ describe('api.domain.lesson-planner action', () => {
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
   });
 
+  test('a planner call that fails early is tried once more, quietly (preview, Nov 22: two of three failures came in 5 and 22 seconds)', async () => {
+    getLLMCompletion.mockReset().mockRejectedValueOnce(new Error('overloaded')).mockResolvedValue('The lesson.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({ request: formRequest({ message: 'hi' }) } as any);
+
+    expect(jsonResult(response).init?.status).toBeUndefined();
+    expect(jsonResult(response).data.reply).toBe('The lesson.');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  test('a planner call that keeps failing is tried twice at most, and the teacher gets the plain failure', async () => {
+    getLLMCompletion.mockReset().mockRejectedValue(new Error('overloaded'));
+
+    const response = await action({ request: formRequest({ message: 'hi' }) } as any);
+
+    expect(jsonResult(response).init?.status).toBe(500);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
   test('never accepts a client request to transfer planner data to fallback', async () => {
     const response = await action({
       request: formRequest({ message: 'hi', llmRetry: 'fallback' }),
