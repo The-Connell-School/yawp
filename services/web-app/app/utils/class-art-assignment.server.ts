@@ -2,7 +2,32 @@ import { prisma } from '~/utils/db.server';
 import {
   classArtKeyFromLegacyPoolIndex,
   pickNextClassArtKeyForOrganization,
+  resolveDistinctClassArtSelections,
 } from '~/utils/class-art';
+
+/**
+ * The art each of a teacher's classes shows, distinct across the teacher's
+ * active classes (oldest keeps its art). Every teacher page that draws a class
+ * uses this so a class looks the same on the home page, My Classes and its own
+ * page. Archived classes are not included; callers fall back to the stored key.
+ */
+export async function loadTeacherClassArtKeys(
+  teacherMembershipId: string
+): Promise<Map<string, string>> {
+  const classes = await prisma.class.findMany({
+    where: { teachers: { some: { id: teacherMembershipId } }, isArchived: false },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, classArtKey: true, classArtIndex: true },
+  });
+  const resolved = resolveDistinctClassArtSelections(
+    classes.map((klass) => ({
+      id: klass.id,
+      classArtKey: klass.classArtKey,
+      legacyClassArtIndex: klass.classArtIndex,
+    }))
+  );
+  return new Map([...resolved].map(([id, art]) => [id, art.key]));
+}
 
 /**
  * Picks a classArtKey for a new class in an organization. The org cycles
@@ -10,8 +35,19 @@ import {
  */
 export async function pickClassArtKeyForOrganization(
   organizationId: string,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  teacherMembershipIds: readonly string[] = []
 ): Promise<string> {
+  // Artwork the teacher's classes already show is skipped while any other is
+  // free, so a teacher's classes never share a picture.
+  const avoidArtworkKeys = new Set<string>();
+  for (const teacherId of teacherMembershipIds) {
+    const shown = await loadTeacherClassArtKeys(teacherId);
+    for (const key of shown.values()) {
+      avoidArtworkKeys.add(key.split('::')[0]);
+    }
+  }
+
   const classes = await prisma.class.findMany({
     where: {
       school: { organizationId },
@@ -28,7 +64,11 @@ export async function pickClassArtKeyForOrganization(
     return legacyKey ? [legacyKey] : [];
   });
 
-  return pickNextClassArtKeyForOrganization(assignedKeys, random);
+  return pickNextClassArtKeyForOrganization(
+    assignedKeys,
+    random,
+    avoidArtworkKeys
+  );
 }
 
 /** @deprecated Use pickClassArtKeyForOrganization */

@@ -32,6 +32,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { loadTeacherClassArtKeys } from '~/utils/class-art-assignment.server';
 import {
   filterAssignmentTypesForOrganizationPlan,
   loadAssignmentCreationQuotasForTypes,
@@ -256,6 +257,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
       >();
 
+  // Distinct art across the teacher's classes, same as My Classes.
+  const teacherClassArtKeys = !useStudentExperience
+    ? await loadTeacherClassArtKeys(profile.id)
+    : new Map<string, string>();
+
   const teacherClassCards: TeacherClassCardData[] = !useStudentExperience
     ? teacherClassesOrdered
         .map((klass) => {
@@ -266,7 +272,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: klass.grade,
             period: klass.period,
             title: klass.title,
-            classArtKey: klass.classArtKey,
+            classArtKey:
+              teacherClassArtKeys.get(klass.id) ?? klass.classArtKey,
             legacyClassArtIndex: klass.classArtIndex,
             school: { id: klass.school.id, name: klass.school.name },
             _count: {

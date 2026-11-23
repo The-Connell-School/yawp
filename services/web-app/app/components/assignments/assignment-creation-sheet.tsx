@@ -886,7 +886,6 @@ export function AssignmentCreationSheetContent({
   );
   const [postAt, setPostAt] = useState<string>('');
   const [dueAt, setDueAt] = useState<string>('');
-  const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(true);
   const [tutorEnabled, setTutorEnabled] = useState(() =>
     initialTutorEnabledFor({
       isEditing: Boolean(editingAssignment),
@@ -1022,11 +1021,6 @@ export function AssignmentCreationSheetContent({
     }
   }, [assignmentTypeId, isEditing, selectedType?.collaborationSupported]);
 
-  // Offered only where there is something to turn off. Switching it on cannot
-  // invent a grammar category for a rubric that has none.
-  const selectedTypeGradesGrammar = Boolean(
-    assignmentTypes.find((type) => type.id === assignmentTypeId)?.gradesGrammar
-  );
   // An exit ticket has no prompt box: the teacher answers the form and the
   // prompt is composed from the answers. With the feature off it falls back to
   // the ordinary prompt box, so an exit ticket type can exist before this does.
@@ -2368,47 +2362,9 @@ export function AssignmentCreationSheetContent({
             </div>
           )}
 
-          {/* Graded for grammar and syntax. Shown only for assignment types whose
-            rubric grades grammar, because the toggle only ever turns it off.
-            Frozen after creation like the two toggles around it: work already
-            graded was scored against a rubric that included the category, and
-            flipping it afterwards would silently restate those grades. */}
-          {selectedTypeGradesGrammar ? (
-            <div className="pt-6">
-              {isEditing ? null : (
-                <BooleanFormValue
-                  name="grammarGradingEnabled"
-                  value={grammarGradingEnabled}
-                />
-              )}
-              <div className="flex items-center gap-2.5">
-                <Checkbox
-                  id="assignment-create-grammar-grading-enabled"
-                  checked={grammarGradingEnabled}
-                  onCheckedChange={(checked) =>
-                    setGrammarGradingEnabled(checked === true)
-                  }
-                  disabled={isSaving || isEditing}
-                  className="size-4 shrink-0"
-                />
-                <Label
-                  htmlFor="assignment-create-grammar-grading-enabled"
-                  className={
-                    isEditing
-                      ? 'font-normal leading-none text-muted-foreground'
-                      : 'cursor-pointer font-normal leading-none'
-                  }
-                >
-                  Grade this for grammar and syntax
-                </Label>
-              </div>
-              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-                {isEditing
-                  ? 'Grammar grading cannot be switched on or off after an assignment is created — work may already be graded against it.'
-                  : 'On by default for this assignment type. Turn it off for a quick write you want graded on the thinking alone: the grammar category is dropped, the writing is not marked up, and the remaining categories carry the whole grade.'}
-              </p>
-            </div>
-          ) : null}
+          {/* Grammar and syntax grading is no longer offered here: the rubric
+            decides (Brian, 11/23). Assignments that already turned it off keep
+            that setting; new ones send nothing and record null. */}
 
           {/* Frozen after creation for assignments that were already
             collaborative: students may already have group drafts built around

@@ -104,8 +104,11 @@ const CLASS_ART_LIBRARY_RAW: readonly ClassArtLibraryEntry[] = [
     positions: ['center 0%', 'center 50%', 'center 100%'],
   },
   {
+    // The key keeps its old name because classes store it. The file used to be
+    // a second copy of The Great Wave, so two classes could look identical
+    // (Scranton Prep, 11/23). It is now a different print.
     src: '/img/class-art/hokusai-moon-beneath-fuji.jpg',
-    credit: 'Katsushika Hokusai — Mount Fuji from the Sea, public domain',
+    credit: 'Katsushika Hokusai — Ejiri in Suruga Province, public domain',
     positions: ['center 0%', 'center 50%', 'center 100%'],
   },
   {
@@ -409,16 +412,44 @@ function artworkCropSlotFromKey(key: string): string | null {
 
 /**
  * Picks the next stable key for an organization. Each crop pass assigns every
- * artwork once before any artwork gets the next crop.
+ * artwork once before any artwork gets the next crop. Artworks in
+ * `avoidArtworkKeys` (the teacher's own classes) are skipped while any other
+ * artwork is free, so one teacher's classes never share a picture until the
+ * library runs out.
  */
 export function pickNextClassArtKeyForOrganization(
   assignedKeys: readonly string[],
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  avoidArtworkKeys: ReadonlySet<string> = new Set()
 ): string {
   const assigned = new Set<string>();
   for (const key of assignedKeys) {
     const slot = artworkCropSlotFromKey(key);
     if (slot) assigned.add(slot);
+  }
+
+  if (avoidArtworkKeys.size > 0) {
+    const fresh = CLASS_ART_LIBRARY.map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => !avoidArtworkKeys.has(entry.key))
+      .map(({ index }) => index);
+    if (fresh.length > 0) {
+      const maxCropsFresh = Math.max(
+        ...fresh.map((index) => CLASS_ART_LIBRARY[index].positions.length)
+      );
+      for (let crop = 0; crop < maxCropsFresh; crop++) {
+        const available = fresh.filter(
+          (artwork) =>
+            crop < CLASS_ART_LIBRARY[artwork].positions.length &&
+            !assigned.has(artworkCropSlotKey(artwork, crop))
+        );
+        if (available.length > 0) {
+          const artwork = available[Math.floor(random() * available.length)];
+          return getClassArtByIndex(buildClassArtPoolIndex(artwork, crop)).key;
+        }
+      }
+      const artwork = fresh[Math.floor(random() * fresh.length)];
+      return getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key;
+    }
   }
 
   const maxCrops = Math.max(
@@ -455,6 +486,50 @@ export function pickNextClassArtIndexForOrganization(
   const art = getClassArtByKey(nextKey);
   if (!art) return 0;
   return CLASS_ART_POOL.findIndex((entry) => entry.key === art.key);
+}
+
+export type ClassArtListItem = {
+  id: string;
+  classArtKey?: string | null;
+  legacyClassArtIndex?: number | null;
+};
+
+/**
+ * Resolves art for one teacher's classes so no two show the same picture.
+ *
+ * Pass the classes oldest first: earlier classes keep the art they have, and a
+ * later class whose art repeats one already shown (a retired artwork falling
+ * back by seed, or an organization that ran through the library) moves to the
+ * first unused artwork, starting from a spot fixed by its id. Every page that
+ * shows these classes gets the same answer from the same list.
+ */
+export function resolveDistinctClassArtSelections(
+  classes: readonly ClassArtListItem[]
+): Map<string, ClassArtSelection> {
+  const used = new Set<string>();
+  const result = new Map<string, ClassArtSelection>();
+  for (const klass of classes) {
+    let art = resolveClassArtSelection({
+      classArtKey: klass.classArtKey,
+      legacyClassArtIndex: klass.legacyClassArtIndex,
+      seed: klass.id,
+    });
+    if (used.has(art.artworkKey) && used.size < CLASS_ARTWORK_COUNT) {
+      const start = hashSeed(klass.id) % CLASS_ARTWORK_COUNT;
+      for (let step = 0; step < CLASS_ARTWORK_COUNT; step++) {
+        const entry = CLASS_ART_LIBRARY[(start + step) % CLASS_ARTWORK_COUNT];
+        if (!used.has(entry.key)) {
+          art = getClassArtByIndex(
+            buildClassArtPoolIndex((start + step) % CLASS_ARTWORK_COUNT, 0)
+          );
+          break;
+        }
+      }
+    }
+    used.add(art.artworkKey);
+    result.set(klass.id, art);
+  }
+  return result;
 }
 
 export { classArtKeyFromLegacyPoolIndex, LEGACY_CLASS_ART_KEY_BY_POOL_INDEX };

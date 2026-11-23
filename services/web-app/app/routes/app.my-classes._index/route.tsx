@@ -42,7 +42,10 @@ import { studentJoinTokenForClassCreate } from '~/utils/class-student-join-token
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { shouldHideFreeTierTeachingSecrets } from '~/domain/free-tier/locked-preview.server';
-import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import {
+  loadTeacherClassArtKeys,
+  pickClassArtKeyForOrganization,
+} from '~/utils/class-art-assignment.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
@@ -144,10 +147,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
 
+  // Distinct art across the teacher's classes (Scranton Prep, 11/23).
+  const teacherClassArtKeys = await loadTeacherClassArtKeys(profile.id);
+
   const classesWithStats = classes.map((klass) => {
     const stats = classStats.find((s) => s.classId === klass.id);
     return {
       ...klass,
+      classArtKey: teacherClassArtKeys.get(klass.id) ?? klass.classArtKey,
       code: hideTeachingSecrets ? null : klass.code,
       legacyClassArtIndex: klass.classArtIndex,
       stats,
@@ -240,7 +247,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
     try {
       const classArtKey = await pickClassArtKeyForOrganization(
-        profile.organization.id
+        profile.organization.id,
+        Math.random,
+        [profile.id]
       );
       await prisma.$transaction(async (tx) => {
         await assertCanCreateClassForOrganizationPlan(tx, profile.organization);

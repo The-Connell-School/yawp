@@ -43,6 +43,7 @@ import {
   type ClassDisplayFields,
 } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
+import { loadTeacherClassArtKeys } from '~/utils/class-art-assignment.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -1083,6 +1084,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
   ]);
   if (!klass) throw new Response('Class not found', { status: 404 });
+  // Same art as this class's card: distinct across the teacher's classes.
+  const shownClassArtKey = (await loadTeacherClassArtKeys(profile.id)).get(
+    klass.id
+  );
+  if (shownClassArtKey) klass.classArtKey = shownClassArtKey;
 
   const hideTeachingSecrets = await shouldHideFreeTierTeachingSecrets(userId);
   if (

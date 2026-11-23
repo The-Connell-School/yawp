@@ -59,6 +59,8 @@ type CreateApiResponse = {
 type UpdateApiResponse = {
   success?: boolean;
   message?: string;
+  classIds?: string[];
+  activeClassId?: string;
 };
 
 export type AssignmentBuilderV3EditInitial = {
@@ -67,6 +69,10 @@ export type AssignmentBuilderV3EditInitial = {
   breadcrumbTitle: string;
   assignmentTypeId: string;
   classLabels: string[];
+  /** Classes the assignment is on now; the editor can add and remove them. */
+  classIds?: string[];
+  /** Group projects keep the classes they were created for. */
+  classesLocked?: boolean;
   title: string;
   prompt: string;
   postAt: string | null;
@@ -200,8 +206,16 @@ export function AssignmentBuilderV3({
     editing?.assignmentTypeId ?? defaults.assignmentTypeId
   );
   const [classIds, setClassIds] = useState<string[]>(
-    isEdit ? [] : defaults.classIds.filter(Boolean)
+    isEdit ? (editing?.classIds ?? []) : defaults.classIds.filter(Boolean)
   );
+  // Which class the edit URLs point at. Taking that class off the assignment
+  // moves it to one that is still assigned.
+  const [activeClassId, setActiveClassId] = useState(editing?.classId ?? '');
+  // Older edit payloads carry labels only; those stay read-only.
+  const classesLocked =
+    isEdit &&
+    (Boolean(editing?.classesLocked) || editing?.classIds === undefined);
+  const classesEditable = !classesLocked;
   const [title, setTitle] = useState(editing?.title ?? defaults.title);
   const [prompt, setPrompt] = useState(editing?.prompt ?? defaults.prompt);
   const [dueAt, setDueAt] = useState(
@@ -241,9 +255,6 @@ export function AssignmentBuilderV3({
   const [tutorEnabled, setTutorEnabled] = useState(
     editing?.tutorEnabled ?? true
   );
-  const [grammarGradingEnabled, setGrammarGradingEnabled] = useState(
-    editing?.grammarGradingEnabled ?? true
-  );
   const [groupProjectEnabled, setGroupProjectEnabled] = useState(
     editing?.collaborationEnabled ?? false
   );
@@ -266,7 +277,6 @@ export function AssignmentBuilderV3({
     [classes, classIds]
   );
   const isExitTicket = isExitTicketAssignmentType(selectedType);
-  const gradesGrammar = Boolean(selectedType?.gradesGrammar);
   const showGroupProjectToggle = assignmentBuilderV3ShowGroupProjectToggle({
     collaborationSupported: Boolean(selectedType?.collaborationSupported),
     isEdit,
@@ -318,11 +328,11 @@ export function AssignmentBuilderV3({
   const canSave =
     isEdit &&
     dirty &&
+    (classesLocked || classIds.length > 0) &&
     prompt.trim().length > 0 &&
     (!isExitTicket || prompt.trim().length > 0);
 
   const tutorLocked = isEdit;
-  const grammarLocked = isEdit;
 
 
   useEffect(() => {
@@ -376,6 +386,8 @@ export function AssignmentBuilderV3({
     const data = updateFetcher.data;
     if (!data || updateFetcher.state !== 'idle') return;
     if (data.success) {
+      if (data.activeClassId) setActiveClassId(data.activeClassId);
+      if (data.classIds) setClassIds(data.classIds);
       setDirty(false);
       setSavedFlash(true);
       const t = window.setTimeout(() => setSavedFlash(false), 2000);
@@ -422,7 +434,8 @@ export function AssignmentBuilderV3({
     }
     fd.set('gradingAssistantStrictnessLevel', strictness);
     fd.set('tutorEnabled', tutorEnabled ? 'true' : 'false');
-    fd.set('grammarGradingEnabled', grammarGradingEnabled ? 'true' : 'false');
+    // Grammar and syntax grading is no longer a builder option: the rubric
+    // decides (Brian, 11/23). Nothing is sent, so the server records null.
     const collaborationEnabled = groupProjectEnabled;
     fd.set('collaborationEnabled', collaborationEnabled ? 'true' : 'false');
     if (collaborationEnabled) {
@@ -463,6 +476,12 @@ export function AssignmentBuilderV3({
     }
     if (removePdf) fd.set('removePromptAttachment', 'true');
     if (pdfFile) fd.set('promptAttachment', pdfFile);
+    if (classesEditable) {
+      fd.set('classChange', 'true');
+      for (const id of classIds) {
+        fd.append('classIds', id);
+      }
+    }
     return fd;
   }
 
@@ -487,7 +506,7 @@ export function AssignmentBuilderV3({
     setFormError(null);
     void updateFetcher.submit(buildUpdateFormData(), {
       method: 'post',
-      action: `/app/assignments/${editing.assignmentId}?classId=${editing.classId}`,
+      action: `/app/assignments/${editing.assignmentId}?classId=${activeClassId || editing.classId}`,
       encType: 'multipart/form-data',
     });
   }
@@ -500,7 +519,7 @@ export function AssignmentBuilderV3({
 
   const newAssignmentBackFallback = '/app/assignments';
   const breadcrumbHref = isEdit
-    ? `/app/assignments/${editing!.assignmentId}?classId=${editing!.classId}`
+    ? `/app/assignments/${editing!.assignmentId}?classId=${activeClassId || editing!.classId}`
     : newAssignmentBackFallback;
   const breadcrumbLabel = isEdit ? editing!.breadcrumbTitle : 'Back';
 
@@ -590,7 +609,7 @@ export function AssignmentBuilderV3({
 
           <div className="abv3-fields">
             <div>
-              {isEdit ? (
+              {classesLocked ? (
                 <span className="abv3-field-label">Assign to</span>
               ) : (
                 <label htmlFor="abv3-class-input" className="abv3-field-label">
@@ -599,20 +618,21 @@ export function AssignmentBuilderV3({
               )}
               <div
                 id="abv3-class-input"
-                ref={!isEdit ? classPickerRef : undefined}
-                role={isEdit ? undefined : 'combobox'}
-                aria-expanded={isEdit ? undefined : classMenuOpen}
-                aria-haspopup={isEdit ? undefined : 'listbox'}
+                data-testid="abv3-class-input"
+                ref={classesEditable ? classPickerRef : undefined}
+                role={classesLocked ? undefined : 'combobox'}
+                aria-expanded={classesLocked ? undefined : classMenuOpen}
+                aria-haspopup={classesLocked ? undefined : 'listbox'}
                 className={cn(
                   'abv3-class-chips',
-                  isEdit && 'abv3-class-chips--locked'
+                  classesLocked && 'abv3-class-chips--locked'
                 )}
-                aria-disabled={isEdit ? true : undefined}
+                aria-disabled={classesLocked ? true : undefined}
                 onClick={() => {
-                  if (!isEdit) setClassMenuOpen((open) => !open);
+                  if (classesEditable) setClassMenuOpen((open) => !open);
                 }}
               >
-                {isEdit
+                {classesLocked
                   ? editing!.classLabels.map((label) => (
                       <span key={label} className="abv3-chip abv3-chip--locked">
                         {label}
@@ -638,7 +658,7 @@ export function AssignmentBuilderV3({
                         </span>
                       );
                     })}
-                {!isEdit && classIds.length > 0 ? (
+                {classesEditable && classIds.length > 0 ? (
                   remainingClassOptions.length === 0 ? (
                     <span className="abv3-class-empty-hint">No more classes</span>
                   ) : (
@@ -650,18 +670,18 @@ export function AssignmentBuilderV3({
                     position: 'absolute',
                     right: 12,
                     top: '50%',
-                    marginTop: isEdit ? -7 : -8,
+                    marginTop: classesLocked ? -7 : -8,
                     color: 'hsl(50 2.4% 36%)',
                     display: 'flex',
                   }}
                 >
-                  {isEdit ? (
+                  {classesLocked ? (
                     <Lock size={14} aria-hidden />
                   ) : (
                     <ChevronDown size={16} aria-hidden />
                   )}
                 </span>
-                {!isEdit && classMenuOpen ? (
+                {classesEditable && classMenuOpen ? (
                   <div className="abv3-class-menu">
                     {remainingClassOptions.length === 0 ? (
                       <p className="abv3-class-menu-empty">No more classes</p>
@@ -683,6 +703,16 @@ export function AssignmentBuilderV3({
                   </div>
                 ) : null}
               </div>
+              {isEdit && classesLocked && editing?.classesLocked ? (
+                <p className="abv3-field-label-muted mt-1.5 text-xs">
+                  A group project keeps the classes it was created for.
+                </p>
+              ) : null}
+              {isEdit && classesEditable && classIds.length === 0 ? (
+                <p className="abv3-field-label-muted mt-1.5 text-xs">
+                  Choose at least one class.
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -904,19 +934,6 @@ export function AssignmentBuilderV3({
                   markDirty();
                 }}
               />
-              {gradesGrammar ? (
-                <Abv3Switch
-                  id="abv3-grammar"
-                  label="Grammar and syntax grading"
-                  description="Grading also scores grammar and syntax."
-                  checked={grammarGradingEnabled}
-                  disabled={grammarLocked}
-                  onChange={(v) => {
-                    setGrammarGradingEnabled(v);
-                    markDirty();
-                  }}
-                />
-              ) : null}
               {showGroupProjectToggle ? (
                 <Abv3Switch
                   id="abv3-group-project"
