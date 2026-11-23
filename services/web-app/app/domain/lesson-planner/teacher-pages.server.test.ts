@@ -123,4 +123,14 @@ describe('what the quotations were checked against, on every lesson that quotes'
     expect(quotedPassagesIn(deckWith([{ layout: 'title', title: 'A "quoted title" of six words here', speakerNotes: 'n' }]))).toBe(0);
     expect(workNamedOnSlides(EXCERPT_DECK)).toBe('Their Eyes Were Watching God');
   });
+
+  test('a unit map, and the prompts in starters and exit tickets, are not quoting the work (Kevin, Nov 23)', () => {
+    const unit = "Here is the unit.\n\n```yawp-unit\nDay 1: Class starter: \"Think of a rule you have followed even though you thought it was wrong.\"\n```\n\nJust build Day 1.";
+    expect(lessonQuotes(unit)).toBe(false);
+    expect(withQuotationsLabel(unit, { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 })).toBe(unit);
+    const starter = "```yawp-daily-pages\n\"When is loyalty to your country more important than loyalty to your family?\"\n```";
+    expect(lessonQuotes(starter)).toBe(false);
+    const handout = "```yawp-material\nkind: handout\n\n\"Life for me ain't been no crystal stair.\"\n```";
+    expect(lessonQuotes(handout)).toBe(true);
+  });
 });

@@ -196,6 +196,14 @@ describe('what is never changed', () => {
     expect(result.flagged).toEqual([]);
   });
 
+  test('a note that says it is not a real error is not one for the teacher (Kevin, Nov 23)', async () => {
+    const result = await withFactCheck(
+      reply,
+      answering([{ wrong: 'The trials end in October 1692', right: 'The trials end in 1692', confidence: 'medium', why: 'The date is roughly correct; this is not a real error, so ignore.' }])
+    );
+    expect(result.flagged).toEqual([]);
+  });
+
   test('a quotation the quotation check verified is protected', async () => {
     const result = await withFactCheck(
       reply,

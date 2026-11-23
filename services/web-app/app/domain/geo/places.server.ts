@@ -40,6 +40,58 @@ const FORMER_NAMES: Record<string, string> = {
  * only tried when the name as written finds nothing, so a real town with the
  * English name (Syracuse, New York) is still found first.
  */
+/**
+ * Places of the books English classes read (Kevin, Nov 23: Thebes was "not on
+ * the map" of an Antigone unit, and the place list put Sparta in New Jersey,
+ * Troy in Michigan and Marathon in Florida). The place list holds today's
+ * towns of some size; the ancient sites, the legendary ones with a real spot,
+ * and the ruins are not in it, or lose to an American town of the name. Each
+ * is set by hand from the site itself. They win unless the lesson places the
+ * name in another country or in a US state ("Troy, New York").
+ */
+type StoryPlace = { lat: number; lon: number; iso2: string; found: string };
+const STORY_PLACES: Record<string, StoryPlace[]> = {
+  thebes: [
+    { lat: 38.321, lon: 23.319, iso2: 'GR', found: 'Thebes, Greece (the ancient city; today Thiva)' },
+    { lat: 25.72, lon: 32.61, iso2: 'EG', found: 'Thebes, Egypt (the ancient city; today Luxor)' },
+  ],
+  sparta: [{ lat: 37.074, lon: 22.43, iso2: 'GR', found: 'Sparta, Greece (the ancient city)' }],
+  troy: [{ lat: 39.957, lon: 26.239, iso2: 'TR', found: 'Troy (the ancient city; today Hisarlık, Turkey)' }],
+  ithaca: [{ lat: 38.4, lon: 20.68, iso2: 'GR', found: 'Ithaca, Greece (the island)' }],
+  ithaka: [{ lat: 38.4, lon: 20.68, iso2: 'GR', found: 'Ithaca, Greece (the island)' }],
+  mycenae: [{ lat: 37.731, lon: 22.756, iso2: 'GR', found: 'Mycenae, Greece (the ancient city)' }],
+  delphi: [{ lat: 38.482, lon: 22.501, iso2: 'GR', found: 'Delphi, Greece (the oracle’s sanctuary)' }],
+  colonus: [{ lat: 37.996, lon: 23.71, iso2: 'GR', found: 'Colonus, Athens, Greece' }],
+  corinth: [{ lat: 37.906, lon: 22.879, iso2: 'GR', found: 'Corinth, Greece (the ancient city)' }],
+  olympia: [{ lat: 37.638, lon: 21.63, iso2: 'GR', found: 'Olympia, Greece (the sanctuary)' }],
+  knossos: [{ lat: 35.298, lon: 25.163, iso2: 'GR', found: 'Knossos, Crete, Greece' }],
+  marathon: [{ lat: 38.153, lon: 23.963, iso2: 'GR', found: 'Marathon, Greece' }],
+  salamis: [{ lat: 37.964, lon: 23.497, iso2: 'GR', found: 'Salamis, Greece (the island)' }],
+  thermopylae: [{ lat: 38.797, lon: 22.537, iso2: 'GR', found: 'Thermopylae, Greece (the pass)' }],
+  'mount olympus': [{ lat: 40.085, lon: 22.359, iso2: 'GR', found: 'Mount Olympus, Greece' }],
+  olympus: [{ lat: 40.085, lon: 22.359, iso2: 'GR', found: 'Mount Olympus, Greece' }],
+  pylos: [{ lat: 36.913, lon: 21.696, iso2: 'GR', found: 'Pylos, Greece' }],
+  aulis: [{ lat: 38.433, lon: 23.6, iso2: 'GR', found: 'Aulis, Greece' }],
+  epidaurus: [{ lat: 37.596, lon: 23.079, iso2: 'GR', found: 'Epidaurus, Greece (the theatre)' }],
+  babylon: [{ lat: 32.536, lon: 44.421, iso2: 'IQ', found: 'Babylon (the ancient city; today Iraq)' }],
+  nineveh: [{ lat: 36.359, lon: 43.153, iso2: 'IQ', found: 'Nineveh (the ancient city; today Mosul, Iraq)' }],
+  uruk: [{ lat: 31.322, lon: 45.636, iso2: 'IQ', found: 'Uruk (the ancient city; today Iraq)' }],
+  ur: [{ lat: 30.963, lon: 46.103, iso2: 'IQ', found: 'Ur (the ancient city; today Iraq)' }],
+  pompeii: [{ lat: 40.749, lon: 14.485, iso2: 'IT', found: 'Pompeii, Italy (the ruins)' }],
+  actium: [{ lat: 38.95, lon: 20.75, iso2: 'GR', found: 'Actium, Greece' }],
+  philippi: [{ lat: 41.013, lon: 24.284, iso2: 'GR', found: 'Philippi, Greece (the ancient city)' }],
+  dunsinane: [{ lat: 56.469, lon: -3.233, iso2: 'GB', found: 'Dunsinane Hill, Scotland' }],
+  birnam: [{ lat: 56.557, lon: -3.576, iso2: 'GB', found: 'Birnam, Scotland' }],
+  glamis: [{ lat: 56.605, lon: -3.002, iso2: 'GB', found: 'Glamis, Scotland' }],
+  cawdor: [{ lat: 57.524, lon: -3.926, iso2: 'GB', found: 'Cawdor, Scotland' }],
+  elsinore: [{ lat: 56.039, lon: 12.621, iso2: 'DK', found: 'Elsinore (Helsingør), Denmark' }],
+  'agincourt': [{ lat: 50.463, lon: 2.142, iso2: 'FR', found: 'Agincourt (Azincourt), France' }],
+  'bosworth': [{ lat: 52.59, lon: -1.41, iso2: 'GB', found: 'Bosworth Field, England' }],
+  'gettysburg': [{ lat: 39.831, lon: -77.231, iso2: 'US', found: 'Gettysburg, Pennsylvania, United States of America' }],
+  'harpers ferry': [{ lat: 39.325, lon: -77.739, iso2: 'US', found: 'Harpers Ferry, West Virginia, United States of America' }],
+  'eatonville': [{ lat: 28.615, lon: -81.38, iso2: 'US', found: 'Eatonville, Florida, United States of America' }],
+};
+
 const ENGLISH_NAMES: Record<string, string> = {
   geneva: 'Genève',
   mantua: 'Mantova',
@@ -167,10 +219,17 @@ export function findPlace(name: string, where?: string | null): FoundPlace | nul
   const [first, ...rest] = name.split(',').map((part) => part.trim()).filter(Boolean);
   if (!first) return null;
   const hints = [...rest, ...(where ?? '').split(',')].map((part) => part.trim()).filter(Boolean);
-  const country = hints.map(findCountry).find(Boolean) ?? null;
   const state = hints.map((hint) => US_STATES[placeKey(hint)]).find(Boolean) ?? null;
+  // "Athens, Georgia": a US state, not the country of that name.
+  const country = hints.filter((hint) => !(state && US_STATES[placeKey(hint)])).map(findCountry).find(Boolean) ?? null;
 
   const key = placeKey(first);
+  // A place of the story: the ancient city, not the American town of its name.
+  const story = STORY_PLACES[key];
+  if (story && (!state || story.some((place) => place.iso2 === 'US'))) {
+    const place = country ? story.find((candidate) => candidate.iso2 === country.iso2) : story[0];
+    if (place && (!state || place.iso2 === 'US')) return { lat: place.lat, lon: place.lon, found: place.found };
+  }
   const today = FORMER_NAMES[key];
   let rows = placesNamed(today ? placeKey(today) : key);
   const narrow = (list: PlaceRow[]) =>

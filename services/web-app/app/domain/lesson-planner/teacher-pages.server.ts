@@ -75,9 +75,15 @@ export function chooseCheckedAgainst(registered: RegisteredWork | null, pages: T
 
 const FENCE = /^\s*(```|~~~)/;
 
-/** Quotations of six words or more in the reply's prose and materials ("…", “…”). */
+/**
+ * Quotations of six words or more in what students read: the lesson's prose
+ * and its handouts. Not the deck (its passages count on their own), and not
+ * the starters, exit tickets, practice or unit maps, whose quotation marks
+ * hold prompts, not the work (Kevin, Nov 23: a unit map was labeled "not
+ * checked" for its class-starter prompts).
+ */
 function quotedPassages(reply: string): number {
-  const text = reply.replace(/```yawp-slides[\s\S]*?```/g, ' ');
+  const text = reply.replace(/```(yawp-[a-z-]+)[\s\S]*?```/g, (block, kind: string) => (kind === 'yawp-material' ? block : ' '));
   return [...text.matchAll(/[“"]([^“”"\n]{8,600})[”"]/g)].filter((m) => wordCount(m[1]!) >= 6).length;
 }
 
@@ -92,6 +98,8 @@ export function workNamedOnSlides(reply: string): string | null {
 
 /** Whether the lesson reads from a text: an excerpt or reading slide, or quotations in its words. */
 export function lessonQuotes(reply: string): boolean {
+  // A unit map assigns reading; it quotes nothing until a day is built.
+  if (/```yawp-unit/.test(reply) && !/```yawp-(?:slides|material)/.test(reply)) return false;
   const outcome = readSlideDeck(reply);
   const readsOnSlides = outcome.kind === 'deck' && outcome.deck.slides.some((slide) => slide.layout === 'excerpt' || (slide.layout === 'read' && Boolean(slide.work)));
   return readsOnSlides || quotedPassages(reply) > 0;

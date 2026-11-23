@@ -250,8 +250,10 @@ export async function withFactCheck(
  * correct… only a clarification"): not an error, so neither made nor shown
  * (re-test, Nov 22: such notes filled the teacher's "check before class").
  */
+// A note that says it is not an error is not one for the teacher (Kevin, Nov 23:
+// "this is not a real error, so ignore" under Check before class).
 function notAnError({ why }: FactError): boolean {
-  return /\b(?:is|are) (?:correct|accurate|right) as written\b|\bwording is fine\b|\bonly a clarification\b|\bno (?:change|correction) (?:is )?needed\b|\bthis is accurate\b|\bnot a clear error\b|\bslightly loose\b/i.test(why);
+  return /\b(?:is|are) (?:correct|accurate|right) as written\b|\bwording is fine\b|\bonly a clarification\b|\bno (?:change|correction) (?:is )?needed\b|\bthis is accurate\b|\bnot a clear error\b|\bslightly loose\b|\bnot (?:a|an) (?:real |actual |factual |true )?error\b|\bso ignore\b|\b(?:can|may|should) (?:safely )?be ignored\b|\bignore (?:it|this)\b/i.test(why);
 }
 
 /** The most places one sure correction is made: the plan and its slide often say the same thing. */

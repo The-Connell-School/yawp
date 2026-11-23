@@ -196,3 +196,22 @@ describe('a deck’s first map starts wide unless the planner says otherwise (13
     expect(resolveDeckPlaces({ title: 'D', slides: [map('Where', { wide: false })] }).slides[0]!.wide).toBe(false);
   });
 });
+
+describe('the places of the story (Kevin, Nov 23: Thebes was not on the Antigone map)', () => {
+  test('the ancient city, not the American town of its name', () => {
+    expect(findPlace('Thebes')?.found).toBe('Thebes, Greece (the ancient city; today Thiva)');
+    expect(findPlace('Thebes', 'Egypt')?.found).toBe('Thebes, Egypt (the ancient city; today Luxor)');
+    expect(findPlace('Sparta')?.found).toContain('Greece');
+    expect(findPlace('Troy')?.found).toContain('Turkey');
+    expect(findPlace('Marathon')?.found).toBe('Marathon, Greece');
+    expect(findPlace('Elsinore')?.found).toContain('Denmark');
+    expect(findPlace('Dunsinane')?.found).toContain('Scotland');
+  });
+
+  test('a lesson that places the name in a US state gets the American town', () => {
+    expect(findPlace('Troy, New York')?.found).toBe('Troy, New York, United States of America');
+    expect(findPlace('Ithaca', 'New York')?.found).toBe('Ithaca, New York, United States of America');
+    expect(findPlace('Athens, Georgia')?.found).toBe('Athens, Georgia, United States of America');
+    expect(findPlace('Eatonville, Florida')?.found).toBe('Eatonville, Florida, United States of America');
+  });
+});
