@@ -819,7 +819,6 @@ export const WORK_VISUAL_KITS: WorkVisualKit[] = [
       { subject: 'Sophocles', shows: 'an ancient portrait bust of Sophocles', use: 'author', unchecked: true },
       { subject: 'Oedipus Rex', shows: 'Oedipus on stage or in a painting', use: 'scene', unchecked: true },
       { subject: 'Antigone (Sophocles play)', shows: 'a 19th-century painting of Antigone and her brother', use: 'scene', unchecked: true },
-      { subject: 'Oedipus', shows: 'Oedipus and the Sphinx on a Greek cup', use: 'scene', unchecked: true },
       { subject: 'Oedipus and the Sphinx', shows: 'a 19th-century painting of Oedipus and the Sphinx', use: 'scene', unchecked: true },
       { subject: 'Antigone', shows: 'Antigone in a 19th-century painting', use: 'scene', unchecked: true },
       { subject: 'Theatre of Dionysus', shows: 'the theatre in Athens where the plays were first staged', use: 'setting', unchecked: true },
