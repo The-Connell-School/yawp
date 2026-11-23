@@ -51,3 +51,7 @@ The same eleven lessons as before, run again and scored by fresh reviewers on th
 2. **A visible slot for a missing picture.** When nothing is found, the slide says what belongs there, so the teacher can add it. That is better than a silent miss.
 3. **Diagram line ranges from the source text** when Yawp! has the text, and no line numbers on a diagram when it does not.
 4. **Verify** the Shakespeare fix and the second try's counts on three or four lessons, before any more picture work.
+
+## Check after the fix (Nov 23)
+
+Macbeth 1.3 was run again on the preview after the copyright-claim fix. It filled 3 of the 3 pictures it asked for (1 of 3 before), and the Chandos portrait of Shakespeare is on the title slide. Nothing was missed, so the second try did not run and its new counts are still untested.
