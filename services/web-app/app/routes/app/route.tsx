@@ -2,6 +2,7 @@ import './app-shell-nav.css';
 import './app-teacher-shell.css';
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
+import { AppNavNeedHelp } from '~/components/app-nav-need-help';
 import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import {
   freeTierNavMobileWarningDot,
@@ -570,6 +571,7 @@ export default function Route() {
               loading={usageNavLoading}
             />
           ) : null}
+          <AppNavNeedHelp navExpanded={navExpanded} />
           <Popover>
             <PopoverTrigger asChild>
               <button

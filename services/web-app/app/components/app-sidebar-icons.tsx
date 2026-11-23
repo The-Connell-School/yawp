@@ -79,6 +79,16 @@ export const appSidebarIcons = {
       <circle cx="7" cy="7" r="3" />
     </AppNavSvg>
   ),
+  help: (
+    <AppNavSvg strokeWidth={1.75}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="m4.93 4.93 4.24 4.24" />
+      <path d="m14.83 9.17 4.24-4.24" />
+      <path d="m14.83 14.83 4.24 4.24" />
+      <path d="m9.17 14.83-4.24 4.24" />
+    </AppNavSvg>
+  ),
 } as const;
 
 const APP_SIDEBAR_ICON_BY_PATH: Record<string, ReactNode> = {
