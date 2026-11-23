@@ -32,6 +32,8 @@ export type PictureKit = {
   visuals: Array<{ subject: string; shows: string; use: string }>;
 };
 const MAX_SLIDES = 12;
+/** Timeline events named per deck: two full timelines. */
+const MAX_EVENTS = 16;
 const MAX_WORDS = 400;
 
 export const PICTURE_EDITOR_SYSTEM = `You pick the picture for each slide of a lesson deck a teacher will project, so students remember what they read by also seeing it (dual coding).
@@ -49,11 +51,12 @@ Rules:
 - Never a category when a specific thing exists: an article about a kind of thing shows whatever example its editors chose (a present-day rescue team for "Gas mask", a cathedral for "Porch"). Name the particular one from the work's time and place ("Lower East Side Tenement Museum", not "Tenement"; "Harlem Renaissance", not "Neighborhood").
 - Never a metaphor: no picture frame for a frame narrative, no mask for identity, no scales for justice. A picture that is not the thing the slide teaches only decorates, and decoration costs learning.
 - When vetted pictures for the work are listed, choose from that list first, by the exact title given, each at most once, for the slide it fits. Go outside the list only when no listed picture fits a slide and you are sure of a specific article.
+- Timeline events, when listed: name the article about the historical event itself, so the timeline shows what happened. A famous event has a famous picture: "Birmingham campaign" for "Marches begin, April 1963", "Battle of the Somme" for "The Somme, 1916", "Wall Street Crash of 1929", "Montgomery bus boycott", "Nigerian independence" as its article is titled. Each event its own article, never the same one twice and never one a slide already has; when two events belong to one larger event, name the more specific article for one (an arrest, a speech, a treaty, a document) or null. An event in the author's life or the book's history (born, wrote, published) takes the person, the place or the first edition by its article, or null. An event inside the story itself, or one no article is about, gets null. A massacre, a genocide or a lynching gets null, as above.
 - "shows": a few words on what the picture should show.
 - "author": the exact title of the Wikipedia article about the author of the work this deck teaches (or the real person the lesson is about), or null when there is none.
 
 Answer with JSON only, no other text:
-{"author": "<article title>" or null, "slides": [{"slide": <number>, "subject": "<article title>" or null, "shows": "<what it shows>"}]}`;
+{"author": "<article title>" or null, "slides": [{"slide": <number>, "subject": "<article title>" or null, "shows": "<what it shows>"}], "events": [{"event": "<slide>.<event>", "subject": "<article title>" or null, "shows": "<what it shows>"}]}`;
 
 const Answer = z.object({
   author: z.string().nullable().optional(),
@@ -64,6 +67,15 @@ const Answer = z.object({
       shows: z.string().nullable().optional(),
     })
   ),
+  events: z
+    .array(
+      z.object({
+        event: z.coerce.string(),
+        subject: z.string().nullable().optional(),
+        shows: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
 });
 
 /** The answer's shape, for the API's structured outputs. */
@@ -84,8 +96,21 @@ export const PICTURE_EDITOR_SCHEMA = {
         additionalProperties: false,
       },
     },
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          event: { type: 'string' },
+          subject: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          shows: { type: 'string' },
+        },
+        required: ['event', 'subject', 'shows'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['author', 'slides'],
+  required: ['author', 'slides', 'events'],
   additionalProperties: false,
 } as const;
 
@@ -120,11 +145,32 @@ export function slidesWithoutSubjects(
     .slice(0, MAX_SLIDES);
 }
 
-/** What the editor is shown: the deck's title, then each slide it is asked about. */
+type TimelineEvent = NonNullable<Slide['events']>[number];
+
+/**
+ * The timeline events that have no picture and ask for none, as "<slide>.<event>"
+ * (both 1-based). Left alone, an event is searched by its own words ("Marches
+ * begin 1963"), which are rarely an article's: about a third of the pictures
+ * missed in the visuals test (Nov 23). Kevin: a timeline should show the
+ * famous events themselves, not only people, places and objects.
+ */
+export function eventsWithoutSubjects(
+  deck: Pick<SlideDeck, 'slides'>
+): Array<{ id: string; slide: number; index: number; event: TimelineEvent }> {
+  return deck.slides
+    .flatMap((slide, i) =>
+      (slide.events ?? []).map((event, k) => ({ id: `${i + 1}.${k + 1}`, slide: i + 1, index: k, event }))
+    )
+    .filter(({ event }) => !event.image && !event.wants)
+    .slice(0, MAX_EVENTS);
+}
+
+/** What the editor is shown: the deck's title, then each slide it is asked about, then each timeline event. */
 export function pictureEditorPrompt(
   deck: Pick<SlideDeck, 'title' | 'unit' | 'slides'>,
   slides: Array<{ number: number; slide: Slide }>,
-  kit?: PictureKit | null
+  kit?: PictureKit | null,
+  events: Array<{ id: string; event: TimelineEvent }> = []
 ): string {
   const lines = [
     `Deck: ${deck.title}${deck.unit ? ` (${deck.unit})` : ''}`,
@@ -140,6 +186,11 @@ export function pictureEditorPrompt(
     const words = slideWords(slide);
     if (words) lines.push(words);
     lines.push('');
+  }
+  if (events.length) {
+    lines.push('Timeline events (each by its id):');
+    for (const { id, event } of events)
+      lines.push(`Event ${id}: ${event.date} — ${event.title}${event.detail ? `. ${event.detail}` : ''}`);
   }
   return lines.join('\n').trim();
 }
@@ -157,6 +208,20 @@ export function readPictureEditorAnswer(
       return [];
     const shows = entry.shows?.trim().slice(0, 160);
     return [{ slide: entry.slide, subject, ...(shows ? { shows } : {}) }];
+  });
+}
+
+/** The editor's answer for timeline events, by "<slide>.<event>" id. */
+export function readPictureEditorEvents(
+  text: string
+): Array<{ event: string; subject: string; shows?: string }> {
+  const answer = readLenientJson(text, Answer);
+  return (answer?.events ?? []).flatMap((entry) => {
+    const subject = entry.subject?.trim();
+    const id = entry.event.trim().replace(/^event\s*/i, '');
+    if (!/^\d+\.\d+$/.test(id) || !subject || subject.length > 120 || /^(null|none|n\/a)$/i.test(subject)) return [];
+    const shows = entry.shows?.trim().slice(0, 160);
+    return [{ event: id, subject, ...(shows ? { shows } : {}) }];
   });
 }
 
@@ -178,12 +243,13 @@ export async function withNamedSubjects<T extends SlideDeck>(
   kit?: PictureKit | null
 ): Promise<{ deck: T; named: number; author: string | null }> {
   const slides = slidesWithoutSubjects(deck);
-  if (!slides.length) return { deck, named: 0, author: null };
+  const events = eventsWithoutSubjects(deck);
+  if (!slides.length && !events.length) return { deck, named: 0, author: null };
   let answer: string;
   try {
     answer = await ask(
       PICTURE_EDITOR_SYSTEM,
-      pictureEditorPrompt(deck, slides, kit)
+      pictureEditorPrompt(deck, slides, kit, events)
     );
   } catch {
     return { deck, named: 0, author: null };
@@ -194,25 +260,44 @@ export async function withNamedSubjects<T extends SlideDeck>(
   for (const entry of readPictureEditorAnswer(answer))
     if (asked.has(entry.slide) && !named.has(entry.slide))
       named.set(entry.slide, entry);
-  if (!named.size) return { deck, named: 0, author };
+  // One subject, one place: an event never repeats what a slide or another event asked for.
+  const taken = new Set<string>();
+  for (const slide of deck.slides) {
+    if (slide.wants) taken.add(pictureKeyOf(slide.wants.subject));
+    for (const event of slide.events ?? []) if (event.wants) taken.add(pictureKeyOf(event.wants.subject));
+  }
+  for (const want of named.values()) taken.add(pictureKeyOf(want.subject));
+  const askedEvents = new Set(events.map(({ id }) => id));
+  const namedEvents = new Map<string, { subject: string; shows?: string }>();
+  for (const entry of readPictureEditorEvents(answer)) {
+    const key = pictureKeyOf(entry.subject);
+    if (!askedEvents.has(entry.event) || namedEvents.has(entry.event) || taken.has(key)) continue;
+    taken.add(key);
+    namedEvents.set(entry.event, entry);
+  }
+  if (!named.size && !namedEvents.size) return { deck, named: 0, author };
+  const wantOf = (want: { subject: string; shows?: string }) => ({
+    subject: want.subject,
+    ...(want.shows ? { shows: want.shows } : {}),
+  });
   return {
     author,
     deck: {
       ...deck,
       slides: deck.slides.map((slide, i): Slide => {
         const want = named.get(i + 1);
-        return want
+        const withEvents = slide.events?.some((_, k) => namedEvents.has(`${i + 1}.${k + 1}`))
           ? {
-              ...slide,
-              wants: {
-                subject: want.subject,
-                ...(want.shows ? { shows: want.shows } : {}),
-              },
+              events: slide.events.map((event, k) => {
+                const eventWant = namedEvents.get(`${i + 1}.${k + 1}`);
+                return eventWant ? { ...event, wants: wantOf(eventWant) } : event;
+              }),
             }
-          : slide;
+          : {};
+        return want || withEvents.events ? { ...slide, ...(want ? { wants: wantOf(want) } : {}), ...withEvents } : slide;
       }),
     },
-    named: named.size,
+    named: named.size + namedEvents.size,
   };
 }
 

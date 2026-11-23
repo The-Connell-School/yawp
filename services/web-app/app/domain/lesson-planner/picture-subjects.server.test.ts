@@ -12,6 +12,8 @@ import {
   withNamedSubjects,
   withTitlePicture,
   readPictureEditorAuthor,
+  eventsWithoutSubjects,
+  readPictureEditorEvents,
 } from './picture-subjects.server';
 import type { Slide, SlideDeck } from './slide-deck';
 
@@ -212,5 +214,73 @@ describe('the vetted kit and the title slide (visuals review, Nov 22)', () => {
   test('the editor’s answer names the author', () => {
     expect(readPictureEditorAuthor('{"author": "Martin Luther King Jr.", "slides": []}')).toBe('Martin Luther King Jr.');
     expect(readPictureEditorAuthor('{"author": null, "slides": []}')).toBeNull();
+  });
+});
+
+describe('timeline events name the historical event (Kevin, Nov 23)', () => {
+  const TIMELINE: SlideDeck = {
+    title: 'Letter from Birmingham Jail',
+    slides: [
+      { layout: 'title', title: 'Letter from Birmingham Jail', speakerNotes: 'n' },
+      {
+        layout: 'timeline',
+        title: 'Birmingham, spring 1963',
+        events: [
+          { date: 'April 3, 1963', title: 'Marches begin', detail: 'Sit-ins and marches start downtown.' },
+          { date: 'April 12, 1963', title: 'King arrested' },
+          { date: 'April 16, 1963', title: 'King writes back', wants: { subject: 'Letter from Birmingham Jail' } },
+          { date: 'May 1963', title: 'Children march' },
+        ],
+        speakerNotes: 'n',
+      },
+    ],
+  };
+
+  test('the events with no picture and no request are offered, by slide and place', () => {
+    expect(eventsWithoutSubjects(TIMELINE).map(({ id }) => id)).toEqual(['2.1', '2.2', '2.4']);
+    const prompt = pictureEditorPrompt(TIMELINE, [], null, eventsWithoutSubjects(TIMELINE));
+    expect(prompt).toContain('Event 2.1: April 3, 1963 — Marches begin. Sit-ins and marches start downtown.');
+    expect(prompt).not.toContain('King writes back');
+  });
+
+  test('the answer for events is read by id; nulls and junk left out', () => {
+    const text = JSON.stringify({
+      author: null,
+      slides: [],
+      events: [
+        { event: '2.1', subject: 'Birmingham campaign', shows: 'marchers downtown' },
+        { event: 'Event 2.2', subject: null, shows: '' },
+        { event: 'two', subject: 'Something', shows: '' },
+      ],
+    });
+    expect(readPictureEditorEvents(text)).toEqual([{ event: '2.1', subject: 'Birmingham campaign', shows: 'marchers downtown' }]);
+  });
+
+  test('each event gets its own article; one already asked for, or named twice, is not used again', async () => {
+    const answer = JSON.stringify({
+      author: 'Martin Luther King Jr.',
+      slides: [],
+      events: [
+        { event: '2.1', subject: 'Birmingham campaign', shows: 'marchers' },
+        { event: '2.2', subject: 'Letter from Birmingham Jail', shows: 'the letter' },
+        { event: '2.4', subject: 'Birmingham campaign', shows: 'children' },
+      ],
+    });
+    const { deck, named } = await withNamedSubjects(TIMELINE, async () => answer);
+    const events = deck.slides[1]!.events!;
+    expect(named).toBe(1);
+    expect(events[0]!.wants).toEqual({ subject: 'Birmingham campaign', shows: 'marchers' });
+    expect(events[1]!.wants).toBeUndefined();
+    expect(events[2]!.wants).toEqual({ subject: 'Letter from Birmingham Jail' });
+    expect(events[3]!.wants).toBeUndefined();
+  });
+
+  test('a deck whose only pictures are on a timeline still asks the editor', async () => {
+    let asked = '';
+    await withNamedSubjects(TIMELINE, async (_system, prompt) => {
+      asked = prompt;
+      return '{}';
+    });
+    expect(asked).toContain('Event 2.4: May 1963 — Children march');
   });
 });
