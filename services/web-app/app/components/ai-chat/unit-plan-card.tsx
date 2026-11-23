@@ -6,7 +6,23 @@
  * Sunday and day 4 on Wednesday, and the map is where they come back to do it,
  * so the build button is the loudest thing on each row.
  */
-import { CalendarRange, Hammer, Flag, ArrowRight } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  CalendarRange,
+  ClipboardCheck,
+  Clapperboard,
+  Flag,
+  Gavel,
+  Hammer,
+  MessagesSquare,
+  PenLine,
+  Presentation,
+  ScanSearch,
+  Sunrise,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -14,6 +30,30 @@ import {
   buildDayRequest,
   type UnitPlan,
 } from '~/domain/lesson-planner/unit-plan';
+import {
+  ACTIVITY_LABELS,
+  shortReading,
+  unitDayActivities,
+  type UnitActivity,
+} from '~/domain/lesson-planner/unit-day-activities';
+
+/**
+ * Each activity's picture (Kevin, Nov 23: "book for reading, pencil for
+ * writing, gavel for debate or seminar, a screen or projector for lecture").
+ */
+const ACTIVITY_ICONS: Record<UnitActivity, LucideIcon> = {
+  starter: Sunrise,
+  teach: Presentation,
+  read: BookOpen,
+  close: ScanSearch,
+  discuss: MessagesSquare,
+  seminar: Gavel,
+  debate: Gavel,
+  pairs: Users,
+  film: Clapperboard,
+  write: PenLine,
+  check: ClipboardCheck,
+};
 
 export function UnitPlanCard({
   unit,
@@ -76,20 +116,29 @@ export function UnitPlanCard({
                   </span>
                 ) : null}
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {day.objective}
-              </p>
-              {day.reading ? (
-                <p data-testid="unit-day-reading" className="mt-1 text-xs">
-                  <span className="font-medium">Reading:</span> {day.reading}
-                </p>
-              ) : null}
-              <p className="mt-1 text-xs">{day.students}</p>
-              {day.check ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  <span className="font-medium">Check:</span> {day.check}
-                </p>
-              ) : null}
+              {/* The day at a glance (Kevin, Nov 23: "less words... a picture
+                  that highlights the major activities"); its words a click away. */}
+              <DayAtAGlance day={day} />
+              <details className="group mt-1.5" open={onBuildDay ? undefined : true}>
+                <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                  <span className="group-open:hidden">Details</span>
+                  <span className="hidden group-open:inline">Hide details</span>
+                </summary>
+                <div className="mt-1 space-y-1 text-xs">
+                  <p className="text-muted-foreground">{day.objective}</p>
+                  {day.reading ? (
+                    <p>
+                      <span className="font-medium">Reading:</span> {day.reading}
+                    </p>
+                  ) : null}
+                  <p>{day.students}</p>
+                  {day.check ? (
+                    <p className="text-muted-foreground">
+                      <span className="font-medium">Check:</span> {day.check}
+                    </p>
+                  ) : null}
+                </div>
+              </details>
             </div>
             {builtDays?.[day.day] ? (
               <Button asChild size="sm" variant="outline-primary" className="shrink-0" data-testid="unit-open-day">
@@ -131,6 +180,37 @@ export function UnitPlanCard({
             {unit.endsWith}
           </span>
         </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A day's main activities as icons with one-word labels, and its reading on one line. */
+function DayAtAGlance({ day }: { day: UnitPlan['days'][number] }) {
+  const reading = shortReading(day.reading);
+  // A named reading says "read" itself, with the book; no second book beside it.
+  const activities = unitDayActivities(day).filter((kind) => !(reading && kind === 'read'));
+  if (!activities.length && !reading) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {activities.map((kind) => {
+        const Icon = ACTIVITY_ICONS[kind];
+        return (
+          <span
+            key={kind}
+            data-testid="unit-day-activity"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+          >
+            <Icon size={12} aria-hidden />
+            {ACTIVITY_LABELS[kind]}
+          </span>
+        );
+      })}
+      {reading ? (
+        <span data-testid="unit-day-reading" className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <BookOpen size={12} aria-hidden className="shrink-0" />
+          <span className="truncate">{reading}</span>
+        </span>
       ) : null}
     </div>
   );

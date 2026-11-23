@@ -57,6 +57,7 @@ import { chooseCheckedAgainst, teacherPages, withQuotationsLabel } from '~/domai
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
+import { withoutProcessTalk, withUnitMapFirst } from '~/domain/lesson-planner/reply-shape';
 import { visualKitFor } from '~/domain/lesson-planner/work-visuals';
 import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
@@ -1123,6 +1124,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
       // What the reply says is what was made: no weighing of paintings
       // against the teacher's other lessons, no painting the deck does not have.
       reply = withoutArtTalk(reply);
+      // No narration of the planner's own process, and a unit's map before
+      // its reasons (Kevin, Nov 23: "a wall of text").
+      reply = withUnitMapFirst(withoutProcessTalk(reply));
 
       // A link the catalog never handed back goes nowhere, and a teacher finds that
       // out in front of a class. Strip the href and keep the words. Done before the

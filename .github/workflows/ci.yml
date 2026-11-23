@@ -1363,6 +1363,8 @@ jobs:
             app/domain/lesson-planner/runaway-blanks.test.ts \
             app/domain/lesson-planner/work-visuals.test.ts \
             app/domain/lesson-planner/teacher-pages.server.test.ts \
+            app/domain/lesson-planner/reply-shape.test.ts \
+            app/domain/lesson-planner/unit-day-activities.test.ts \
             app/domain/lesson-planner/file-later-handout.server.test.ts \
             app/domain/lesson-planner/pdf-text.server.test.ts \
             app/domain/lesson-planner/source-texts.server.test.ts \
