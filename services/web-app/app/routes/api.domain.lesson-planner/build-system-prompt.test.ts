@@ -2365,7 +2365,8 @@ describe('buildLessonPlannerSystemPrompt — slides that teach (Kevin, Nov 21)',
   test('a reading slide is never shipped without its reading', () => {
     const on = textOf(true);
     expect(on).toContain('A read or excerpt slide needs its passage');
-    expect(on).toContain('ask the teacher for the passage');
+    expect(on).toContain('the passage comes only from the teacher\'s own pages');
+    expect(on).toContain('Yawp! asks the teacher for the pages itself');
     expect(textOf(false)).not.toContain('A read or excerpt slide needs its passage');
   });
 });
@@ -2455,7 +2456,9 @@ describe('buildLessonPlannerSystemPrompt — standards every lesson meets (13-le
     expect(on).toContain('The text in students’ hands');
     expect(on).toContain('printed in full on the student handout, above the questions');
     expect(on).toContain('includes that handout in this reply');
-    expect(on).toContain('[Paste chapter 1, pages 1–3 from your edition here]');
+    expect(on).toContain('[Add your pages: chapter 1');
+    expect(on).toContain('nothing in the lesson quotes the work from memory');
+    expect(on).toContain('published in 1930 or earlier');
     // The excerpt rule now lets a public-domain passage on the slide, exactly as printed.
     expect(on).toContain('For a work in the public domain');
     expect(on).not.toContain('40–90 words, only text the teacher supplied or a tool returned');

@@ -53,6 +53,7 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
+import { chooseCheckedAgainst, teacherPages, withQuotationsLabel } from '~/domain/lesson-planner/teacher-pages.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
@@ -62,7 +63,7 @@ import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server'
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
-import { preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
+import { checkQuotations, preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
 import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
 import { fetchWorkText, sourceTextFailure, warmSourceTexts, workForText } from '~/domain/lesson-planner/source-texts.server';
@@ -958,8 +959,17 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // names no registered work is about one that is not registered (Things
         // Fall Apart is not Heart of Darkness, though its lesson names both).
         const followUp = turn.message.trim().split(/\s+/).length < 15;
-        const checkedWork = workAsked ?? (followUp ? workForText(reply) : null);
-        const quoted = await withQuotationCheck(reply, { work: checkedWork });
+        const registeredWork = workAsked ?? (followUp ? workForText(reply) : null);
+        // The teacher's own pages (plan item 12, Nov 23): for a work Yawp! does
+        // not hold whole, what the teacher uploaded is the text, and every
+        // quotation is checked and corrected against it.
+        const against = chooseCheckedAgainst(registeredWork, teacherPages(sources));
+        const checkedWork = against.kind === 'none' ? null : against.work;
+        const checkQuotes = async (text: string) =>
+          against.kind === 'pages'
+            ? { ...checkQuotations(text, against.source, { work: against.work }), work: against.work }
+            : await withQuotationCheck(text, { work: checkedWork });
+        const quoted = await checkQuotes(reply);
         reply = quoted.reply;
         const attribution = () => ({
           organizationId: ctx.organizationId,
@@ -993,7 +1003,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
         let requoted: Awaited<ReturnType<typeof withQuotationCheck>> | null = null;
         if (repair.repaired.length) {
           // A repair may quote: it is checked against the work like the rest.
-          requoted = await withQuotationCheck(repair.reply, { work: checkedWork });
+          requoted = await checkQuotes(repair.reply);
           reply = requoted.reply;
         }
         const stillMisplaced = (requoted?.misplaced ?? []).filter((miss) => !quoted.misplaced.some((was) => was.quote === miss.quote));
@@ -1002,16 +1012,26 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // Not for a text kept only to verify against (Dickinson's 1890 editors
         // changed her words; Homer in a translation the teacher may not use):
         // there the slide would disagree with the handout (Nov 22).
-        const excerpts = checkedWork && !checkedWork.verifyOnly ? withExcerptsFromSource(reply, preparedSourceOf(checkedWork)) : { reply, rewritten: 0 };
+        const checkedSource = against.kind === 'pages' ? against.source : checkedWork ? preparedSourceOf(checkedWork) : null;
+        const excerpts = checkedWork && !checkedWork.verifyOnly ? withExcerptsFromSource(reply, checkedSource) : { reply, rewritten: 0 };
         reply = excerpts.reply;
         reply = withCheckNote(reply, [
           ...(repair.left as Array<Problem & { note?: string }>).map((problem) => problem.note ?? problem.what),
           ...stillMisplaced.map((miss) => `“${miss.quote.slice(0, 80)}${miss.quote.length > 80 ? '…' : ''}” is in ${miss.actual}, not ${miss.claimed}.`),
         ]);
+        // What the quotations were checked against, or that they were not and
+        // how to fix it (Kevin, Nov 23). A text that could not be had in time
+        // checked nothing, and says so.
+        const finalCheck = requoted ?? quoted;
+        reply = withQuotationsLabel(reply, checkedSource ? against : { kind: 'none' }, {
+          verified: finalCheck.verified.length,
+          corrected: quoted.corrections.length + (requoted?.corrections.length ?? 0),
+          unverified: finalCheck.unverified.length,
+        });
         // Counts only, never the lesson: in the log, and to the client, which
         // shows nothing of it (it lets a test see the checks ran).
         checks = {
-          work: quoted.work?.id ?? 'none',
+          work: against.kind === 'pages' ? 'pages' : (quoted.work?.id ?? 'none'),
           ...(quoted.work && sourceTextFailure(quoted.work) ? { source: sourceTextFailure(quoted.work)! } : {}),
           quotationsCorrected: quoted.corrections.length,
           quotationsVerified: quoted.verified.length,
