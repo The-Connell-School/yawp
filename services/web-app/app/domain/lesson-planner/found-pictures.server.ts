@@ -128,7 +128,9 @@ const plain = (html: unknown, max: number) => {
 function cleanArtist(text: string): string {
   if (/^https?:\/\//i.test(text)) {
     try {
-      return new URL(text.replace(/…$/, '')).hostname.replace(/^www\./, '');
+      const host = new URL(text.replace(/…$/, '')).hostname.replace(/^www\./, '');
+      // A file store is not who made a picture ("s3.amazonaws.com" under Dickinson's portrait, Nov 22).
+      return /amazonaws\.com$|cloudfront\.net$|googleusercontent\.com$|wikimedia\.org$/i.test(host) ? '' : host;
     } catch {
       return '';
     }

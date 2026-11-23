@@ -81,6 +81,14 @@ export function syncAgendaToStack<T extends SlideDeck>(deck: T, steps: AgendaSte
       slide.agenda.map((item) => item.title),
       steps
     );
+    // A line that stands for two steps ("Class starter, context": an agenda
+    // holds six lines, a plan may have seven steps) keeps the minutes of
+    // both. Matched to one of them it showed that step's minutes alone, and
+    // the agenda on screen came to 45 for a 50-minute lesson (Nov 22). Such a
+    // deck's agenda already adds up to the stack: it is left as it is.
+    const total = steps.reduce((sum, step) => sum + step.minutes, 0);
+    const shown = slide.agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
+    if (slide.agenda.length < steps.length && shown === total) return slide;
     const agenda = slide.agenda.map((item, index) => {
       const step = matched[index];
       if (!step || step.minutes === item.minutes) return item;

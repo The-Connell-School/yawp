@@ -999,7 +999,10 @@ async function turnAction({ request }: ActionFunctionArgs) {
         const stillMisplaced = (requoted?.misplaced ?? []).filter((miss) => !quoted.misplaced.some((was) => was.quote === miss.quote));
         // The true lines on the excerpt slides, one to a line, with any lines
         // left out marked (plan item 2, Nov 22), from the text just checked.
-        const excerpts = checkedWork ? withExcerptsFromSource(reply, preparedSourceOf(checkedWork)) : { reply, rewritten: 0 };
+        // Not for a text kept only to verify against (Dickinson's 1890 editors
+        // changed her words; Homer in a translation the teacher may not use):
+        // there the slide would disagree with the handout (Nov 22).
+        const excerpts = checkedWork && !checkedWork.verifyOnly ? withExcerptsFromSource(reply, preparedSourceOf(checkedWork)) : { reply, rewritten: 0 };
         reply = excerpts.reply;
         reply = withCheckNote(reply, [
           ...(repair.left as Array<Problem & { note?: string }>).map((problem) => problem.note ?? problem.what),
