@@ -17,6 +17,7 @@ const {
   getArtworkIndexFromPoolIndex,
   getClassArtByIndex,
   getCropIndexFromPoolIndex,
+  LEGACY_CLASS_ART_KEY_BY_POOL_INDEX,
 } = await import('./class-art');
 
 function poolIndexForKey(key: string) {
@@ -73,10 +74,17 @@ describe('pickClassArtKeyForOrganization', () => {
   });
 
   test('maps legacy classArtIndex rows when picking the next key', async () => {
+    // Legacy indexes point into the pool as it was shipped (including art
+    // since retired), so map through the legacy table, not today's pool.
+    const crop0Keys = Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) =>
+      getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key
+    );
     prisma.class.findMany.mockResolvedValue(
-      Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
+      crop0Keys.map((key) => ({
         classArtKey: null,
-        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+        classArtIndex: (
+          LEGACY_CLASS_ART_KEY_BY_POOL_INDEX as readonly string[]
+        ).indexOf(key),
       }))
     );
 

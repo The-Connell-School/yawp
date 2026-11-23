@@ -347,7 +347,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const classArtKey = await pickClassArtKeyForOrganization(
-      profile.organization.id
+      profile.organization.id,
+      Math.random,
+      teacherIds
     );
     const maxAttempts = codeWasGenerated ? 4 : 1;
 

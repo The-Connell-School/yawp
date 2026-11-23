@@ -78,6 +78,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
 
   const classLabels = deployments.map((row) => formatClassLabel(row.class));
+  const deployedClassIds = deployments.map((row) => row.classId);
+  // An assignment can sit in a class that is now archived. Keep it pickable
+  // here so saving the editor never drops it by accident.
+  const classes = [
+    ...v3.classes,
+    ...deployments
+      .filter((row) => !v3.classes.some((klass) => klass.id === row.classId))
+      .map((row) => ({ id: row.classId, label: formatClassLabel(row.class) })),
+  ];
   const breadcrumbTitle =
     active.assignment.title?.trim() ||
     active.assignment.assignmentType.title ||
@@ -85,12 +94,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return {
     ...v3,
+    classes,
     editing: {
       assignmentId: active.assignment.id,
       classId: active.classId,
       breadcrumbTitle,
       assignmentTypeId: active.assignment.assignmentTypeId,
       classLabels,
+      classIds: deployedClassIds,
+      // A group project's groups are arranged per class when it is created,
+      // so its classes stay fixed. Every other assignment can move.
+      classesLocked: active.assignment.collaborationEnabled,
       title: active.assignment.title ?? '',
       prompt: active.assignment.prompt,
       postAt: active.postAt ? active.postAt.toISOString() : null,

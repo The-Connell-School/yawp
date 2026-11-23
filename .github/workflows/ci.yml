@@ -1156,6 +1156,10 @@ jobs:
             'app/routes/app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel.test.tsx' \
             'app/routes/app.assignments.$assignmentId._index/route.test.ts' \
             'app/routes/app.my-classes.$classId/route.test.ts' \
+            app/utils/assignment-deployment.server.test.ts \
+            app/utils/class-art.test.ts \
+            app/utils/class-art-distinct.test.ts \
+            app/utils/class-art-assignment.server.test.ts \
             'app/routes/app.my-classes.$classId/class-assignments-tab.test.tsx' \
             app/utils/group-by-assignment-type.test.ts \
             app/components/collapsible-group-section.test.tsx \

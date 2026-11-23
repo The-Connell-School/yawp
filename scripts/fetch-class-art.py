@@ -40,7 +40,9 @@ ARTWORKS: dict[str, str] = {
     "bierstadt-yosemite-valley": "Albert Bierstadt - Yosemite Valley - Google Art Project.jpg",
     "cole-the-oxbow": "Thomas Cole - The Oxbow - Google Art Project.jpg",
     "homer-breezing-up": "Winslow Homer - Breezing Up (A Fair Wind) - Google Art Project.jpg",
-    "hokusai-moon-beneath-fuji": "Hokusai - Mount Fuji seen from the sea.jpg",
+    # Was "Hokusai - Mount Fuji seen from the sea.jpg", which is a copy of The
+    # Great Wave. The stem stays because classes store it as their key.
+    "hokusai-moon-beneath-fuji": "冨嶽三十六景 駿州江尻-Ejiri in Suruga Province (Sunshū Ejiri), from the series Thirty-six Views of Mount Fuji (Fugaku sanjūrokkei) MET DP141030.jpg",
     "hokusai-kirifuri-falls": "Katsushika Hokusai - Kirifuri Waterfall at Kurokami Mountain in Shimotsuke.jpg",
     "hiroshige-whirlpool": "Hiroshige - Naruto Whirlpools - Google Art Project.jpg",
     "hiroshige-tago-bay": "Hiroshige - Tago Bay near Ejiri on the Tokaido - Google Art Project.jpg",

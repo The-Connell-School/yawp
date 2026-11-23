@@ -86,6 +86,8 @@ import {
 import {
   createAssignmentDeployedToClasses,
   updateAssignmentInClassDeployment,
+  AssignmentClassChangeError,
+  changeAssignmentClasses,
 } from '~/utils/assignment-deployment.server';
 import { FreeClassroomAssignmentQuotaError } from '~/utils/assignment-quota.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
@@ -843,6 +845,42 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await deleteAssignmentPromptAttachment(
         existingAssignment.promptAttachmentKey
       ).catch(() => {});
+    }
+
+    // The editor sends the full list of classes the teacher picked. Older
+    // clients (and the exit ticket sheet) never send it, and keep their
+    // classes as they are.
+    if (formData.get('classChange') === 'true') {
+      const requestedClassIds = formData
+        .getAll('classIds')
+        .map((value) => value.toString());
+      try {
+        const plan = await changeAssignmentClasses({
+          assignmentId: existingAssignment.id,
+          teacherMembershipId: profile.id,
+          requestedClassIds,
+          deployment: { postAt: postAt ?? null, dueAt: dueAt ?? null },
+        });
+        return dataResponse({
+          success: true,
+          message: 'Assignment updated successfully.',
+          classIds: plan.classIds,
+          activeClassId: plan.classIds.includes(classId)
+            ? classId
+            : (plan.classIds[0] ?? classId),
+        });
+      } catch (error) {
+        if (error instanceof AssignmentClassChangeError) {
+          return dataResponse(
+            {
+              success: false,
+              message: `Your other changes were saved. ${error.message}`,
+            },
+            { status: error.status }
+          );
+        }
+        throw error;
+      }
     }
 
     return dataResponse({

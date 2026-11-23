@@ -379,6 +379,22 @@ describe('app index loader assignments', () => {
         ];
       }
 
+      // loadTeacherClassArtKeys: the teacher's classes oldest first.
+      if (args.select?.classArtKey) {
+        return [
+          {
+            id: 'class-1',
+            classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
+            classArtIndex: 12,
+          },
+          {
+            id: 'class-2',
+            classArtKey: 'af-klint-ten-largest-youth::center-10pct',
+            classArtIndex: 3,
+          },
+        ];
+      }
+
       return [
         {
           id: 'class-1',
