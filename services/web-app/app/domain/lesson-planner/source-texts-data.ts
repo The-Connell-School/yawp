@@ -40,6 +40,12 @@ export type RegisteredWork = {
    * Butler is not Fagles; Dickinson's 1890s editors changed her words.
    */
   verifyOnly?: boolean;
+  /**
+   * One public-domain translation of a work the class may read in another
+   * (Homer, Sophocles): the teacher's own pages, when they add them, come
+   * first (Nov 23).
+   */
+  translated?: boolean;
   idConfidence?: 'medium' | 'low';
   note?: string;
 };
@@ -133,7 +139,27 @@ export const SOURCE_TEXT_WORKS: readonly RegisteredWork[] = [
     check: 'Telemachus',
     edition: "Samuel Butler's translation (1900)",
     verifyOnly: true,
+    translated: true,
     note: 'Public domain in Butler only. Fagles (1996), Fitzgerald (1961), Lombardo and Wilson (2017) are under copyright.',
+  },
+  {
+    // Kevin's Antigone unit (Nov 23): the planner said "Antigone is in the
+    // public domain, so I can quote it directly" and printed Fitts and
+    // Fitzgerald (1939) from memory. Sophocles is; most school translations
+    // are not. Storr's (1912) is: the planner prints it, and a line of it
+    // misremembered is corrected. A line of another translation is not near
+    // enough to Storr's to be rewritten; it is only not found.
+    id: 'sophocles-theban',
+    title: 'Antigone, Oedipus the King and Oedipus at Colonus',
+    author: 'Sophocles',
+    gutenbergId: 31,
+    structure: 'poems',
+    names: ['Antigone', 'Oedipus Rex', 'Oedipus the King', 'Oedipus Tyrannus', 'Oedipus at Colonus'],
+    check: 'Creon',
+    edition: "F. Storr's translation (1912)",
+    translated: true,
+    idConfidence: 'medium',
+    note: 'Public domain in Storr (1912) and Jebb (1891). Fitts and Fitzgerald (1939), Fagles (1982) and Woodruff (2001) are under copyright.',
   },
   {
     id: 'iliad',
@@ -145,6 +171,7 @@ export const SOURCE_TEXT_WORKS: readonly RegisteredWork[] = [
     check: 'Agamemnon',
     edition: "Samuel Butler's translation (1898)",
     verifyOnly: true,
+    translated: true,
     note: 'Public domain in Butler only. Fagles, Fitzgerald and Lattimore are under copyright.',
   },
   {

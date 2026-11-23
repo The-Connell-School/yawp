@@ -77,6 +77,9 @@ describe('the teacher’s pages as the text', () => {
     const pages = teacherPages([upload()]);
     expect(chooseCheckedAgainst(registered(), pages).kind).toBe('registered');
     expect(chooseCheckedAgainst(null, pages).kind).toBe('pages');
+    // A translation is one of several: the class's own pages come first (Nov 23).
+    expect(chooseCheckedAgainst(registered({ id: 'sophocles-theban', translated: true }), pages).kind).toBe('pages');
+    expect(chooseCheckedAgainst(registered({ id: 'sophocles-theban', translated: true }), null).kind).toBe('registered');
     const dickinson = registered({ id: 'dickinson', verifyOnly: true });
     expect(chooseCheckedAgainst(dickinson, pages).kind).toBe('pages');
     expect(chooseCheckedAgainst(dickinson, null)).toEqual({ kind: 'registered', work: dickinson });
@@ -85,22 +88,23 @@ describe('the teacher’s pages as the text', () => {
 });
 
 describe('what the quotations were checked against, on every lesson that quotes', () => {
-  test('not checked: at the top, naming the work from the slides, with the one thing that fixes it', () => {
-    const reply = `# The Porch\n\nA lesson on chapter 1.\n\n${EXCERPT_DECK}\n\nWant changes?`;
+  test('not checked: at the end, with what to check before class, naming the work and the one thing that fixes it (Kevin, Nov 23)', () => {
+    const reply = `# The Porch\n\nA lesson on chapter 1.\n\n${EXCERPT_DECK}\n\n**Check before class:**\n- A date to confirm.\n\nWant changes?`;
     const out = withQuotationsLabel(reply, { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 });
-    const lines = out.split('\n').filter(Boolean);
-    expect(lines[0]).toBe('# The Porch');
-    expect(lines[1]).toContain('**Quotations:** not checked.');
-    expect(lines[1]).toContain('*Their Eyes Were Watching God*');
-    expect(lines[1]).toContain('paperclip');
+    expect(out.startsWith('# The Porch')).toBe(true);
+    expect(out).toContain('**Check before class:**\n- A date to confirm.\n- Quotations not checked: Yawp! doesn’t have *Their Eyes Were Watching God*. Add your pages with the paperclip');
+    expect(out.trimEnd().endsWith('Want changes?')).toBe(true);
+    // With nothing to check, one quiet line at the end.
+    const quiet = withQuotationsLabel(`# The Porch\n\n${EXCERPT_DECK}\n\nWant changes?`, { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 });
+    expect(quiet).toContain('*Quotations not checked:');
+    expect(quiet.trimEnd().endsWith('Want changes?')).toBe(true);
   });
 
-  test('checked against the pages: what was found and corrected, before the closing question', () => {
+  test('checked against the pages: what was found and corrected', () => {
     const pages = teacherPages([upload()])!;
     const reply = `# The Porch\n\n${EXCERPT_DECK}\n\nWant changes?`;
     const out = withQuotationsLabel(reply, { kind: 'pages', ...pages }, { verified: 9, corrected: 2, unverified: 1 });
-    expect(out).toContain('**Quotations:** checked against your pages (Their Eyes ch1.pdf): 9 found; 2 corrected to match; 1 not found');
-    expect(out.trimEnd().endsWith('Want changes?')).toBe(true);
+    expect(out).toContain('*Quotations checked against your pages (Their Eyes ch1.pdf): 9 found; 2 corrected to match; 1 not found in it.*');
   });
 
   test('a text kept only to verify says it was checked, not corrected', () => {

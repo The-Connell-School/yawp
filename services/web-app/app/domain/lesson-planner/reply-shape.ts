@@ -16,7 +16,9 @@ const FENCE = /^\s*(```|~~~)/;
  */
 const PROCESS_TALK = [
   /\bI (?:now )?have (?:everything|all|what) I need\b/i,
-  /\bI['’]ll (?:write|draft|create|make|build)\b[^.!?]*\bmyself\b/i,
+  /\bI['’]ll (?:write|draft|create|make|build)\b[^.!?]*\b(?:myself|from scratch)\b/i,
+  /\bI['’]ll\b[^.!?]*\bbuild the (?:full |whole )?(?:lesson|unit|map|deck)\b[^.!?]*\bnow\b/i,
+  /\bis in the public domain, so I (?:can|will|['’]ll)\b/i,
   /^(?:Now )?(?:let me|I['’]ll now|I will now|now I['’]ll)\s+(?:build|write|draft|put|make|create|pull|search|look)\b/i,
   /\b(?:nothing|no lessons?|no decks?) in the (?:Teacher['’]s )?Lounge (?:covers|matches|fits)\b/i,
   /\bthe (?:Short Response|class starter|Daily Pages|writing lesson) library (?:has|had|doesn['’]t have|does not have)\b/i,
@@ -108,9 +110,7 @@ export function withUnitMapFirst(reply: string): string {
   const at = parts.findIndex((part) => part.fenced && /^\s*```yawp-unit\b/.test(part.text));
   if (at <= 0) return reply;
   const before = parts.slice(0, at);
-  // A note Yawp! itself put first (the quotation label) stays first.
-  const pinned = before.filter((part) => /^\*\*Quotations:\*\*/.test(part.text.trim()));
-  const prose = before.filter((part) => !pinned.includes(part));
+  const prose = before;
   const proseText = prose.filter((part) => !part.fenced);
   const firstPlain = proseText.findIndex((part) => !/^\s*(?:[-*+]|\d+[.)]|#{1,6}|>|\|)/.test(part.text));
   if (firstPlain < 0) return reply;
@@ -122,5 +122,5 @@ export function withUnitMapFirst(reply: string): string {
     ...prose.filter((part) => part !== proseText[firstPlain]),
   ];
   if (!moved.length) return reply;
-  return joinParts([...pinned, { fenced: false, text: lead }, parts[at]!, ...moved, ...parts.slice(at + 1)]);
+  return joinParts([{ fenced: false, text: lead }, parts[at]!, ...moved, ...parts.slice(at + 1)]);
 }

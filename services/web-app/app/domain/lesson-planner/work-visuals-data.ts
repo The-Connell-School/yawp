@@ -825,6 +825,8 @@ export const WORK_VISUAL_KITS: WorkVisualKit[] = [
       { subject: 'Theatre of Dionysus', shows: 'the theatre in Athens where the plays were first staged', use: 'setting', unchecked: true },
       { subject: 'Oedipus at Colonus', shows: 'blind Oedipus with Antigone, a painting', use: 'scene', unchecked: true },
       { subject: 'Pythia', shows: 'the priestess of the oracle at Delphi, a painting', use: 'scene', unchecked: true },
+      { subject: 'Acropolis of Athens', shows: 'the Acropolis above Athens, where the plays were first seen', use: 'setting', unchecked: true },
+      { subject: 'Theatre of ancient Greece', shows: 'an open-air Greek theatre: the stone seats, the circle where the chorus danced', use: 'period', unchecked: true },
     ],
   },
   {

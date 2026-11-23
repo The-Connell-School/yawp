@@ -62,12 +62,14 @@ export type CheckedAgainst =
 
 /**
  * Which text the lesson's quotations are checked against. A public-domain
- * text Yawp! holds whole comes first; then the teacher's pages, which are
+ * text Yawp! holds whole comes first (not a translation: the class may read
+ * another, and the teacher's pages are theirs); then the teacher's pages, which are
  * the edition their students hold (and better than a text kept only to
  * verify, such as Dickinson's 1890 editors or Homer in Butler); then that.
  */
 export function chooseCheckedAgainst(registered: RegisteredWork | null, pages: TeacherPages | null): CheckedAgainst {
-  if (registered && !registered.verifyOnly) return { kind: 'registered', work: registered };
+  // A translation is one of several: the class's own (the teacher's pages) comes first.
+  if (registered && !registered.verifyOnly && !(registered.translated && pages)) return { kind: 'registered', work: registered };
   if (pages) return { kind: 'pages', ...pages };
   if (registered) return { kind: 'registered', work: registered };
   return { kind: 'none' };
@@ -105,13 +107,15 @@ export function lessonQuotes(reply: string): boolean {
   return readsOnSlides || quotedPassages(reply) > 0;
 }
 
-const QUOTATIONS_LABEL = '**Quotations:**';
+const QUOTATIONS_MARK = /\bQuotations (?:not checked|checked against)\b/;
+const CHECK_NOTE = '**Check before class:**';
 
 /**
- * One line in every lesson that quotes, saying what its quotations were
+ * One short line in every lesson that quotes, saying what its quotations were
  * checked against (Kevin, Nov 23: teachers must know when to give us the
- * text). Checked: where, and what was found. Not checked: why, and the one
- * thing that fixes it, placed at the top where it is read before the lesson.
+ * text). At the end, with what to check before class: it is a caveat, not
+ * the lesson's opening (Kevin, Nov 23: "quotations feels like a caveat that
+ * should be somewhere else").
  */
 export function withQuotationsLabel(
   reply: string,
@@ -119,32 +123,36 @@ export function withQuotationsLabel(
   /** `verified` counts every quotation found, the corrected ones too (as the check counts them). */
   counts: { verified: number; corrected: number; unverified: number }
 ): string {
-  if (reply.includes(QUOTATIONS_LABEL) || !lessonQuotes(reply)) return reply;
+  if (QUOTATIONS_MARK.test(reply) || !lessonQuotes(reply)) return reply;
+  let line: string;
   if (checked.kind === 'none') {
     const work = workNamedOnSlides(reply);
-    const line = `${QUOTATIONS_LABEL} not checked. Yawp! doesn’t have ${work ? `*${work}*` : 'this text'}, so nothing it quotes here has been checked against the book. Add your pages with the paperclip below (a PDF, a photo of the pages, or the text pasted in) and every quotation will be checked against your copy and the passage printed from it.`;
-    return withLineAtTop(reply, line);
+    line = `Quotations not checked: Yawp! doesn’t have ${work ? `*${work}*` : 'this text'}. Add your pages with the paperclip (a PDF, a photo or pasted text) and they will be.`;
+  } else {
+    const against =
+      checked.kind === 'pages'
+        ? `your pages (${checked.names.length === 1 ? checked.names[0] : checked.names.join(', ')})`
+        : `${checked.work.title}, ${checked.work.edition}${checked.work.verifyOnly ? ', checked but not corrected, since your edition may differ' : ''}`;
+    const parts = [
+      `${counts.verified} found`,
+      ...(counts.corrected ? [`${counts.corrected} corrected to match`] : []),
+      ...(counts.unverified ? [`${counts.unverified} not found in it`] : []),
+    ];
+    line = `Quotations checked against ${against}: ${parts.join('; ')}.`;
   }
-  const against =
-    checked.kind === 'pages'
-      ? `your pages (${checked.names.length === 1 ? checked.names[0] : checked.names.join(', ')})`
-      : `${checked.work.title}, ${checked.work.edition}${checked.work.verifyOnly ? ', checked but not corrected, since your edition may differ' : ''}`;
-  const parts = [
-    `${counts.verified} found`,
-    ...(counts.corrected ? [`${counts.corrected} corrected to match`] : []),
-    ...(counts.unverified ? [`${counts.unverified} not found, listed under “Check before class” if the lesson relies on them`] : []),
-  ];
-  return withLineAtEnd(reply, `${QUOTATIONS_LABEL} checked against ${against}: ${parts.join('; ')}.`);
+  return withLineInCheckNote(reply, line);
 }
 
-/** After the reply's opening heading, if it has one; else first. */
-function withLineAtTop(reply: string, line: string): string {
+/** The last item of "Check before class" when the lesson has one; else one quiet line at the end. */
+function withLineInCheckNote(reply: string, line: string): string {
   const lines = reply.split('\n');
-  const first = lines.findIndex((text) => text.trim());
-  if (first >= 0 && /^#{1,3}\s/.test(lines[first]!) && !FENCE.test(lines[first]!)) {
-    return [...lines.slice(0, first + 1), '', line, '', ...lines.slice(first + 1)].join('\n').replace(/\n{3,}/g, '\n\n');
+  const at = lines.findIndex((text) => text.trim() === CHECK_NOTE);
+  if (at >= 0) {
+    let end = at + 1;
+    while (end < lines.length && /^\s*-\s/.test(lines[end]!)) end += 1;
+    return [...lines.slice(0, end), `- ${line}`, ...lines.slice(end)].join('\n');
   }
-  return `${line}\n\n${reply.trimStart()}`;
+  return withLineAtEnd(reply, `*${line}*`);
 }
 
 /** Before the closing question, when the reply ends on one; otherwise at the end (as "Check before class"). */
