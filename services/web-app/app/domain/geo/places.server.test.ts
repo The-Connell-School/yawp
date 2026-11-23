@@ -213,5 +213,8 @@ describe('the places of the story (Kevin, Nov 23: Thebes was not on the Antigone
     expect(findPlace('Ithaca', 'New York')?.found).toBe('Ithaca, New York, United States of America');
     expect(findPlace('Athens, Georgia')?.found).toBe('Athens, Georgia, United States of America');
     expect(findPlace('Eatonville, Florida')?.found).toBe('Eatonville, Florida, United States of America');
+    expect(findPlace('Atlanta', 'Georgia')?.found).toBe('Atlanta, Georgia, United States of America');
+    for (const [name, where] of [['Washington, D.C.', 'District of Columbia'], ['Washington D.C.', undefined], ['Washington DC', 'United States']] as Array<[string, string | undefined]>)
+      expect(findPlace(name, where)?.found).toContain('District Of Columbia');
   });
 });

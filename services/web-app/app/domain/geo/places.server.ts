@@ -215,6 +215,12 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
  * name finds the country.
  */
 export function findPlace(name: string, where?: string | null): FoundPlace | null {
+  // The capital, however it is written (King's letter, Nov 23: "Washington, D.C." in
+  // "District of Columbia" was not found; "Washington D.C." went to England).
+  const whole = `${name},${where ?? ''}`;
+  if (/^\s*washington\b/i.test(name) && (/\bd\.?\s?c\b\.?|district of columbia/i.test(whole))) {
+    return findPlace('Washington', 'United States');
+  }
   // "Khartoum, Sudan" is a name and where it is.
   const [first, ...rest] = name.split(',').map((part) => part.trim()).filter(Boolean);
   if (!first) return null;
