@@ -32,6 +32,7 @@ import {
   type SignonState,
   type SignonTransport,
 } from '~/domain/unified-signon/contracts';
+import { WhatIsYawpLink } from '~/components/what-is-yawp-link';
 import './unified-signon.css';
 
 const passwordHint = 'At least 6 characters.'; // Existing account policy; do not silently raise it.
@@ -1280,6 +1281,9 @@ export function UnifiedSignon({
           </div>
         </AuthFormCard>
         {below && <div className="signon-below">{below}</div>}
+        <p className="signon-below">
+          <WhatIsYawpLink />
+        </p>
       </div>
       <footer className="signon-footer">
         <Link to="/terms">Terms</Link>
