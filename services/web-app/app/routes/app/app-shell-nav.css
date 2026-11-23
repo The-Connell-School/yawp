@@ -95,6 +95,7 @@
   white-space: nowrap;
 }
 
+[data-app-shell] > nav > div.flex.shrink-0 > a[data-testid='app-nav-need-help'],
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
   display: flex;
@@ -113,6 +114,7 @@
 
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'],
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-need-help'],
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] {
   box-sizing: border-box;
   flex: 1 0 auto;
@@ -149,11 +151,13 @@
 }
 
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action:hover,
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-need-help']:hover,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings']:hover {
   color: #0f172a;
   background: transparent;
 }
 
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-need-help'] svg,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings'] svg,
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action svg {
   width: 17px;

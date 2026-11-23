@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { appSidebarIconForPath } from './app-sidebar-icons';
+import { appSidebarIconForPath, appSidebarIcons } from './app-sidebar-icons';
 
 const TEACHER_NAV_PATHS = [
   '/app',
@@ -19,5 +19,11 @@ describe('appSidebarIconForPath', () => {
 
   test('unknown routes fall back to caller-provided icons', () => {
     expect(appSidebarIconForPath('/app/admin')).toBeNull();
+  });
+});
+
+describe('appSidebarIcons', () => {
+  test('footer help icon is available for the Need help? row', () => {
+    expect(appSidebarIcons.help).not.toBeNull();
   });
 });
