@@ -683,7 +683,12 @@ export function tourForPathname(pathname: string): PageTour | null {
   if (path === '/app/lesson-planner') return TOURS['lesson-planner'];
   if (/^\/app\/organization(\/[^/]+)?$/.test(path)) return TOURS.organization;
   if (/^\/app\/documents\/[^/]+$/.test(path)) return TOURS.document;
-  if (/^\/app\/assignments\/[^/]+$/.test(path)) return TOURS['teacher-assignment'];
+  // `/app/assignments/new` is the creation form, not an assignment. Offering
+  // the assignment tour there let a Skip or Finish on the form hide it from
+  // the teacher's first real assignment page.
+  if (/^\/app\/assignments\/[^/]+$/.test(path) && path !== '/app/assignments/new') {
+    return TOURS['teacher-assignment'];
+  }
   return null;
 }
 

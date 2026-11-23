@@ -43,6 +43,7 @@ The tours are defined in `services/web-app/app/domain/guided-tours/tours.ts`:
 | `type-class-starter` | `/app/assignment-types/:id` (Class Starter) | New menu, how it works, prompt library, modules, your drafts |
 | `type-prewriting` | `/app/assignment-types/:id` (Prewriting) | New menu, modules, your drafts |
 | `type-thesis-statement` | `/app/assignment-types/:id` (Thesis Statement) | New menu, modules, your drafts |
+| `teacher-assignment` | `/app/assignments/:id` (not the `/app/assignments/new` creation form) | Header actions, student documents, class performance summary, prompt |
 | `document` | `/app/documents/:id` | Tutor, editor toolbar, comments, Submit, saved/history/print (Tour this page is in the ⋮ menu) |
 
 ### The first tour: the dashboard

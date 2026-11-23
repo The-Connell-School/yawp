@@ -53,6 +53,10 @@ describe('tourForPathname', () => {
   test('has no tour for pages deeper in a class or elsewhere', () => {
     expect(tourForPathname('/app/my-classes/cls_123/assignment/a1')).toBeNull();
     expect(tourForPathname('/app/assignments/a1')?.id).toBe('teacher-assignment');
+    // The creation form is not an assignment page (Final Week audit, Nov 23).
+    expect(tourForPathname('/app/assignments/new')).toBeNull();
+    expect(tourForPathname('/app/assignments/new/')).toBeNull();
+    expect(tourForPage('/app/assignments/new', null)).toBeNull();
     expect(tourForPathname('/app/writing-lessons/commas')).toBeNull();
     expect(tourForPathname('/app/teacher-trainings/course-1')).toBeNull();
     expect(tourForPathname('/app/lesson-planner/library')).toBeNull();
