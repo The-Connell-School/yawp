@@ -1457,6 +1457,7 @@ jobs:
 
       - name: 🧹 Prune Playwright browsers cache
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == 1 }}
+        working-directory: services/web-app
         run: bash ../../scripts/ci/prune-playwright-browser-cache.sh
 
       - name: 💾 Save Playwright browsers cache
