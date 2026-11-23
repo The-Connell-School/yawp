@@ -163,6 +163,7 @@ describe('parseSlideDeck', () => {
       if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
       if (layout === 'timeline') slide.events = [{ date: '1899', title: 'One' }, { date: '1956', title: 'Two' }];
+      if (layout === 'world') slide.scenes = [{ label: 'The Acropolis today' }, { label: 'A chorus on a vase' }];
       if (layout === 'map') slide.places = [{ name: 'Khartoum' }];
       if (layout === 'define') slide.terms = [{ word: 'aristocracy', definition: 'Families who rule by birth.' }];
       if (layout === 'person') slide.people = [{ name: 'Garibaldi', role: 'General' }];

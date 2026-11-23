@@ -12,6 +12,7 @@ import {
   deckPictureIds,
   fenceSlideDeck,
   parseSlideDeck,
+  validateSlideDeck,
   type Slide,
   type SlideDeck,
 } from './slide-deck';
@@ -194,14 +195,14 @@ describe('the kit draws the picture beside the words', () => {
     );
   });
 
-  test('a timeline: the event in focus shows its picture, the overview none', () => {
+  test('a timeline: the event in focus shows its picture large; the whole line shows every picture (Kevin, Nov 23)', () => {
     const slide = {
       ...FIFTIES,
       events: FIFTIES.events!.map((event, i) =>
         i === 2 ? { ...event, image: 'ckhowl0000001' } : event
       ),
     } as Slide;
-    expect(pictures(layoutOf(slide))).toEqual([]);
+    expect(pictures(layoutOf(slide))).toEqual(['ckhowl0000001']);
     expect(pictures(layoutOf(slide, 2))).toEqual(['ckhowl0000001']);
     expect(pictures(layoutOf(slide, 1))).toEqual([]);
   });
@@ -514,5 +515,51 @@ describe('one picture, one slide (visuals review, Nov 22)', () => {
     expect(out.slides[0]!.image).toBe('pic_1');
     expect(out.slides[1]!.image).toBeUndefined();
     expect(out.slides[1]!.wants).toBeUndefined();
+  });
+});
+
+describe('a world slide: the work’s world in pictures, side by side (Kevin, Nov 23)', () => {
+  const ATHENS = {
+    title: 'Antigone',
+    slides: [
+      {
+        layout: 'world',
+        title: 'Athens, 441 BCE',
+        body: 'The city where Antigone was first performed.',
+        scenes: [
+          { label: 'The Acropolis today', note: 'Still standing above the theatre.', wants: 'Acropolis of Athens' },
+          { label: 'Where the play was first seen', wants: { subject: 'Theatre of Dionysus', shows: 'the stone seats' } },
+          'A chorus on a vase',
+        ],
+        speakerNotes: 'Let them look.',
+      },
+    ],
+  };
+
+  test('it reads: a bare want is a subject, a bare scene is its label; fewer than two is not a world slide', () => {
+    const one = validateSlideDeck(JSON.stringify({ title: 'A', slides: [{ layout: 'world', title: 'W', scenes: ['Only one'], speakerNotes: 'n' }] }));
+    expect(one.ok && (one as { deck: SlideDeck }).deck.slides[0]!.layout === 'world').toBe(false);
+    const deck = (validateSlideDeck(JSON.stringify(ATHENS)) as { ok: true; deck: SlideDeck }).deck;
+    expect(deck.slides[0]!.scenes).toEqual([
+      { label: 'The Acropolis today', note: 'Still standing above the theatre.', wants: { subject: 'Acropolis of Athens' } },
+      { label: 'Where the play was first seen', wants: { subject: 'Theatre of Dionysus', shows: 'the stone seats' } },
+      { label: 'A chorus on a vase' },
+    ]);
+  });
+
+  test('each picture is asked for and put where it was asked for, and the kit draws them in a row with their words', () => {
+    const deck = (validateSlideDeck(JSON.stringify(ATHENS)) as { ok: true; deck: SlideDeck }).deck;
+    expect(wantedPictures(deck).map((want) => want.subject)).toEqual(['Acropolis of Athens', 'Theatre of Dionysus']);
+    const filled = withFoundPictures(deck, new Map([[pictureKey('Acropolis of Athens'), 'acropolis01'], [pictureKey('Theatre of Dionysus'), 'dionysus01']]));
+    expect(filled.slides[0]!.scenes!.map((scene) => scene.image)).toEqual(['acropolis01', 'dionysus01', undefined]);
+    expect(deckPictureIds(filled)).toEqual(['acropolis01', 'dionysus01']);
+    const elements = layoutKitV4Slide({ ...filled, kit: 'v4.1' } as SlideDeck, 0).elements;
+    const pictures = elements.filter((element) => element.kind === 'picture');
+    expect(pictures.map((element) => (element as { id: string }).id)).toEqual(['acropolis01', 'dionysus01']);
+    // The one not found keeps its place, and its words.
+    expect(elements.some((element) => element.kind === 'rect' && element.role === 'block')).toBe(true);
+    const words = elements.flatMap((element) => (element.kind === 'text' ? element.paras.flatMap((para) => para.runs.map((run) => run.text)) : []));
+    expect(words).toEqual(expect.arrayContaining(['Athens, 441 BCE', 'The Acropolis today', 'A chorus on a vase', 'Still standing above the theatre.']));
+    for (const picture of pictures) expect(picture.x + picture.w).toBeLessThanOrEqual(1280 - 80);
   });
 });

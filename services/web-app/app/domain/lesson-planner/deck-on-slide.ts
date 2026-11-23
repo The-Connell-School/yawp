@@ -102,6 +102,16 @@ const LISTS: Record<string, ListSpec> = {
     focusKey: 'name',
     label: (n, key) => (key === 'role' ? `Person ${n} role` : key === 'note' ? `Person ${n} sentence` : `Person ${n}`),
   },
+  // A world slide's pictures (Kevin, Nov 23): what each shows.
+  scenes: {
+    max: 4,
+    parts: { label: 60, note: 160 },
+    blank: () => ({ label: 'What it shows' }),
+    focusKey: 'label',
+    needs: 'label',
+    least: 2,
+    label: (n, key) => (key === 'note' ? `Picture ${n} sentence` : `Picture ${n}`),
+  },
   timeline: {
     max: 5,
     parts: { year: 14, caption: 70 },

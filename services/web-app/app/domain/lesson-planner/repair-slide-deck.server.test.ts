@@ -174,7 +174,7 @@ describe('the repair keeps the slides that teach (preview, Nov 21: The Grapes of
 
   test('it fixes only what the errors name and never turns a slide into a list', () => {
     expect(instruction).toContain('Fix only what the errors name');
-    expect(instruction).toContain('Never turn a timeline, map, define, person or picture slide into notes, bullets or a statement');
+    expect(instruction).toContain('Never turn a timeline, map, define, person, world or picture slide into notes, bullets or a statement');
     expect(instruction).toContain('split it into two slides of the same kind');
     expect(instruction).toContain('Keep every "image" id and every "wants"');
   });

@@ -57,7 +57,10 @@ export const GALLERY_SLIDE_LAYOUTS = [
  * (`legacyContextSlide`, `classicSlide`). Not gallery templates: the planner
  * is told of them only with `lesson_planner_context_tools`.
  */
-export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map', 'define', 'person'] as const;
+// `world` (Kevin, Nov 23): two to four pictures of the work's world on one
+// slide ("in the case where you're talking about Ancient Greece... the ruins,
+// what it would have looked like").
+export const CONTEXT_SLIDE_LAYOUTS = ['timeline', 'map', 'define', 'person', 'world'] as const;
 
 /**
  * How a text is built (Nov 22): reviewers found a literature deck had almost
@@ -324,6 +327,20 @@ const slideSchema = z
       .min(1)
       .max(4)
       .optional(),
+    // A world slide's pictures (Kevin, Nov 23): what the place and time looked
+    // like, side by side, each with a few words saying what it is.
+    scenes: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(60),
+          note: z.string().trim().min(1).max(160).optional(),
+          image: z.string().regex(PICTURE_ID).optional(),
+          wants: pictureWant.optional(),
+        })
+      )
+      .min(2)
+      .max(4)
+      .optional(),
     // A diagram slide (Nov 22): how the text is built, in boxes and words.
     // `weight` is a part's share of the strip (a quatrain 4, the couplet 2);
     // `note` is the small grey line (a part's lines, who a person is to another).
@@ -381,6 +398,7 @@ const slideSchema = z
     if (slide.layout === 'map') needs('places', 'at least one place', Boolean(slide.places?.length));
     if (slide.layout === 'define') needs('terms', 'at least one word', Boolean(slide.terms?.length));
     if (slide.layout === 'person') needs('people', 'at least one person', Boolean(slide.people?.length));
+    if (slide.layout === 'world') needs('scenes', 'two to four pictures', (slide.scenes?.length ?? 0) >= 2);
     if (slide.layout === 'diagram') needs('diagram', 'a diagram: `kind` and two to six `items`', Boolean(slide.diagram));
     if (slide.layout === 'picture') needs('image', 'the id of one of the teacher’s pictures, or `wants`', Boolean(slide.image || slide.wants));
     if (slide.layout === 'compare' && (!slide.left || !slide.right)) {
@@ -923,6 +941,21 @@ function normalizeSlide(raw: unknown): unknown {
       };
     });
   }
+  // A world slide's pictures, the same way; a scene written as a bare label is a label.
+  if (Array.isArray(slide.scenes)) {
+    slide.scenes = slide.scenes.map((scene) => {
+      if (typeof scene === 'string' && scene.trim()) return { label: scene.trim().slice(0, 60) };
+      if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return scene;
+      const { image, wants, title, caption, ...rest } = scene as Record<string, unknown>;
+      const label = rest.label ?? title ?? caption;
+      return {
+        ...rest,
+        ...(typeof label === 'string' ? { label: label.trim().slice(0, 60) } : {}),
+        ...(wants !== undefined ? { wants: asWant(wants) } : {}),
+        ...(typeof image === 'string' && PICTURE_ID.test(image.trim()) ? { image: image.trim() } : {}),
+      };
+    });
+  }
   // A person's picture is one of the teacher's, by id, or none.
   if (Array.isArray(slide.people)) {
     slide.people = slide.people.map((person) => {
@@ -987,6 +1020,7 @@ export function normalizeSlideFields(raw: unknown): Record<string, unknown> {
 const SPLIT_LISTS: Record<string, { key: string; max: number }> = {
   define: { key: 'terms', max: 3 },
   person: { key: 'people', max: 4 },
+  world: { key: 'scenes', max: 4 },
   timeline: { key: 'events', max: 8 },
   map: { key: 'places', max: 8 },
 };
@@ -1362,6 +1396,8 @@ export function classicSlide(slide: Slide): ClassicSlide {
       return as('bullets', { bullets: (slide.terms ?? []).map((term) => `${term.word}: ${term.definition}`.slice(0, 200)) });
     case 'person':
       return as('bullets', { bullets: (slide.people ?? []).map((person) => `${person.name}: ${person.role}`.slice(0, 200)) });
+    case 'world':
+      return as('bullets', { bullets: (slide.scenes ?? []).map((scene) => `${scene.label}${scene.note ? `: ${scene.note}` : ''}`.slice(0, 200)) });
     case 'diagram':
       return as('bullets', { bullets: diagramLines(slide) });
     case 'map':
@@ -1383,6 +1419,7 @@ export function deckPictureIds(deck: Pick<SlideDeck, 'slides'>): string[] {
         ...(slide.image ? [slide.image] : []),
         ...(slide.people ?? []).flatMap((person) => (person.image ? [person.image] : [])),
         ...(slide.events ?? []).flatMap((event) => (event.image ? [event.image] : [])),
+        ...(slide.scenes ?? []).flatMap((scene) => (scene.image ? [scene.image] : [])),
       ])
     ),
   ];

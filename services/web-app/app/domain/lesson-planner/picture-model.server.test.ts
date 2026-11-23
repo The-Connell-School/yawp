@@ -33,7 +33,7 @@ describe('pictureModelCalls', () => {
         effort: 'low',
         format: {
           type: 'json_schema',
-          schema: { required: ['author', 'slides'] },
+          schema: { required: ['author', 'slides', 'events'] },
         },
       },
       allowFallbackProvider: false,

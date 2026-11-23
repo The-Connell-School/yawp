@@ -76,6 +76,10 @@ export function legacyContextSlide(slide: Slide): Slide {
     const { people, ...rest } = slide;
     return { ...rest, layout: 'notes', facts: (people ?? []).slice(0, 3).map((person) => clip(`${person.name}: ${person.role}`, 200)) };
   }
+  if (slide.layout === 'world') {
+    const { scenes, ...rest } = slide;
+    return { ...rest, layout: 'notes', facts: (scenes ?? []).slice(0, 3).map((scene) => clip(`${scene.label}${scene.note ? `: ${scene.note}` : ''}`, 200)) };
+  }
   if (slide.layout === 'diagram') {
     // A notes slide holds three lines: a longer diagram shares them out in
     // order, so the sonnet keeps its couplet.

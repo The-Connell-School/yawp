@@ -284,3 +284,37 @@ describe('timeline events name the historical event (Kevin, Nov 23)', () => {
     expect(asked).toContain('Event 2.4: May 1963 — Children march');
   });
 });
+
+describe('a world slide’s pictures are named like timeline events (Kevin, Nov 23)', () => {
+  const WORLD: SlideDeck = {
+    title: 'Antigone',
+    slides: [
+      { layout: 'title', title: 'Antigone', speakerNotes: 'n' },
+      {
+        layout: 'world',
+        title: 'Athens, 441 BCE',
+        scenes: [{ label: 'The Acropolis today' }, { label: 'Where the play was seen', note: 'The stone seats.' }, { label: 'Pericles', wants: { subject: 'Pericles' } }],
+        speakerNotes: 'n',
+      } as Slide,
+    ],
+  };
+
+  test('the pictures with no request are offered, and what the editor names is each one’s request', async () => {
+    expect(eventsWithoutSubjects(WORLD).map(({ id }) => id)).toEqual(['2.1', '2.2']);
+    let asked = '';
+    const { deck } = await withNamedSubjects(WORLD, async (_system, prompt) => {
+      asked = prompt;
+      return JSON.stringify({
+        author: null,
+        slides: [],
+        events: [
+          { event: '2.1', subject: 'Acropolis of Athens', shows: 'the hill and its temples' },
+          { event: '2.2', subject: 'Theatre of Dionysus', shows: 'the stone seats' },
+          { event: '2.3', subject: 'Parthenon', shows: 'x' },
+        ],
+      });
+    });
+    expect(asked).toContain('Picture 2.2: Where the play was seen. The stone seats.');
+    expect(deck.slides[1]!.scenes!.map((scene) => scene.wants?.subject)).toEqual(['Acropolis of Athens', 'Theatre of Dionysus', 'Pericles']);
+  });
+});

@@ -71,6 +71,7 @@ export function wantedPictures(
   for (const slide of deck.slides) {
     ask(slide.wants, slide.image);
     for (const event of slide.events ?? []) ask(event.wants, event.image);
+    for (const scene of slide.scenes ?? []) ask(scene.wants, scene.image);
     for (const person of slide.people ?? []) ask(person.wants, person.image);
   }
   for (const slide of deck.slides) {
@@ -121,6 +122,7 @@ export function pictureWords(
         `${person.name}${person.role ? `, ${person.role}` : ''}.`,
         person.note,
       ]);
+    for (const scene of slide.scenes ?? []) note(scene.wants, [slide.title, `${scene.label}.`, scene.note]);
   }
   return words;
 }
@@ -156,6 +158,11 @@ export function withFoundPictures<T extends SlideDeck>(
         const eventImage = idFor(eventWant(event), event.image);
         return eventImage ? { ...event, image: eventImage } : event;
       });
+      // A world slide's pictures (Kevin, Nov 23), each where it was asked for.
+      const scenes = slide.scenes?.map((scene) => {
+        const sceneImage = idFor(scene.wants, scene.image);
+        return sceneImage ? { ...scene, image: sceneImage } : scene;
+      });
       let people = slide.people?.map((person) => {
         const personImage = idFor(personWant(person), person.image);
         return personImage ? { ...person, image: personImage } : person;
@@ -189,6 +196,7 @@ export function withFoundPictures<T extends SlideDeck>(
         ...slide,
         ...(image ? { image } : {}),
         ...(events ? { events } : {}),
+        ...(scenes ? { scenes } : {}),
         ...(people ? { people } : {}),
       };
     }),

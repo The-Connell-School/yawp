@@ -170,7 +170,7 @@ export function kitV4Band(color: string): string {
 // The plan ----------------------------------------------------------------
 
 /** The gallery's templates, a quiz, the four that give a text its background (Nov 19), and how it is built (Nov 22). */
-export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map' | 'define' | 'person' | 'diagram';
+export type KitV4Template = GalleryTemplate | 'quiz' | 'timeline' | 'map' | 'define' | 'person' | 'diagram' | 'world';
 
 export type KitV4Plan = {
   slide: Slide;
@@ -206,6 +206,7 @@ const DEFAULT_LABELS: Record<KitV4Template, string | null> = {
   define: null,
   person: null,
   diagram: null,
+  world: null,
 };
 
 /** Labels that only decorate. */
@@ -248,7 +249,7 @@ const wordsOf = (text: string) =>
     .filter(Boolean);
 
 function headlineOf(template: KitV4Template, slide: Slide): string {
-  if (['steps', 'notes', 'read', 'divider', 'compare', 'title', 'discuss', 'diagram'].includes(template)) return slide.title;
+  if (['steps', 'notes', 'read', 'divider', 'compare', 'title', 'discuss', 'diagram', 'world'].includes(template)) return slide.title;
   return slide.question ?? slide.body ?? slide.title;
 }
 
@@ -283,6 +284,8 @@ function templateOf(slide: Slide): KitV4Template {
   if (slide.layout === 'timeline' || slide.layout === 'map' || slide.layout === 'define' || slide.layout === 'person') return slide.layout;
   // A diagram with nothing in it to draw is its title, as any slide without its parts is.
   if (slide.layout === 'diagram') return slide.diagram ? 'diagram' : 'big_idea';
+  // Pictures of the work's world with fewer than two to show are their words, as a notes slide.
+  if (slide.layout === 'world') return (slide.scenes?.length ?? 0) >= 2 ? 'world' : 'notes';
   if (slide.choices?.length) return 'quiz';
   return galleryTemplate(slide);
 }
@@ -1597,6 +1600,39 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
             para([from(serif(term.definition, meaningSize, KIT_V4.ink), on('terms', { index: i, key: 'definition' }))], 10, 1.3),
             para([term.example ? from(sans(term.example, exampleSize, KIT_V4.grey), on('terms', { index: i, key: 'example' })) : null], 0, 1.35),
           ], 'top')
+        );
+      });
+      return out();
+    }
+
+    case 'world': {
+      // The work's world in pictures, side by side (Kevin, Nov 23: "in the case
+      // where you're talking about Ancient Greece you could [have] multiple
+      // pictures on one slide that show kids what Greece is like... the ruins,
+      // what it would have looked like"). Each picture with a few words saying
+      // what it is; one not found keeps its place and its words.
+      const scenes = (slide.scenes ?? []).slice(0, 4);
+      elements.push(column({ x: MARGIN, y: 40, w: W - MARGIN * 2, h: 84 }, [para([from(head(slide.title, slide.title.length > 40 ? 36 : 44, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+      if (slide.body) elements.push(column({ x: MARGIN, y: 130, w: W - MARGIN * 2, h: 36 }, [para([from(sans(slide.body, 20, KIT_V4.grey), on('body'))], 0, 1.2)], 'top'));
+      const top = slide.body ? 186 : 160;
+      const GAP = 28;
+      const cellW = (W - MARGIN * 2 - GAP * (scenes.length - 1)) / scenes.length;
+      const anyNote = scenes.some((scene) => scene.note);
+      const wordsH = anyNote ? (scenes.length > 3 ? 120 : 104) : 52;
+      const pictureH = H - 40 - top - wordsH - 14;
+      scenes.forEach((scene, i) => {
+        const x = MARGIN + i * (cellW + GAP);
+        if (scene.image) elements.push({ kind: 'picture', id: scene.image, x, y: top, w: cellW, h: pictureH });
+        else elements.push({ kind: 'rect', role: 'block', fill: '#E7E1D3', x, y: top, w: cellW, h: pictureH });
+        elements.push(
+          column(
+            { x, y: top + pictureH + 14, w: cellW, h: wordsH },
+            [
+              para([from(sans(scene.label, scenes.length > 3 ? 18 : 20, KIT_V4.ink, true), on('scenes', { index: i, key: 'label' }))], 4, 1.2),
+              para([scene.note ? from(sans(scene.note, scenes.length > 3 ? 14 : 16, KIT_V4.grey), on('scenes', { index: i, key: 'note' })) : null], 0, 1.3),
+            ],
+            'top'
+          )
         );
       });
       return out();

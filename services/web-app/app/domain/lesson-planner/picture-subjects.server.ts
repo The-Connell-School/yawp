@@ -52,6 +52,7 @@ Rules:
 - Never a metaphor: no picture frame for a frame narrative, no mask for identity, no scales for justice. A picture that is not the thing the slide teaches only decorates, and decoration costs learning.
 - When vetted pictures for the work are listed, choose from that list first, by the exact title given, each at most once, for the slide it fits. Go outside the list only when no listed picture fits a slide and you are sure of a specific article.
 - Timeline events, when listed: name the article about the historical event itself, so the timeline shows what happened. A famous event has a famous picture: "Birmingham campaign" for "Marches begin, April 1963", "Battle of the Somme" for "The Somme, 1916", "Wall Street Crash of 1929", "Montgomery bus boycott", "Nigerian independence" as its article is titled. Each event its own article, never the same one twice and never one a slide already has; when two events belong to one larger event, name the more specific article for one (an arrest, a speech, a treaty, a document) or null. The article for a war, a reform or a movement often opens with a map or a chart, which will not be shown: name instead the person who led it, the building, or a well-known painting or statue of the moment, by its own article ("Cleisthenes" for the first Athenian democracy, "Pericles" for the age of Athens, "The Death of Socrates" for Socrates' trial). An event in the author's life or the book's history (born, wrote, published) takes the person, the place or the first edition by its article, or null. An event inside the story itself, or one no article is about, gets null. A massacre, a genocide or a lynching gets null, as above.
+- Pictures of the work's world, when listed (several on one slide: the ruins today, the place as it was, an object of the time): name for each the article whose lead picture is that very thing ("Parthenon", "Theatre of Dionysus", "Acropolis of Athens", a museum piece by its own article), each different from the others and from every slide.
 - "shows": a few words on what the picture should show.
 - "author": the exact title of the Wikipedia article about the author of the work this deck teaches (or the real person the lesson is about), or null when there is none.
 
@@ -156,11 +157,23 @@ type TimelineEvent = NonNullable<Slide['events']>[number];
  */
 export function eventsWithoutSubjects(
   deck: Pick<SlideDeck, 'slides'>
-): Array<{ id: string; slide: number; index: number; event: TimelineEvent }> {
+): Array<{ id: string; slide: number; index: number; event: TimelineEvent; scene?: true }> {
   return deck.slides
-    .flatMap((slide, i) =>
-      (slide.events ?? []).map((event, k) => ({ id: `${i + 1}.${k + 1}`, slide: i + 1, index: k, event }))
-    )
+    .flatMap((slide, i) => [
+      ...(slide.events ?? []).map((event, k) => ({ id: `${i + 1}.${k + 1}`, slide: i + 1, index: k, event })),
+      // A world slide's pictures (Kevin, Nov 23) are asked about the same way: each by its words.
+      ...(slide.events?.length
+        ? []
+        : (slide.scenes ?? [])
+            .filter((scene) => !scene.image && !scene.wants)
+            .map((scene) => ({
+              id: `${i + 1}.${(slide.scenes ?? []).indexOf(scene) + 1}`,
+              slide: i + 1,
+              index: (slide.scenes ?? []).indexOf(scene),
+              event: { date: '', title: scene.label, ...(scene.note ? { detail: scene.note } : {}) } as TimelineEvent,
+              scene: true as const,
+            }))),
+    ])
     .filter(({ event }) => !event.image && !event.wants)
     .slice(0, MAX_EVENTS);
 }
@@ -170,7 +183,7 @@ export function pictureEditorPrompt(
   deck: Pick<SlideDeck, 'title' | 'unit' | 'slides'>,
   slides: Array<{ number: number; slide: Slide }>,
   kit?: PictureKit | null,
-  events: Array<{ id: string; event: TimelineEvent }> = []
+  events: Array<{ id: string; event: TimelineEvent; scene?: true }> = []
 ): string {
   const lines = [
     `Deck: ${deck.title}${deck.unit ? ` (${deck.unit})` : ''}`,
@@ -187,10 +200,16 @@ export function pictureEditorPrompt(
     if (words) lines.push(words);
     lines.push('');
   }
-  if (events.length) {
+  const onLine = events.filter((entry) => !entry.scene);
+  const scenes = events.filter((entry) => entry.scene);
+  if (onLine.length) {
     lines.push('Timeline events (each by its id):');
-    for (const { id, event } of events)
+    for (const { id, event } of onLine)
       lines.push(`Event ${id}: ${event.date} — ${event.title}${event.detail ? `. ${event.detail}` : ''}`);
+  }
+  if (scenes.length) {
+    lines.push('', 'Pictures of the work\'s world, side by side on one slide (each by its id, answered in "events" like an event):');
+    for (const { id, event } of scenes) lines.push(`Picture ${id}: ${event.title}${event.detail ? `. ${event.detail}` : ''}`);
   }
   return lines.join('\n').trim();
 }
@@ -265,6 +284,7 @@ export async function withNamedSubjects<T extends SlideDeck>(
   for (const slide of deck.slides) {
     if (slide.wants) taken.add(pictureKeyOf(slide.wants.subject));
     for (const event of slide.events ?? []) if (event.wants) taken.add(pictureKeyOf(event.wants.subject));
+    for (const scene of slide.scenes ?? []) if (scene.wants) taken.add(pictureKeyOf(scene.wants.subject));
   }
   for (const want of named.values()) taken.add(pictureKeyOf(want.subject));
   const askedEvents = new Set(events.map(({ id }) => id));
@@ -294,7 +314,16 @@ export async function withNamedSubjects<T extends SlideDeck>(
               }),
             }
           : {};
-        return want || withEvents.events ? { ...slide, ...(want ? { wants: wantOf(want) } : {}), ...withEvents } : slide;
+        const withScenes =
+          !slide.events?.length && slide.scenes?.some((scene, k) => !scene.wants && !scene.image && namedEvents.has(`${i + 1}.${k + 1}`))
+            ? {
+                scenes: slide.scenes.map((scene, k) => {
+                  const sceneWant = !scene.wants && !scene.image ? namedEvents.get(`${i + 1}.${k + 1}`) : undefined;
+                  return sceneWant ? { ...scene, wants: wantOf(sceneWant) } : scene;
+                }),
+              }
+            : {};
+        return want || withEvents.events || withScenes.scenes ? { ...slide, ...(want ? { wants: wantOf(want) } : {}), ...withEvents, ...withScenes } : slide;
       }),
     },
     named: named.size + namedEvents.size,

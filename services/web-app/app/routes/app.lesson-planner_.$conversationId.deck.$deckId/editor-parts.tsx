@@ -45,6 +45,7 @@ export const LAYOUT_LABELS: Record<Slide['layout'], string> = {
   map: 'Map',
   define: 'Words',
   person: 'People',
+  world: 'Pictures',
   diagram: 'Diagram',
 };
 
@@ -192,7 +193,7 @@ export function SlideFields({
                     // The same for a diagram (Nov 22): its parts are written by the
                     // planner or asked for in the command line, and there are no
                     // fields here to make one from nothing.
-                    .filter((layout) => (layout !== 'picture' && layout !== 'diagram') || slide.layout === layout)
+                    .filter((layout) => (layout !== 'picture' && layout !== 'diagram' && layout !== 'world') || slide.layout === layout)
                     .map((layout) => (
                     <option key={layout} value={layout}>
                       {LAYOUT_LABELS[layout]}
