@@ -318,9 +318,7 @@ for (const width of [1440, 390]) {
         await expect(page.getByTestId('free-assignment-tiles')).not.toContainText(
           /\d+ of \d+ left/
         );
-        await expect(
-          page.getByRole('button', { name: 'Usage', exact: true })
-        ).toHaveCount(0);
+        // Meter A may show a plain Usage row; it never shows rings.
         await expect(
           page.getByTestId('usage-nav-ring-lesson-planner')
         ).toHaveCount(0);

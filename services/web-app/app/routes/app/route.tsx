@@ -2,6 +2,7 @@ import './app-shell-nav.css';
 import './app-teacher-shell.css';
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
+import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import {
   freeTierNavMobileWarningDot,
   renderFreeTierNavRow,
@@ -558,6 +559,15 @@ export default function Route() {
               navExpanded={navExpanded}
               onClick={() => setIsMobileNavOpen(false)}
               waitingForApproval={guidedTours.waitingForApproval}
+            />
+          ) : null}
+          {freeAccountUsage ? (
+            <FreeTierSidebarUsage
+              usage={freeAccountUsage}
+              navExpanded={navExpanded}
+              mobileDrawer={mobileDrawer}
+              lessonPlannerAvailable={rootData?.lessonPlannerEnabled ?? false}
+              loading={usageNavLoading}
             />
           ) : null}
           <Popover>

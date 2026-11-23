@@ -129,6 +129,19 @@
   color: hsl(50 2.4% 36%);
 }
 
+/* Meter A (Claude Design, Nov 2): the expanded Usage row is an inset rounded
+   row with no divider; the divider sits above Settings. Icon stays in line
+   with the Settings icon (24px from the sidebar edge). */
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'][data-nav-expanded] {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 34px;
+  margin: 4px 0 6px;
+  padding: 7px 12px;
+  border-top: 0;
+  border-radius: 6px;
+}
+
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action:hover,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings']:hover {
   color: #0f172a;
