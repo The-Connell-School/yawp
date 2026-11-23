@@ -1654,6 +1654,41 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
       // Two rows when the slide names them: the world above the line, the book below.
       const twoRows = Boolean(slide.tracks) && events.some((event) => event.track === 2);
       const side = (event: (typeof events)[number], i: number) => (twoRows ? (event.track === 2 ? 'below' : 'above') : i % 2 ? 'below' : 'above');
+      // The whole line with each event's picture above it (Kevin, Nov 23: "these
+      // timelines appear a bit lifeless": only the event in focus had a
+      // picture, and only in Present). In Present a step still shows one event
+      // large; the line itself, the deck studio, the PDF and PowerPoint show them all.
+      const pictured = focus === undefined && !twoRows && events.length <= 6 && events.some((event) => event.image);
+      if (pictured) {
+        elements.push(column({ x: MARGIN, y: 40, w: W - MARGIN * 2, h: 84 }, [para([from(head(slide.title, slide.title.length > 40 ? 36 : 44, KIT_V4.ink), on('title'))], 0, 1.05)], 'bottom'));
+        if (slide.body) elements.push(column({ x: MARGIN, y: 128, w: W - MARGIN * 2, h: 34 }, [para([from(sans(slide.body, 18, KIT_V4.grey), on('body'))], 0, 1.2)], 'top'));
+        const LINE = 476;
+        const cell = (W - MARGIN * 2) / events.length;
+        const inner = cell - 24;
+        elements.push({ kind: 'rect', role: 'mark', fill: color, x: MARGIN, y: LINE, w: W - MARGIN * 2, h: 6 });
+        events.forEach((event, i) => {
+          const x = MARGIN + i * cell;
+          if (event.image) elements.push({ kind: 'picture', id: event.image, x, y: 172, w: inner, h: LINE - 172 - 24 });
+          elements.push({ kind: 'rect', role: 'mark', step: i, fill: color, x, y: LINE - 6, w: 18, h: 18 });
+          const fits = (text: string, size: number, least: number) => {
+            const longest = Math.max(...text.split(/\s+/).map((word) => word.length));
+            return Math.max(least, Math.min(size, Math.floor(inner / (longest * 0.62))));
+          };
+          elements.push({
+            ...column(
+              { x, y: LINE + 30, w: inner, h: H - LINE - 30 - 40 },
+              [
+                para([from(serif(event.date, fits(event.date, 28, 18), color), on('events', { index: i, key: 'date' }))], 4, 1.1),
+                para([from(sans(event.title, fits(event.title, 19, 13), KIT_V4.ink, true), on('events', { index: i, key: 'title' }))], 6, 1.25),
+                para([events.length <= 5 && event.detail ? from(sans(event.detail, fits(event.detail, 15, 11), KIT_V4.grey), on('events', { index: i, key: 'detail' })) : null], 0, 1.3),
+              ],
+              'top'
+            ),
+            step: i,
+          });
+        });
+        return out();
+      }
       // The event in focus shows its own picture, top right (dual coding, Nov 22).
       const shot = inFocus?.image;
       const beside = shot ? 370 : 0;

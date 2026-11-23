@@ -9,6 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   resolveDeckPictures,
   searchWords,
+  searchQueries,
   type PictureShelf,
 } from './picture-lookup.server';
 import type { Slide, SlideDeck } from './slide-deck';
@@ -1076,5 +1077,9 @@ describe('the second try: what Commons is searched for (visuals review, Nov 22)'
   });
   test('a phrase the planner gave to find it by is used as it is', () => {
     expect(searchWords({ subject: 'Owen killed', find: 'Wilfred Owen 1918', shows: 'x' })).toBe('Wilfred Owen 1918');
+    // Commons wants every word: two words of "shows", then the subject alone (Nov 23).
+    expect(searchQueries({ subject: 'Battle of Salamis (480 BC)', shows: 'Greek triremes ramming Persian ships in the strait' })).toEqual(['Battle of Salamis Greek triremes', 'Battle of Salamis']);
+    expect(searchQueries({ subject: 'Socrates' })).toEqual(['Socrates']);
+    expect(searchQueries({ subject: 'Owen killed', find: 'Wilfred Owen 1918' })).toEqual(['Wilfred Owen 1918']);
   });
 });

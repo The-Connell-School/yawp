@@ -98,7 +98,7 @@ const SEARCH_STOP = new Set(
  * filler. "Gas mask" + "Early World War I gas mask worn by soldiers on the
  * Western Front" → "Gas mask early World War I soldiers Western".
  */
-export function searchWords(want: Pick<WantedPicture, 'subject' | 'shows' | 'find'>): string {
+export function searchWords(want: Pick<WantedPicture, 'subject' | 'shows' | 'find'>, most = 5): string {
   if (want.find) return want.find;
   const subject = want.subject.replace(/\s*\([^)]*\)\s*$/, '').trim();
   const has = new Set(subject.toLowerCase().split(/[^a-z0-9]+/));
@@ -108,9 +108,21 @@ export function searchWords(want: Pick<WantedPicture, 'subject' | 'shows' | 'fin
     if (word.length < 3 || SEARCH_STOP.has(lower) || has.has(lower)) continue;
     has.add(lower);
     extra.push(word);
-    if (extra.length === 5) break;
+    if (extra.length >= most) break;
   }
   return [subject, ...extra].join(' ');
+}
+
+/**
+ * What Commons is searched for, in turn, until something comes back: the
+ * subject with two words of what it should show, then the subject alone.
+ * Commons wants every word of a search: five words of "shows" found nothing
+ * (visuals, Nov 23: four subjects tried, no picture to look at).
+ */
+export function searchQueries(want: Pick<WantedPicture, 'subject' | 'shows' | 'find'>): string[] {
+  if (want.find) return [want.find];
+  const subject = want.subject.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return [...new Set([searchWords(want, 2), subject].filter(Boolean))];
 }
 type Fetch = typeof fetch;
 
@@ -151,6 +163,10 @@ export type PictureCounts = {
   /** Subjects the second try searched for, found or not; and how many results the look was shown. */
   secondTried?: number;
   secondShown?: number;
+  /** Where the second try's pictures went (visuals, Nov 23: tried 4, shown none): results, usable, downloaded, and a search that failed. */
+  secondHits?: number;
+  secondUsable?: number;
+  secondFailed?: number;
 };
 export type ResolvedPictures<T> = {
   deck: T;
@@ -433,6 +449,9 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   let searched = 0;
   let secondTried = 0;
   let secondShown = 0;
+  let secondHits = 0;
+  let secondUsable = 0;
+  let secondFailed = 0;
   let lookOutcome: ResolvedPictures<T>['look'] = null;
 
   const work = (async () => {
@@ -636,13 +655,23 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       const offered: Array<{ key: string; candidate: FoundCandidate }> = [];
       for (const want of again) {
         secondTried += 1;
-        let hits: FoundCandidate[];
-        try {
-          hits = await searchOpenPictures(searchWords(want), { fetch: fetcher, limit: 5, timeoutMs });
-        } catch {
+        let hits: FoundCandidate[] = [];
+        let busy = false;
+        for (const query of searchQueries(want)) {
+          try {
+            hits = await searchOpenPictures(query, { fetch: fetcher, limit: 5, timeoutMs });
+          } catch {
+            busy = true;
+            break;
+          }
+          if (hits.length) break;
+        }
+        if (busy) {
           // Busy: the rest wait for another deck.
+          secondFailed += 1;
           break;
         }
+        secondHits += hits.length;
         const usable = hits
           .filter(
             (hit) =>
@@ -651,6 +680,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
               !offered.some((other) => other.candidate.sourceUrl === hit.sourceUrl)
           )
           .slice(0, 2);
+        secondUsable += usable.length;
         for (const candidate of usable) offered.push({ key: pictureKey(want.subject), candidate });
       }
       const fetched = (
@@ -735,7 +765,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       reused,
       empty: empty.length,
       ...(searched ? { searched } : {}),
-      ...(secondTried ? { secondTried, secondShown } : {}),
+      ...(secondTried ? { secondTried, secondShown, secondHits, secondUsable, ...(secondFailed ? { secondFailed } : {}) } : {}),
     },
     empty,
     look: lookOutcome,

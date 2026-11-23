@@ -193,13 +193,13 @@ export async function searchOpenPictures(
   });
 }
 
-/** A file's record as a picture a school may show, or null: no open license, too small, or not a photograph a browser draws. */
 /** The work's own date, as Commons records it ("circa 1600-1610", "1890"): every year in it before 1900. */
 function madeBefore1900(date: string): boolean {
   const years = [...date.matchAll(/\b(\d{3,4})\b/g)].map((m) => Number(m[1]));
   return years.length > 0 && years.every((year) => year < 1900);
 }
 
+/** A file's record as a picture a school may show, or null: no open license, too small, or not a photograph a browser draws. */
 export function candidateFromFile(page: CommonsPage, { minWidth = MIN_WIDTH }: { minWidth?: number } = {}): FoundCandidate | null {
   const info = page.imageinfo?.[0];
   if (!info) return null;

@@ -101,6 +101,30 @@ describe('the timeline', () => {
     expect(texts(layoutKitV4Slide(withSlideFocus(deck, 1, 1), 1).elements).filter((text) => text === 'Egyptian troops sent home')).toHaveLength(2);
   });
 
+  test('with pictures, the whole line shows each event\'s picture above it, and a step still shows one large (Kevin, Nov 23)', () => {
+    const pictured = {
+      ...TIMELINE,
+      events: TIMELINE.events!.map((event, i) => (i === 1 ? event : { ...event, image: `pic${i}abcdefgh` })),
+    } as Slide;
+    const withPictures = { ...deck, slides: deck.slides.map((slide, i) => (i === 1 ? pictured : slide)) };
+    const whole = layoutKitV4Slide(withPictures, 1).elements;
+    const pictures = whole.filter((element) => element.kind === 'picture');
+    expect(pictures.map((element) => (element as { id: string }).id)).toEqual(['pic0abcdefgh', 'pic2abcdefgh', 'pic3abcdefgh']);
+    // Each sits above the line, in its own event's column, inside the slide.
+    const line = whole.find((element) => element.kind === 'rect' && element.role === 'mark' && element.w > 600)!;
+    for (const picture of pictures) {
+      expect(picture.y + picture.h).toBeLessThan(line.y);
+      expect(picture.x + picture.w).toBeLessThanOrEqual(1280 - 80);
+    }
+    expect(texts(whole)).toEqual(expect.arrayContaining(['1899', 'Britain and Egypt rule together', 'Sixty years, two flags.']));
+    // In focus: one picture, large, top right, as before.
+    const step = layoutKitV4Slide(withSlideFocus(withPictures, 1, 2), 1).elements.filter((element) => element.kind === 'picture');
+    expect(step).toHaveLength(1);
+    expect((step[0] as { id: string }).id).toBe('pic2abcdefgh');
+    // No pictures: the line as it was.
+    expect(layoutKitV4Slide(deck, 1).elements.filter((element) => element.kind === 'picture')).toEqual([]);
+  });
+
   test('every word typed on reads back to its field', () => {
     for (const index of [1, 2]) {
       for (const focus of [undefined, 0, 2]) {
