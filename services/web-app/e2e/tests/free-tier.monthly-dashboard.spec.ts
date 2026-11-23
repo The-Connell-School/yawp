@@ -176,11 +176,19 @@ test('monthly dashboard guidance, classes, advocate pack and keyboard/mobile dia
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/app');
-  await expect(
-    page.getByRole('button', { name: 'Usage', exact: true })
-  ).toHaveCount(0);
+  // Meter A: a plain "Usage" row in the sidebar opens "Usage this month".
+  const usageRow = page.getByRole('button', { name: 'Usage', exact: true });
+  await expect(usageRow).toBeVisible();
+  await usageRow.click();
+  const meter = page.getByTestId('usage-meter-body');
+  await expect(meter).toContainText('Usage this month');
+  await expect(meter).toContainText(/Renews [A-Z][a-z]{2} 1/);
+  await expect(page.getByTestId('usage-meter-row-lesson-planner')).toBeVisible();
+  await expect(page.getByTestId('usage-meter-row-reporter')).toBeVisible();
+  await expect(meter).not.toContainText(/\d+ of \d+/);
   await expect(page.getByTestId('usage-nav-ring-lesson-planner')).toHaveCount(0);
-  await shot(page, 'monthly-dashboard-no-sidebar-meter');
+  await shot(page, 'monthly-dashboard-sidebar-meter-a');
+  await page.keyboard.press('Escape');
   const studentMembership = await db.orgMembership.findFirstOrThrow({
     where: {
       organizationId: org,
