@@ -61,6 +61,7 @@ describe('AppNavNeedHelp', () => {
     const container = renderTree(<AppNavNeedHelp navExpanded />);
     const link = footerLink(container);
     expect(link).not.toBeNull();
+    expect(APP_NAV_NEED_HELP_MAILTO).toBe('mailto:support@yawp.school');
     expect(link!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
     expect(link!.getAttribute('aria-label')).toBe('Need help?');
     expect(link!.textContent).toContain('Need help?');
