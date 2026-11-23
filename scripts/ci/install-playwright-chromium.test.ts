@@ -90,6 +90,17 @@ test('ci.yml wires Playwright install through bounded helper and cache hardening
   }
 
   expect(workflow).toContain('prune-playwright-browser-cache.sh');
+  // The prune step's ../../ path only resolves from services/web-app. Without
+  // it, every shard-1 cache miss failed with exit 127 (No such file).
+  const pruneBlocks = workflow.match(
+    /- name: 🧹 Prune Playwright browsers cache[\s\S]*?(?=\n      - name:)/g
+  );
+  expect(pruneBlocks?.length ?? 0).toBeGreaterThan(0);
+  for (const block of pruneBlocks ?? []) {
+    if (block.includes('../../scripts/ci/prune-playwright-browser-cache.sh')) {
+      expect(block).toContain('working-directory: services/web-app');
+    }
+  }
   expect(workflow).toContain('continue-on-error: true');
   expect(workflow).toContain('id: playwright-cache-save');
 });
