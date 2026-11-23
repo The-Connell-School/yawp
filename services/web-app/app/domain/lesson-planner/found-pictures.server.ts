@@ -174,7 +174,7 @@ export async function searchOpenPictures(
     prop: 'imageinfo',
     iiprop: 'url|size|mime|extmetadata',
     iiurlwidth: '1280',
-    iiextmetadatafilter: 'LicenseShortName|Artist|Credit|ImageDescription|ObjectName',
+    iiextmetadatafilter: 'LicenseShortName|Artist|Credit|ImageDescription|ObjectName|DateTimeOriginal',
   });
   let response: Response;
   try {
@@ -194,6 +194,12 @@ export async function searchOpenPictures(
 }
 
 /** A file's record as a picture a school may show, or null: no open license, too small, or not a photograph a browser draws. */
+/** The work's own date, as Commons records it ("circa 1600-1610", "1890"): every year in it before 1900. */
+function madeBefore1900(date: string): boolean {
+  const years = [...date.matchAll(/\b(\d{3,4})\b/g)].map((m) => Number(m[1]));
+  return years.length > 0 && years.every((year) => year < 1900);
+}
+
 export function candidateFromFile(page: CommonsPage, { minWidth = MIN_WIDTH }: { minWidth?: number } = {}): FoundCandidate | null {
   const info = page.imageinfo?.[0];
   if (!info) return null;
@@ -206,8 +212,13 @@ export function candidateFromFile(page: CommonsPage, { minWidth = MIN_WIDTH }: {
   const named = /\.jpe?g(\?|$)/i.test(imageUrl ?? '') ? 'image/jpeg' : /\.png(\?|$)/i.test(imageUrl ?? '') ? 'image/png' : '';
   const type = info.thumburl ? named : (info.mime ?? named);
   if (!license || !imageUrl || width < minWidth || !/^image\/(jpeg|png)$/.test(type)) return null;
-  // A file whose credit says its copyright is disputed is not one a school should show (Night, Nov 22).
-  if (/copyright claims?/i.test(`${plain(meta.Artist?.value, 400)} ${plain(meta.Credit?.value, 400)}`)) return null;
+  // A file whose credit says its copyright is disputed is not one a school should show (Night, Nov 22),
+  // except the museums' standard claim on a scan of an old work: the visuals test (Nov 23) lost the
+  // Chandos portrait of Shakespeare (c. 1610) to it. A claim on a "mechanical reproduction" of a work
+  // made before 1900 is kept; any other claim, or a later work, is still left out.
+  const claimed = `${plain(meta.Artist?.value, 400)} ${plain(meta.Credit?.value, 400)}`;
+  if (/copyright claims?/i.test(claimed) && !(/mechanical reproduction/i.test(claimed) && madeBefore1900(plain(meta.DateTimeOriginal?.value, 200))))
+    return null;
   const title = plain(meta.ObjectName?.value, 100) || (page.title ?? '').replace(/^File:/, '').replace(/\.\w+$/, '');
   // Who made it; for a collection's scan with no artist, the collection's credit line.
   const artist = cleanArtist(plain(meta.Artist?.value, 80)) || cleanArtist(plain(meta.Credit?.value, 200));

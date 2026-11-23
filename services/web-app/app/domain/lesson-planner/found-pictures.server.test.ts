@@ -162,6 +162,33 @@ describe('searchOpenPictures', () => {
     ).toBeNull();
   });
 
+  test('the museums\' claim on a scan of a work made before 1900 does not lose the picture (Shakespeare, Nov 23)', () => {
+    const file = (date: string) =>
+      candidateFromFile({
+        title: 'File:William Shakespeare by John Taylor, edited.jpg',
+        imageinfo: [
+          {
+            mime: 'image/jpeg',
+            thumburl: 'https://u/s.jpg',
+            thumbwidth: 1280,
+            thumbheight: 1630,
+            extmetadata: {
+              LicenseShortName: { value: 'Public domain' },
+              Artist: { value: 'Attributed to John Taylor' },
+              Credit: {
+                value:
+                  'one or more <b>third parties have made copyright claims against Wikimedia Commons in relation to the work from which this is sourced or a purely mechanical reproduction thereof</b>.',
+              },
+              DateTimeOriginal: { value: date },
+            },
+          },
+        ],
+      } as never);
+    expect(file('circa 1600-1610')?.license).toBe('Public domain');
+    expect(file('1933')).toBeNull();
+    expect(file('')).toBeNull();
+  });
+
   test('a picture too small to project is left out', async () => {
     const small = page(1, 'Tiny.jpg', 'Public domain');
     small.imageinfo[0]!.width = 200;

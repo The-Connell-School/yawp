@@ -148,6 +148,9 @@ export type PictureCounts = {
   empty: number;
   /** Found on the second try, by a search of Commons the look chose from. */
   searched?: number;
+  /** Subjects the second try searched for, found or not; and how many results the look was shown. */
+  secondTried?: number;
+  secondShown?: number;
 };
 export type ResolvedPictures<T> = {
   deck: T;
@@ -377,7 +380,7 @@ async function lookUp(
       iiprop: 'url|size|mime|extmetadata',
       iiurlwidth: '1280',
       iiextmetadatafilter:
-        'LicenseShortName|Artist|Credit|ImageDescription|ObjectName',
+        'LicenseShortName|Artist|Credit|ImageDescription|ObjectName|DateTimeOriginal',
     },
     fetcher,
     timeoutMs,
@@ -428,6 +431,8 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const why = new Map<string, Miss>();
   let reused = 0;
   let searched = 0;
+  let secondTried = 0;
+  let secondShown = 0;
   let lookOutcome: ResolvedPictures<T>['look'] = null;
 
   const work = (async () => {
@@ -630,6 +635,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         .slice(0, MAX_SECOND_TRIES);
       const offered: Array<{ key: string; candidate: FoundCandidate }> = [];
       for (const want of again) {
+        secondTried += 1;
         let hits: FoundCandidate[];
         try {
           hits = await searchOpenPictures(searchWords(want), { fetch: fetcher, limit: 5, timeoutMs });
@@ -656,6 +662,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
           })
         )
       ).filter((item): item is NonNullable<typeof item> => Boolean(item));
+      secondShown = fetched.length;
       if (fetched.length) {
         const words = pictureWords(deck);
         const asked = new Map(wanted.map((want) => [pictureKey(want.subject), want]));
@@ -728,6 +735,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
       reused,
       empty: empty.length,
       ...(searched ? { searched } : {}),
+      ...(secondTried ? { secondTried, secondShown } : {}),
     },
     empty,
     look: lookOutcome,
