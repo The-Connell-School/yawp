@@ -32,6 +32,7 @@ import { useState } from 'react';
 import { CircleCheck, CircleAlert, Mail } from 'lucide-react';
 import { requireFreeTierEnabled } from '~/utils/free-tier/free-tier-feature-gate.server';
 import { FreeTierDevPrefillApplier } from './free-tier-dev-prefill-applier';
+import { WhatIsYawpLink } from '~/components/what-is-yawp-link';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireFreeTierEnabled();
@@ -249,6 +250,13 @@ export default function FreeTierLandingRoute() {
     : data.mode === 'token' ? 'Sign up below to start your free Yawp! classroom.'
     : 'Join the waitlist. We let teachers in a group at a time.';
 
+  const showRegistrationBox = !submitted && !(data.mode === 'token' && data.linkClosed);
+  const whatIsYawpLink = showRegistrationBox ? (
+    <p className="text-center text-sm">
+      <WhatIsYawpLink className="underline underline-offset-2" />
+    </p>
+  ) : undefined;
+
   const contents = (
     <>
 
@@ -325,14 +333,14 @@ export default function FreeTierLandingRoute() {
   );
   if (data.onboardingV2 && !submitted && !(data.mode === 'token' && data.linkClosed)) {
     return (
-      <FreeTierWelcomeCard onboardingV2 eventLink={data.mode === 'token'}>
+      <FreeTierWelcomeCard onboardingV2 eventLink={data.mode === 'token'} aboveCard={whatIsYawpLink}>
         <FreeTierDevPrefillApplier />
         {contents}
       </FreeTierWelcomeCard>
     );
   }
   return (
-    <FreeTierAuthCard status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
+    <FreeTierAuthCard aboveCard={whatIsYawpLink} status={submitted || (data.mode === 'token' && data.linkClosed)} title={title} subtitle={subtitle} icon={data.mode === 'token' && data.linkClosed ? <CircleAlert /> : submitted ? (fetcher.data && 'bypassWaitlist' in fetcher.data && fetcher.data.bypassWaitlist ? <Mail /> : <CircleCheck />) : undefined}>
       {!submitted && !(data.mode === 'token' && data.linkClosed) ? (
         <FreeTierDevPrefillApplier />
       ) : null}

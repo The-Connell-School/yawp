@@ -43,3 +43,11 @@ test('user-facing copy uses Yawp! without Yawp!. or Yawp!?', () => {
   expect(teacher).toContain('Your school uses Yawp! Ask your admin for an invite.');
   expect(teacher).not.toMatch(/Yawp!\?/);
 });
+
+test('entry shows a What is Yawp! link to the writing program site in a new tab', () => {
+  const html = render({ googleAvailable: true });
+  expect(html).toContain('What is Yawp!');
+  expect(html).toContain('href="https://yawpwritingprogram.com"');
+  expect(html).toContain('target="_blank"');
+  expect(html).toContain('rel="noopener"');
+});

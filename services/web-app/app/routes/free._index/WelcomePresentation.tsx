@@ -12,13 +12,16 @@ export function FreeTierWelcomeCard({
   children,
   onboardingV2 = false,
   eventLink = false,
+  aboveCard,
 }: {
   children: ReactNode;
   onboardingV2?: boolean;
   eventLink?: boolean;
+  aboveCard?: ReactNode;
 }) {
   return (
     <FreeTierAuthCard
+      aboveCard={aboveCard}
       title={onboardingV2 ? 'Welcome to Yawp!' : 'Try Yawp! with your students'}
       subtitle={onboardingV2
         ? eventLink

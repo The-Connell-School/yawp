@@ -1132,6 +1132,8 @@ jobs:
             app/routes/free-tier/AdminApprovalStates.test.tsx \
             app/routes/free._index/route.action.test.ts \
             app/routes/free._index/LegalLinks.test.tsx \
+            app/components/what-is-yawp-link.test.tsx \
+            app/components/unified-signon/unified-signon.test.tsx \
             app/routes/privacy/route.test.tsx \
             app/routes/terms/route.test.tsx \
             app/utils/free-tier/free-tier-feature-gate.server.test.ts \
