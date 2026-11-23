@@ -47,7 +47,7 @@ The same eleven lessons as before, run again and scored by fresh reviewers on th
 
 ## What I would do next, in order
 
-1. **Timeline events get no picture search** unless they name a person, place or object. About a third of the 31 misses were timeline events ("Novel published", "Independence"), so this alone removes many of them.
+1. ~~Timeline events get no picture search unless they name a person, place or object.~~ Changed at Kevin's request (Nov 23): timelines should show famous historical events too. The picture editor now names each event's own Wikipedia article ("Birmingham campaign" for "Marches begin"), so the event is found by its title instead of searched by its words.
 2. **A visible slot for a missing picture.** When nothing is found, the slide says what belongs there, so the teacher can add it. That is better than a silent miss.
 3. **Diagram line ranges from the source text** when Yawp! has the text, and no line numbers on a diagram when it does not.
 4. **Verify** the Shakespeare fix and the second try's counts on three or four lessons, before any more picture work.
