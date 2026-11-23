@@ -142,6 +142,12 @@
   border-radius: 6px;
 }
 
+/* Open state keeps its fill on hover (the footer hover rule clears backgrounds). */
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'][aria-expanded='true'],
+[data-app-shell] > nav > div.flex.shrink-0 [data-testid='free-tier-sidebar-usage'][aria-expanded='true']:hover {
+  background: #e6e2d6;
+}
+
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action:hover,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings']:hover {
   color: #0f172a;

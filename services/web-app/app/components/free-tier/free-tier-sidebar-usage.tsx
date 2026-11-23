@@ -67,8 +67,8 @@ export function UsageThisMonth({
 }) {
   return (
     <div className="text-sm" data-testid="usage-meter-body">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold leading-tight text-[#0F172A]">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <p className="whitespace-nowrap text-sm font-semibold leading-tight text-[#0F172A]">
           Usage this month
         </p>
         {renewsAtIso ? (
@@ -130,13 +130,15 @@ export function FreeTierSidebarUsage({
   );
   const rowClassName = cn(
     'app-nav-footer-action flex w-full items-center gap-2 text-left transition',
-    open && 'bg-[#E6E2D6]',
     loading && 'opacity-60'
   );
 
   if (mobileDrawer) {
     return (
-      <div data-testid="free-tier-sidebar-usage-mobile">
+      <div
+        className="flex flex-col"
+        data-testid="free-tier-sidebar-usage-mobile"
+      >
         <button
           type="button"
           aria-expanded={open}
@@ -157,7 +159,7 @@ export function FreeTierSidebarUsage({
           />
         </button>
         {open ? (
-          <div className="mx-3 mb-3 rounded-[10px] border border-[#D6D5CF] bg-white p-4">
+          <div className="mb-2 mt-1 rounded-[10px] border border-[#D6D5CF] bg-white p-3">
             <UsageThisMonth rows={rows} renewsAtIso={usage.renewsAt} />
           </div>
         ) : null}
