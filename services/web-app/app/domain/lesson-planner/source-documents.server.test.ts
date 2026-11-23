@@ -9,6 +9,7 @@ import {
   readSourceDocument,
   SourceDocumentError,
 } from './source-documents.server';
+import { MAX_PAGE_PHOTO_BYTES, NOT_A_PAGE, pagePhotoTranscriber, pagePhotoType, readTranscription } from './page-photo.server';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures', name)));
 const file = (name: string, bytes: Uint8Array | string, type = '') =>
@@ -90,5 +91,70 @@ describe('readSourceDocument: the text of a teacher’s own document', () => {
     await expect(readSourceDocument(file('empty.txt', ''))).rejects.toThrow('empty');
     await expect(readSourceDocument(file('big.txt', new Uint8Array(MAX_SOURCE_BYTES + 1)))).rejects.toThrow('10 MB');
     await expect(readSourceDocument(file('fake.pdf', 'not a pdf'))).rejects.toThrow('could not be opened');
+  });
+
+  test('a photo of the pages is read word for word, and only the words are kept (plan item 12, Nov 23)', async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+    const seen: string[] = [];
+    const read = await readSourceDocument(file('pages 12-13.jpg', jpeg), {
+      transcribe: async (_bytes, type) => {
+        seen.push(type);
+        return 'Ships at a distance have every man\'s wish on board.\n\n\n[p. 1]';
+      },
+    });
+    expect(seen).toEqual(['image/jpeg']);
+    expect(read.kind).toBe('photo');
+    expect(read.text).toBe('Ships at a distance have every man\'s wish on board.\n\n[p. 1]');
+    expect(read.deck).toBeNull();
+  });
+
+  test('a photo that is not of pages, too big, unreadable, or an iPhone HEIC says what to do', async () => {
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2]);
+    const transcribe = async () => '';
+    await expect(readSourceDocument(file('cat.jpg', jpeg), { transcribe })).rejects.toThrow("doesn't look like a photo of printed pages");
+    await expect(readSourceDocument(file('huge.jpg', new Uint8Array(MAX_PAGE_PHOTO_BYTES + 1)), { transcribe })).rejects.toThrow('over 5 MB');
+    await expect(readSourceDocument(file('fake.png', 'not a png'), { transcribe })).rejects.toThrow('could not be opened as a photo');
+    await expect(readSourceDocument(file('IMG_0001.HEIC', jpeg), { transcribe })).rejects.toThrow('save it as a JPEG');
+    await expect(
+      readSourceDocument(file('page.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0])), {
+        transcribe: async () => {
+          throw new Error('busy');
+        },
+      })
+    ).rejects.toThrow('Try again in a minute');
+  });
+});
+
+describe('the page photo reader', () => {
+  test('what a picture file is, from its first bytes', () => {
+    expect(pagePhotoType(new Uint8Array([0xff, 0xd8, 0xff, 0xdb]))).toBe('image/jpeg');
+    expect(pagePhotoType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d]))).toBe('image/png');
+    expect(pagePhotoType(new TextEncoder().encode('RIFF1234WEBPVP8 '))).toBe('image/webp');
+    expect(pagePhotoType(new TextEncoder().encode('%PDF-1.7'))).toBeNull();
+  });
+
+  test('an answer that is not a page is no text; a fenced answer is unwrapped', () => {
+    expect(readTranscription(NOT_A_PAGE)).toBe('');
+    expect(readTranscription('```\nThe dream is the truth.\n```')).toBe('The dream is the truth.');
+  });
+
+  test('the photo goes to the model as a picture, with nothing else of the teacher’s, and is not logged', async () => {
+    let call: any = null;
+    const transcribe = pagePhotoTranscriber(
+      () => ({ organizationId: 'o', membershipId: 'm', route: 'r', requestId: 'q', ipHash: 'h' }) as never,
+      {
+        model: 'test-model',
+        complete: (async (params: unknown) => {
+          call = params;
+          return 'Now, women forget all those things.';
+        }) as never,
+      }
+    );
+    expect(await transcribe(new Uint8Array([0xff, 0xd8, 0xff]), 'image/jpeg')).toBe('Now, women forget all those things.');
+    expect(call.model).toBe('test-model');
+    expect(call.logPayload).toBe('metadata-only');
+    expect(call.allowFallbackProvider).toBe(false);
+    expect(call.messages[0].content[0].type).toBe('image');
+    expect(call.messages[0].content[0].source.media_type).toBe('image/jpeg');
   });
 });

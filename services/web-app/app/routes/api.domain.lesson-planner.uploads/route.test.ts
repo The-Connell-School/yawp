@@ -199,7 +199,8 @@ describe('api.domain.lesson-planner.uploads action', () => {
 
   test('with the kept deck off, a deck is read for its text only, as before', async () => {
     await uploadDeck();
-    expect(readSourceDocument.mock.calls[0]?.[1]).toEqual({ keepDeck: false });
+    expect(readSourceDocument.mock.calls[0]?.[1]).toMatchObject({ keepDeck: false });
+    expect(typeof (readSourceDocument.mock.calls[0]?.[1] as { transcribe?: unknown })?.transcribe).toBe('function');
     const data = prisma.lessonPlanUpload.create.mock.calls[0]?.[0].data;
     expect(data.file).toBeUndefined();
     expect(data.pictures).toBeUndefined();
@@ -217,7 +218,7 @@ describe('api.domain.lesson-planner.uploads action', () => {
       _count: { pictures: 1 },
     });
     const response = await uploadDeck();
-    expect(readSourceDocument.mock.calls[0]?.[1]).toEqual({ keepDeck: true });
+    expect(readSourceDocument.mock.calls[0]?.[1]).toMatchObject({ keepDeck: true });
     const data = prisma.lessonPlanUpload.create.mock.calls[0]?.[0].data;
     expect(data.file).toEqual(new Uint8Array([1, 2, 3]));
     expect(data.keptDeck).toBe(true);

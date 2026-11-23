@@ -12,12 +12,14 @@ import { extractText, getDocumentProxy } from 'unpdf';
 import { readDocxText } from '~/domain/office/docx';
 import { pptxPlainText } from '~/domain/office/pptx';
 import { deckTextWithPictures, readPptxDeck, type PptxPicture } from '~/domain/office/pptx-pictures';
+import { MAX_PAGE_PHOTO_BYTES, pagePhotoType, type TranscribePage } from './page-photo.server';
 
 export const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 /** About forty pages of prose: enough for a chapter or a unit packet. */
 export const MAX_SOURCE_CHARS = 120_000;
 export const MAX_SOURCES_PER_LESSON = 10;
-export const SOURCE_ACCEPT = '.pdf,.docx,.pptx,.txt,.md';
+/** A photo of the pages (plan item 12, Nov 23) is read as text and never kept. */
+export const SOURCE_ACCEPT = '.pdf,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp';
 
 export class SourceDocumentError extends Error {}
 
@@ -25,7 +27,7 @@ export class SourceDocumentError extends Error {}
 export type KeptDeck = { file: Uint8Array; pictures: PptxPicture[] };
 
 export type SourceDocument = {
-  kind: 'pdf' | 'docx' | 'pptx' | 'text';
+  kind: 'pdf' | 'docx' | 'pptx' | 'text' | 'photo';
   contentType: string;
   text: string;
   truncated: boolean;
@@ -38,6 +40,7 @@ const CONTENT_TYPES: Record<SourceDocument['kind'], string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   text: 'text/plain',
+  photo: 'text/plain',
 };
 
 function kindOf(name: string): SourceDocument['kind'] | null {
@@ -46,6 +49,7 @@ function kindOf(name: string): SourceDocument['kind'] | null {
   if (extension === 'docx') return 'docx';
   if (extension === 'pptx') return 'pptx';
   if (extension === 'txt' || extension === 'md' || extension === 'markdown') return 'text';
+  if (extension === 'jpg' || extension === 'jpeg' || extension === 'png' || extension === 'webp') return 'photo';
   return null;
 }
 
@@ -105,12 +109,41 @@ function readKeptDeck(bytes: Uint8Array): { text: string; deck: KeptDeck } {
   return { text: readable ? deckTextWithPictures(read) : '', deck: { file: bytes, pictures: read.pictures } };
 }
 
+/**
+ * A photo of printed pages, read word for word (plan item 12, Nov 23). Only
+ * the words are kept; the photo is not.
+ */
+async function readPagePhoto(file: File, transcribe: TranscribePage): Promise<SourceDocument> {
+  if (file.size > MAX_PAGE_PHOTO_BYTES) throw new SourceDocumentError(`"${file.name}" is over 5 MB. Take the photo a little farther away, or crop it to the pages.`);
+  const bytes = await readFileBytesCapped(file, MAX_PAGE_PHOTO_BYTES);
+  const type = pagePhotoType(bytes);
+  if (!type) throw new SourceDocumentError(`"${file.name}" could not be opened as a photo.`);
+  let raw: string;
+  try {
+    raw = await transcribe(bytes, type);
+  } catch {
+    throw new SourceDocumentError(`Yawp! couldn't read "${file.name}" just now. Try again in a minute.`);
+  }
+  const text = tidy(raw);
+  if (!text) throw new SourceDocumentError(`"${file.name}" doesn't look like a photo of printed pages.`);
+  const truncated = text.length > MAX_SOURCE_CHARS;
+  return { kind: 'photo', contentType: 'text/plain', text: truncated ? text.slice(0, MAX_SOURCE_CHARS) : text, truncated, deck: null };
+}
+
 export async function readSourceDocument(
   file: File,
-  { keepDeck = false }: { keepDeck?: boolean } = {}
+  { keepDeck = false, transcribe }: { keepDeck?: boolean; transcribe?: TranscribePage } = {}
 ): Promise<SourceDocument> {
   const kind = kindOf(file.name);
-  if (!kind) throw new SourceDocumentError('Yawp! can read PDF, Word, PowerPoint, text and Markdown files.');
+  if (!kind || (kind === 'photo' && !transcribe))
+    throw new SourceDocumentError(
+      /\.(heic|heif)$/i.test(file.name.trim())
+        ? `"${file.name}" is an iPhone photo format Yawp! can't open. Choose it again from Photos, or save it as a JPEG.`
+        : transcribe
+          ? 'Yawp! can read PDF, Word, PowerPoint, text and Markdown files, and photos of pages (JPEG, PNG or WebP).'
+          : 'Yawp! can read PDF, Word, PowerPoint, text and Markdown files.'
+    );
+  if (kind === 'photo') return readPagePhoto(file, transcribe!);
   const bytes = await readFileBytesCapped(file, MAX_SOURCE_BYTES);
   if (bytes.byteLength <= 0) throw new SourceDocumentError(`"${file.name}" is empty.`);
   let raw: string;
@@ -136,7 +169,7 @@ export async function readSourceDocument(
   if (!text) {
     throw new SourceDocumentError(
       kind === 'pdf'
-        ? `"${file.name}" has no text Yawp! can read. It may be a scan; try the Word file or a PDF exported from it.`
+        ? `"${file.name}" has no text Yawp! can read. It may be a scan: add photos of the pages instead, or a PDF exported from the original.`
         : `"${file.name}" has no text Yawp! can read.`
     );
   }
