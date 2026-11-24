@@ -30,17 +30,23 @@ const MAX_TITLE_CHARS = 120;
  * table.
  */
 const MAX_CELL_CHARS = 220;
+/**
+ * What students do: the line the day's activity icons are read from, shown
+ * whole under Details (Nov 23), so it may run longer than the other cells.
+ */
+const MAX_STUDENTS_CHARS = 600;
 
 /**
- * A cell a little over the limit is trimmed at a word rather than costing
- * the teacher the whole map (Oct 21: the first map "glitched"); a paragraph
- * pretending to be a cell, past twice the limit, still fails.
+ * A cell over the limit is trimmed at a word rather than costing the teacher
+ * the whole map (Oct 21: the first map "glitched"; types test, Nov 24: the
+ * Douglass unit, every day's activities 300 to 470 characters, did not build
+ * at all). Its full words are still in the day's request when it is built.
  */
 function trimmed(limit: number) {
   return (value: unknown) => {
     if (typeof value !== 'string') return value;
     const text = value.trim();
-    if (text.length <= limit || text.length > limit * 2) return text;
+    if (text.length <= limit) return text;
     const cut = text.slice(0, limit - 1);
     const at = cut.lastIndexOf(' ');
     return `${(at > limit / 2 ? cut.slice(0, at) : cut).replace(/[\s,;:–—-]+$/, '')}…`;
@@ -61,7 +67,7 @@ const daySchema = z
     /** What students will be able to do by the end of this period. */
     objective: cell,
     /** What they actually do — the activity, not the pedagogy. */
-    students: cell,
+    students: z.preprocess(trimmed(MAX_STUDENTS_CHARS), z.string().trim().min(1).max(MAX_STUDENTS_CHARS)),
     /** What students read for this day, and whether in class or at home (Oct 21). */
     reading: cell.optional(),
     /** What this day hands to the next one. The arc, made checkable. */
