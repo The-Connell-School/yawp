@@ -133,6 +133,7 @@ export async function loadTeacherPreviewDocumentsForClass({
           is: {
             ...teacherPreviewDocumentWhere,
             deletedAt: null,
+            archivedAt: null,
           },
         },
       },

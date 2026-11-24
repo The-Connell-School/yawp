@@ -139,25 +139,26 @@ export const DocumentLink = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <archiveFetcher.Form
-                method="POST"
-                action={`/api/model/document/${doc.id}`}
+              {/*
+                Letterpress Button defaults to type="button", so a Form + Button
+                inside this menu never submitted. Submit through the fetcher
+                instead of relying on a native form click inside a Radix menu
+                (which is also nested in a Link).
+              */}
+              <DropdownMenuItem
+                onClick={(event) => event.stopPropagation()}
+                onSelect={() => {
+                  archiveFetcher.submit(
+                    { action: isArchived ? 'unarchive' : 'archive' },
+                    {
+                      method: 'POST',
+                      action: `/api/model/document/${doc.id}`,
+                    }
+                  );
+                }}
               >
-                <input
-                  type="hidden"
-                  name="action"
-                  value={isArchived ? 'unarchive' : 'archive'}
-                />
-                <DropdownMenuItem asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {isArchived ? 'Unarchive' : 'Archive'}
-                  </Button>
-                </DropdownMenuItem>
-              </archiveFetcher.Form>
+                {isArchived ? 'Unarchive' : 'Archive'}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
