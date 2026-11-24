@@ -98,6 +98,7 @@ afterAll(() => {
 import {
   buildClassStudentWorkOnAssignmentBranches,
   buildClassTeacherAssignmentTestDocumentBranch,
+  teacherWorkListVisibilityWhere,
 } from '~/utils/class-assignment-scope';
 
 describe('class detail loader document visibility', () => {
@@ -195,6 +196,7 @@ describe('class detail loader document visibility', () => {
         AND: [
           expectedScope,
           { deletedAt: null },
+          teacherWorkListVisibilityWhere(),
           HIDE_AP_HISTORY_DOCUMENT_WHERE,
         ],
       },
