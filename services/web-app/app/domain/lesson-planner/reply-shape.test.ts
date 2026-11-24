@@ -29,6 +29,7 @@ describe('the planner never narrates its own process', () => {
     expect(withoutProcessTalk("Here's the full plan and deck. I'm using F. Storr's 1912 translation (public domain) for all quoted passages, and I'll note that on the handout.\n\n## Step 1")).toBe("Here's the full plan and deck.\n\n## Step 1");
     expect(withoutProcessTalk('The Odyssey is in the public domain (Homer, composed ~8th century BCE), so I can quote it directly — I\'ll use Samuel Butler\'s translation.\n\n## Step 1')).toBe('## Step 1');
     expect(withoutProcessTalk('Now for the deck:\n\n## Slides')).toBe('## Slides');
+    expect(withoutProcessTalk('The *Narrative of the Life of Frederick Douglass* (1845) is in the public domain, so passages can be quoted and printed in full. Here is the unit map: 15 days.\n\n## Map')).toBe('Here is the unit map: 15 days.\n\n## Map');
     expect(withoutProcessTalk('Here\'s the full plan. "Dulce et Decorum Est" is in the public domain, so all passages are quoted directly from Owen\'s text.\n\n## Step 1')).toBe('Here\'s the full plan.\n\n## Step 1');
   });
 
