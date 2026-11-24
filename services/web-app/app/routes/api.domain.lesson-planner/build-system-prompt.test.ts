@@ -2418,7 +2418,7 @@ describe('buildLessonPlannerSystemPrompt — the arc of a lesson (Kevin, Nov 21)
 
   test('it opens on the theme in the students’ own lives, always at the start of a unit', () => {
     const on = textOf(true);
-    expect(on).toContain('Start with the students, and start with the theme');
+    expect(on).toContain('Start with the students, and start with a thematic topic');
     expect(on).toContain('Always on the first day of a unit');
     expect(on).toContain('What do you think it is like to lose power?');
     expect(on).toContain('recall what came earlier in the unit');
@@ -2436,12 +2436,22 @@ describe('buildLessonPlannerSystemPrompt — the arc of a lesson (Kevin, Nov 21)
 
   test('then the novel against what the students said, alone, together and taught', () => {
     const on = textOf(true);
-    expect(on).toContain('set the novel’s treatment of the theme beside what the students said');
+    expect(on).toContain('Then bring in the text against what the students said, through questions');
     expect(on).toContain('time alone to think and write, time to discuss with peers, and the teacher teaching directly');
   });
 
   test('off, none of it', () => {
-    expect(textOf(false)).not.toContain('Start with the students, and start with the theme');
+    expect(textOf(false)).not.toContain('Start with the students, and start with a thematic topic');
+  });
+
+  test('theme and thematic topic (Kevin, Nov 24): students find the theme; no lesson tells them', () => {
+    const on = textOf(true);
+    expect(on).toContain('"Love" is a topic, never a theme.');
+    expect(on).toContain('Never tell students the theme.');
+    expect(on).toContain('Never open with a theme for students to agree or disagree with');
+    expect(on).toContain('A writing task asks students to make the claim, never to illustrate one given to them.');
+    expect(on).toContain('The themes go only in the teacher\'s notes');
+    expect(textOf(false)).not.toContain('Theme and thematic topic.');
   });
 });
 
