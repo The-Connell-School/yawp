@@ -7,11 +7,17 @@
 // Thesis-Driven Essay, Class Starter, Exit Ticket, Pre-Writing and Thesis
 // Statement. Keep them exact. `content.test.ts` pins each one to the doc.
 //
-// The rest (Short Response, AP History, The 5-Paragraph Essay, ACT Writing and
-// Welcome to Yawp!) are written to the same model: a short description, How
-// it works with the same bold leads (New, Tutor on or off?, Grading is ...),
-// and the Prompt Library intro. Their claims about grading have to hold
-// against the rubric each type actually grades with.
+// The rest (Short Response, AP History, The 5-Paragraph Essay, The CER
+// Paragraph, ACT Writing and Welcome to Yawp!) are written to the same model:
+// a short description, How it works with the same bold leads (New, Tutor on
+// or off?, Grading is ...), and the Prompt Library intro. Their claims about
+// grading have to hold against the rubric each type actually grades with.
+//
+// The CER Paragraph (Brian, Nov 24) uses the 5-Paragraph Essay layout: How to
+// Teach It with one note and a numbered accordion of the four modules, then
+// How it works. The heading reads "The CER Paragraph" while the type is still
+// titled C-E-R. The 5-Paragraph Essay page no longer mentions the Lesson
+// Planner (it is not live yet).
 //
 // Short Response is the type that used to be called Daily Pages (Brian, Nov
 // 15). Class Starter and Exit Ticket took over the daily writing, so the old
@@ -39,6 +45,7 @@ export type LandingPageKey =
   | 'daily-pages'
   | 'ap-history'
   | 'five-paragraph-essay'
+  | 'cer-paragraph'
   | 'act-writing'
   | 'welcome-to-yawp';
 
@@ -556,15 +563,11 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
       heading: 'How to Teach It',
       blocks: [
         // Brian, Nov 17: his note, word for word, in place of the old
-        // "Teach the steps below in order" intro, then the steps.
+        // "Teach the steps below in order" intro, then the steps. The Lesson
+        // Planner paragraph was removed Nov 24 (the planner is not live yet).
         p(
           'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.'
         ),
-        {
-          type: 'paragraph',
-          text: 'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.',
-          plannerLink: 'Lesson Planner',
-        },
         { type: 'steps', descriptions: FIVE_PARAGRAPH_STEP_DESCRIPTIONS },
       ],
     },
@@ -578,6 +581,68 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
         ),
         p(
           '**Grading follows the rubric.** When students submit, the Grading Assistant scores the essay and drafts feedback. You review it, change anything you like, and release the grade.'
+        ),
+      ],
+    },
+  ],
+  libraryNote: null,
+  library: null,
+};
+
+
+/**
+ * Brian's descriptions of the CER Paragraph's four modules (Nov 24), word
+ * for word. Each opens when a teacher clicks its module in How to Teach It.
+ */
+const CER_PARAGRAPH_STEP_DESCRIPTIONS: StepDescription[] = [
+  {
+    matches: /^claim$/,
+    text: 'Students break down the question and write a claim: one sentence that answers the question and takes a position. The Tutor helps them see what the question is really asking. Then it checks that the claim answers the question, takes a position, and can be proven.',
+  },
+  {
+    matches: /^evidence$/,
+    text: 'Students find the one piece of evidence that best proves their claim. When the question is about a text, the Tutor helps them pick the strongest line, trim it, put the exact words in quotation marks, and set it up for the reader. When the question is open, the Tutor pushes for a specific fact, number, example, or observation someone could check.',
+  },
+  {
+    matches: /^reasoning$/,
+    text: "This is the heart of the paragraph, and it's often the hardest part for students. As students explain how their evidence proves their claim, the Tutor teaches them specific moves for getting it right. If your question asks for two pieces of evidence, students do evidence and reasoning a second time in this step.",
+  },
+  {
+    matches: /^(?:wrap it up(?: and)? clean it up|wrap it up|clean it up)$/,
+    text: 'Wrap It Up: students add a closing sentence, and the Tutor checks that every part of the paragraph is there. Clean It Up: the Tutor points out grammar and spelling errors and teaches students how to fix them. It never makes the corrections for them.',
+  },
+];
+
+const CER_PARAGRAPH: LandingPage = {
+  key: 'cer-paragraph',
+  description: [
+    p(
+      "The CER paragraph teaches students to argue from evidence in one focused paragraph. Your school may call it something else: CEA (Claim, Evidence, Analysis), ACE (Answer, Cite, Explain), RACE/RACES (Restate, Answer, Cite, Explain, Summarize), or PEEL (Point, Evidence, Explain, Link). Whether you're ACEing, RACEing, or PEELing, the idea is the same: students take a position, support it with evidence, and explain how that evidence proves their point. Every analytical essay is built from paragraphs like this one, and it works in any subject: a short response in English, a lab conclusion in science, or a document question in history."
+    ),
+  ],
+  sections: [
+    {
+      id: 'how-to-teach-it',
+      heading: 'How to Teach It',
+      blocks: [
+        p(
+          'Whatever your school calls this paragraph, Yawp! is built to work alongside the way you already teach it. Students write the paragraph one part at a time in their documents, and the Yawp! Tutor coaches them through each part: the claim, the evidence, the reasoning, and a final wrap-up. If your version asks for more than one piece of evidence, students repeat the evidence and reasoning steps before they finish.'
+        ),
+        { type: 'steps', descriptions: CER_PARAGRAPH_STEP_DESCRIPTIONS },
+      ],
+    },
+    {
+      id: 'how-it-works',
+      heading: 'How it works',
+      blocks: [
+        p(
+          'Click **New** above and write your question or prompt. It can be about a text, a lab, a primary source, or any question that needs an argument.'
+        ),
+        p(
+          `**Tutor on or off?** With the Tutor on, students get feedback at every step: questions that push their thinking and help them see what's missing. ${TUTOR_NEVER_WRITES} Turn it off if you want to see how students do on their own.`
+        ),
+        p(
+          '**Grading follows the rubric.** When students submit, the Grading Assistant scores the paragraph and drafts feedback. You review it, change anything you like, and release the grade.'
         ),
       ],
     },
@@ -655,6 +720,7 @@ export const LANDING_PAGES: Record<LandingPageKey, LandingPage> = {
   'daily-pages': DAILY_PAGES,
   'ap-history': AP_HISTORY,
   'five-paragraph-essay': FIVE_PARAGRAPH_ESSAY,
+  'cer-paragraph': CER_PARAGRAPH,
   'act-writing': ACT_WRITING,
   'welcome-to-yawp': WELCOME_TO_YAWP,
 };
@@ -664,18 +730,30 @@ const normalize = (title: string) => title.trim().toLowerCase();
 /** What Daily Pages is called now. */
 export const SHORT_RESPONSE_TITLE = 'Short Response';
 
+/** What C-E-R is called on its landing page (Brian, Nov 24). */
+export const CER_PARAGRAPH_TITLE = 'The CER Paragraph';
+
 /**
  * The title at the top of a landing page. A type still titled Daily Pages
- * reads Short Response; a title a school chose for it, and every other
- * type's title, is shown as it is.
+ * reads Short Response; a type still titled C-E-R reads The CER Paragraph.
+ * A title a school chose for it, and every other type's title, is shown as
+ * it is.
  */
 export function landingPageHeading(
   key: LandingPageKey | null,
   title: string
 ): string {
-  return key === 'daily-pages' && normalize(title) === 'daily pages'
-    ? SHORT_RESPONSE_TITLE
-    : title;
+  const normalized = normalize(title);
+  if (key === 'daily-pages' && normalized === 'daily pages') {
+    return SHORT_RESPONSE_TITLE;
+  }
+  if (
+    key === 'cer-paragraph' &&
+    (normalized === 'c-e-r' || normalized === 'the cer paragraph')
+  ) {
+    return CER_PARAGRAPH_TITLE;
+  }
+  return title;
 }
 
 /**
@@ -683,7 +761,8 @@ export function landingPageHeading(
  * route already keys on: kind and systemKey where a type has them, and the
  * title for the ones that never got either (The Thesis-Driven Essay, the
  * 5-Paragraph Essay, ACT Writing, Welcome to Yawp!, and Class Starter in the
- * paid catalog). Null keeps the old page.
+ * paid catalog). C-E-R matches on kind `claim_evidence_reasoning` and on the
+ * stock titles. Null keeps the old page.
  */
 export function resolveLandingPageKey(type: {
   title: string;
@@ -702,6 +781,8 @@ export function resolveLandingPageKey(type: {
       return 'thesis-statement';
     case 'daily_pages':
       return 'daily-pages';
+    case 'claim_evidence_reasoning':
+      return 'cer-paragraph';
     default:
       break;
   }
@@ -714,6 +795,9 @@ export function resolveLandingPageKey(type: {
       return 'daily-pages';
     case 'the 5-paragraph essay':
       return 'five-paragraph-essay';
+    case 'c-e-r':
+    case 'the cer paragraph':
+      return 'cer-paragraph';
     case 'act writing section':
       return 'act-writing';
     case 'welcome to yawp!':

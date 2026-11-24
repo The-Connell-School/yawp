@@ -136,7 +136,7 @@ describe("Brian's Nov 3 round 2", () => {
   });
 
   it('every How to Teach It box can collapse, the step lists included', () => {
-    for (const key of ['five-paragraph-essay', 'act-writing'] as const) {
+    for (const key of ['five-paragraph-essay', 'cer-paragraph', 'act-writing'] as const) {
       const root = render(<LandingSections page={LANDING_PAGES[key]} modules={THESIS_MODULES} />);
       open(buttonByLabel(root, 'Hide How to Teach It'));
       expect(root.querySelectorAll('[data-testid="how-to-teach-step"]')).toHaveLength(0);
@@ -200,7 +200,12 @@ describe("Brian's Nov 3 round 2", () => {
 
 describe('How to Teach It spotlight', () => {
   it('sets How to Teach It off in a lighter box that rises on hover, like the Units boxes', () => {
-    for (const key of ['thesis-driven-essay', 'five-paragraph-essay', 'act-writing'] as const) {
+    for (const key of [
+      'thesis-driven-essay',
+      'five-paragraph-essay',
+      'cer-paragraph',
+      'act-writing',
+    ] as const) {
       const root = render(
         <LandingSections page={LANDING_PAGES[key]} modules={THESIS_MODULES} />
       );
@@ -208,9 +213,13 @@ describe('How to Teach It spotlight', () => {
       expect({ key, boxed: !!box }).toEqual({ key, boxed: true });
       // The heading, the copy and the lessons are all inside the box.
       expect(box.querySelector('h2')?.textContent).toBe('How to Teach It');
-      expect(box.textContent).toContain(
-        key === 'five-paragraph-essay' ? 'Most English teachers' : 'Teach the'
-      );
+      const lead =
+        key === 'five-paragraph-essay'
+          ? 'Most English teachers'
+          : key === 'cer-paragraph'
+            ? 'Whatever your school calls'
+            : 'Teach the';
+      expect(box.textContent).toContain(lead);
       const classes = box.className.split(/\s+/);
       expect(classes).toContain('hover:-translate-y-0.5');
       // Keyboard focus lifts it too, but a mouse click on Hide/Show does not
@@ -639,7 +648,7 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
   const box = (root: HTMLElement) =>
     root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
 
-  it('opens with the note and links "Lesson Planner" to the planner', () => {
+  it('opens with the note and does not mention the Lesson Planner', () => {
     const root = render(
       <LandingSections
         page={LANDING_PAGES['five-paragraph-essay']}
@@ -648,20 +657,9 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
       />
     );
     const paragraphs = [...box(root).querySelectorAll('p')];
+    expect(paragraphs).toHaveLength(1);
     expect(paragraphs[0]!.textContent).toStartWith('Most English teachers already have a way');
-    const link = paragraphs[1]!.querySelector('a')!;
-    expect(link.textContent).toBe('Lesson Planner');
-    expect(link.getAttribute('href')).toBe('/app/lesson-planner');
-    expect(paragraphs[1]!.textContent).toBe(
-      'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.'
-    );
-  });
-
-  it('keeps "Lesson Planner" as plain text for a teacher who cannot open the planner', () => {
-    const root = render(
-      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
-    );
-    expect(box(root).textContent).toContain('Head to the Lesson Planner and ask it');
+    expect(box(root).textContent).not.toMatch(/Lesson Planner/i);
     expect(box(root).querySelectorAll('a')).toHaveLength(0);
   });
 
@@ -704,5 +702,55 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
     expect(rows).toHaveLength(4);
     for (const row of rows) expect(row.querySelector('button')).toBeNull();
+  });
+});
+
+describe('The CER Paragraph How to Teach It (Brian, Nov 24)', () => {
+  const CER_MODULES = [
+    { id: 'c1', title: 'Claim' },
+    { id: 'c2', title: 'Evidence' },
+    { id: 'c3', title: 'Reasoning' },
+    { id: 'c4', title: 'Wrap It Up / Clean It Up' },
+  ];
+  const box = (root: HTMLElement) =>
+    root.querySelector('[data-testid="how-to-teach-spotlight"]')!;
+
+  it('opens with his note, then the four modules, and never mentions the Lesson Planner', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['cer-paragraph']} modules={CER_MODULES} />
+    );
+    const paragraphs = [...box(root).querySelectorAll('p')];
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]!.textContent).toStartWith('Whatever your school calls this paragraph');
+    expect(box(root).textContent).not.toMatch(/Lesson Planner/i);
+    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
+    expect(rows.map((row) => row.querySelector('[data-step-title]')?.textContent)).toEqual([
+      'Claim',
+      'Evidence',
+      'Reasoning',
+      'Wrap It Up / Clean It Up',
+    ]);
+  });
+
+  it('each step opens its description when a teacher clicks it', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['cer-paragraph']} modules={CER_MODULES} />
+    );
+    const rows = [...root.querySelectorAll('[data-testid="how-to-teach-step"]')];
+    expect(rows).toHaveLength(4);
+    expect(root.textContent).not.toContain('Students break down the question');
+
+    const button = rows[0]!.querySelector('button')!;
+    expect(button.textContent).toContain('Claim');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    act(() => button.click());
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const panel = document.getElementById(button.getAttribute('aria-controls')!)!;
+    expect(panel.textContent).toStartWith('Students break down the question');
+    expect(root.textContent).not.toContain('Students find the one piece of evidence');
+
+    act(() => button.click());
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.textContent).not.toContain('Students break down the question');
   });
 });

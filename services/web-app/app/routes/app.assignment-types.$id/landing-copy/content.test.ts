@@ -48,6 +48,9 @@ describe('resolveLandingPageKey', () => {
     [{ title: ' short response ' }, 'daily-pages'],
     [{ title: 'AP History Essays', systemKey: 'ap_history_essay' }, 'ap-history'],
     [{ title: 'The 5-Paragraph Essay' }, 'five-paragraph-essay'],
+    [{ title: 'C-E-R', kind: 'claim_evidence_reasoning' }, 'cer-paragraph'],
+    [{ title: 'C-E-R' }, 'cer-paragraph'],
+    [{ title: ' The CER Paragraph ' }, 'cer-paragraph'],
     [{ title: 'ACT Writing Section ' }, 'act-writing'],
     [{ title: 'Welcome to Yawp! ' }, 'welcome-to-yawp'],
   ] as const)('%o resolves to %s', (type, key) => {
@@ -319,7 +322,7 @@ describe('every page', () => {
       page(key).sections.flatMap((s) => s.blocks.map((b) => b.type));
     const withSteps = keys.filter((key) => blockTypes(key).includes('steps'));
     expect(withSteps.sort()).toEqual(
-      (['act-writing', 'five-paragraph-essay'] as LandingPageKey[]).sort()
+      (['act-writing', 'cer-paragraph', 'five-paragraph-essay'] as LandingPageKey[]).sort()
     );
     // Only the Thesis-Driven Essay has the course, with lesson plans and decks.
     expect(keys.filter((key) => blockTypes(key).includes('course'))).toEqual([
@@ -418,6 +421,7 @@ describe('Short Response (previously Daily Pages)', () => {
   test('a title a school chose, and every other page, is left alone', () => {
     expect(landingPageHeading('daily-pages', 'Friday Journal')).toBe('Friday Journal');
     expect(landingPageHeading('class-starter', 'Class Starter')).toBe('Class Starter');
+    expect(landingPageHeading('cer-paragraph', 'Science CER')).toBe('Science CER');
     expect(landingPageHeading(null, 'Daily Pages')).toBe('Daily Pages');
   });
 });
@@ -456,24 +460,23 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
 
   test('keeps the heading and opens with his note, word for word', () => {
     expect(howToTeach().heading).toBe('How to Teach It');
-    expect(paragraphs(howToTeach().blocks).slice(0, 2)).toEqual([
+    expect(paragraphs(howToTeach().blocks)).toEqual([
       'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.',
-      'New to this essay, or want fresh slides and ideas on how to teach it? Head to the Lesson Planner and ask it to build you a lesson on pre-writing, body paragraphs, or the whole 5-paragraph essay.',
     ]);
   });
 
-  test('"Lesson Planner" in the second paragraph is the planner link', () => {
-    const block = howToTeach().blocks[1]!;
-    expect(block.type).toBe('paragraph');
-    if (block.type !== 'paragraph') return;
-    expect(block.plannerLink).toBe('Lesson Planner');
-    expect(block.text).toContain(block.plannerLink!);
+  test('does not mention the Lesson Planner', () => {
+    const text = landingPagePlainText(page('five-paragraph-essay'));
+    expect(text).not.toMatch(/Lesson Planner/i);
+    expect(
+      howToTeach().blocks.some((b) => b.type === 'paragraph' && b.plannerLink)
+    ).toBe(false);
   });
 
   test('the note leads straight into the steps; the old intro lines are gone', () => {
     const blocks = howToTeach().blocks;
-    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'steps']);
-    const steps = blocks[2]!;
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'steps']);
+    const steps = blocks[1]!;
     expect(steps.type === 'steps' && steps.lead).toBeFalsy();
     const text = landingPagePlainText(page('five-paragraph-essay'));
     expect(text).not.toContain('Teach the steps below in order.');
@@ -528,5 +531,85 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     const act = section('act-writing', 'how-to-teach-it').blocks.find((b) => b.type === 'steps');
     if (!act || act.type !== 'steps') throw new Error('no steps');
     expect(stepDescription(act, 'Introduction')).toBeNull();
+  });
+});
+
+describe('The CER Paragraph (Brian, Nov 24)', () => {
+  const howToTeach = () => section('cer-paragraph', 'how-to-teach-it');
+  const howItWorks = () => section('cer-paragraph', 'how-it-works');
+
+  test('the heading reads The CER Paragraph while the type is still titled C-E-R', () => {
+    expect(landingPageHeading('cer-paragraph', 'C-E-R')).toBe('The CER Paragraph');
+    expect(landingPageHeading('cer-paragraph', ' c-e-r ')).toBe('The CER Paragraph');
+    expect(landingPageHeading('cer-paragraph', 'The CER Paragraph')).toBe(
+      'The CER Paragraph'
+    );
+  });
+
+  test('the description is his, word for word', () => {
+    expect(paragraphs(page('cer-paragraph').description)).toEqual([
+      "The CER paragraph teaches students to argue from evidence in one focused paragraph. Your school may call it something else: CEA (Claim, Evidence, Analysis), ACE (Answer, Cite, Explain), RACE/RACES (Restate, Answer, Cite, Explain, Summarize), or PEEL (Point, Evidence, Explain, Link). Whether you're ACEing, RACEing, or PEELing, the idea is the same: students take a position, support it with evidence, and explain how that evidence proves their point. Every analytical essay is built from paragraphs like this one, and it works in any subject: a short response in English, a lab conclusion in science, or a document question in history.",
+    ]);
+  });
+
+  test('How to Teach It is his note, then the four modules, and never mentions the Lesson Planner', () => {
+    expect(howToTeach().heading).toBe('How to Teach It');
+    expect(paragraphs(howToTeach().blocks)).toEqual([
+      'Whatever your school calls this paragraph, Yawp! is built to work alongside the way you already teach it. Students write the paragraph one part at a time in their documents, and the Yawp! Tutor coaches them through each part: the claim, the evidence, the reasoning, and a final wrap-up. If your version asks for more than one piece of evidence, students repeat the evidence and reasoning steps before they finish.',
+    ]);
+    expect(howToTeach().blocks.map((b) => b.type)).toEqual(['paragraph', 'steps']);
+    expect(landingPagePlainText(page('cer-paragraph'))).not.toMatch(/Lesson Planner/i);
+  });
+
+  const steps = () => {
+    const block = howToTeach().blocks.find((b) => b.type === 'steps');
+    if (!block || block.type !== 'steps') throw new Error('no steps');
+    return block;
+  };
+  const describeCer = (title: string) => stepDescription(steps(), title);
+
+  test.each([
+    [
+      'Claim',
+      'Students break down the question and write a claim: one sentence that answers the question and takes a position. The Tutor helps them see what the question is really asking. Then it checks that the claim answers the question, takes a position, and can be proven.',
+    ],
+    [
+      'Evidence',
+      'Students find the one piece of evidence that best proves their claim. When the question is about a text, the Tutor helps them pick the strongest line, trim it, put the exact words in quotation marks, and set it up for the reader. When the question is open, the Tutor pushes for a specific fact, number, example, or observation someone could check.',
+    ],
+    [
+      'Reasoning',
+      "This is the heart of the paragraph, and it's often the hardest part for students. As students explain how their evidence proves their claim, the Tutor teaches them specific moves for getting it right. If your question asks for two pieces of evidence, students do evidence and reasoning a second time in this step.",
+    ],
+    [
+      'Wrap It Up / Clean It Up',
+      'Wrap It Up: students add a closing sentence, and the Tutor checks that every part of the paragraph is there. Clean It Up: the Tutor points out grammar and spelling errors and teaches students how to fix them. It never makes the corrections for them.',
+    ],
+    [
+      'Wrap It Up & Clean It Up',
+      'Wrap It Up: students add a closing sentence, and the Tutor checks that every part of the paragraph is there. Clean It Up: the Tutor points out grammar and spelling errors and teaches students how to fix them. It never makes the corrections for them.',
+    ],
+  ] as const)('%s gets its description, word for word', (title, text) => {
+    expect(describeCer(title)).toBe(text);
+  });
+
+  test('a module it has no description for gets none', () => {
+    expect(describeCer('C-E-R')).toBeNull();
+    expect(describeCer('Claim-Evidence-Reasoning')).toBeNull();
+    expect(describeCer('Introduction')).toBeNull();
+  });
+
+  test('How it works uses the same bold lead-ins as the 5-Paragraph Essay, word for word', () => {
+    expect(howItWorks().heading).toBe('How it works');
+    expect(paragraphs(howItWorks().blocks)).toEqual([
+      'Click **New** above and write your question or prompt. It can be about a text, a lab, a primary source, or any question that needs an argument.',
+      "**Tutor on or off?** With the Tutor on, students get feedback at every step: questions that push their thinking and help them see what's missing. It will never write for them. Turn it off if you want to see how students do on their own.",
+      '**Grading follows the rubric.** When students submit, the Grading Assistant scores the paragraph and drafts feedback. You review it, change anything you like, and release the grade.',
+    ]);
+    expect(page('cer-paragraph').sections.map((s) => s.id)).toEqual([
+      'how-to-teach-it',
+      'how-it-works',
+    ]);
+    expect(page('cer-paragraph').library).toBeNull();
   });
 });
