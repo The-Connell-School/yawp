@@ -966,9 +966,9 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
     );
   });
 
-  test('teaches the recurring open-writing route by theme, not by plot', () => {
+  test('teaches the recurring open-writing route by thematic topic, not by plot', () => {
     expect(lower).toContain('recurring open class starter arc across the unit');
-    expect(lower).toContain("the unit's big themes, not its plot");
+    expect(lower).toContain("the unit's big thematic topics (asked as open questions, never as the theme itself), not its plot");
     expect(lower).toContain('how do people gain and lose power');
   });
 
