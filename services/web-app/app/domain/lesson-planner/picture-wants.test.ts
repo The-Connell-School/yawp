@@ -563,3 +563,14 @@ describe('a world slide: the work’s world in pictures, side by side (Kevin, No
     for (const picture of pictures) expect(picture.x + picture.w).toBeLessThanOrEqual(1280 - 80);
   });
 });
+
+describe('no "Picture to add" under a picture that is there (rules test, Nov 23)', () => {
+  test('a person slide whose person has the picture gets no slot note', async () => {
+    const { withPictureSlots } = await import('./picture-wants');
+    const deck = {
+      title: 'Hurston',
+      slides: [{ layout: 'person', title: 'Zora Neale Hurston', wants: { subject: 'Zora Neale Hurston' }, people: [{ name: 'Zora Neale Hurston', role: 'The author', image: 'hurston00001' }], speakerNotes: 'Who she was.' }],
+    } as unknown as SlideDeck;
+    expect(withPictureSlots(deck).slides[0]!.speakerNotes).toBe('Who she was.');
+  });
+});

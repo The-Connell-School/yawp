@@ -241,6 +241,9 @@ export function withPictureSlots<T extends SlideDeck>(deck: T): T {
       if (
         !slide.wants ||
         slide.image ||
+        // A person slide's picture goes to its person (rules test, Nov 23:
+        // "Picture to add: Zora Neale Hurston" under her own portrait).
+        slide.people?.some((person) => person.image) ||
         (slide.speakerNotes ?? '').includes(PICTURE_SLOT_LEAD)
       )
         return slide;
