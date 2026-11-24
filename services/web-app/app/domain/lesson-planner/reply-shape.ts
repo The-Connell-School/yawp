@@ -18,7 +18,7 @@ const PROCESS_TALK = [
   /\bI (?:now )?have (?:everything|all|what) I need\b/i,
   /\bI['’]ll (?:write|draft|create|make|build)\b[^.!?]*\b(?:myself|from scratch)\b/i,
   /\bI['’]ll\b[^.!?]*\bbuild the (?:full |whole )?(?:lesson|unit|map|deck)\b[^.!?]*\bnow\b/i,
-  /\bis in the public domain, so I (?:can|will|['’]ll)\b/i,
+  /\bis in the public domain, so (?:I|all|every|the|its|it|we)\b/i,
   /^(?:Now )?(?:let me|I['’]ll now|I will now|now I['’]ll)\s+(?:build|write|draft|put|make|create|pull|search|look)\b/i,
   /\b(?:nothing|no lessons?|no decks?) in the (?:Teacher['’]s )?Lounge (?:covers|matches|fits)\b/i,
   /\bthe (?:Short Response|class starter|Daily Pages|writing lesson) library (?:has|had|doesn['’]t have|does not have)\b/i,

@@ -789,10 +789,10 @@ describe('the second look (Nov 22, night)', () => {
       ].sort()
     );
     expect(result.deck.slides[0]!.image).toBeUndefined();
-    expect(result.empty).toContainEqual({
+    expect(result.empty).toContainEqual(expect.objectContaining({
       subject: 'Giuseppe Garibaldi',
       why: 'not the thing',
-    });
+    }));
     // Four lead pictures, then the two the second try found for Levittown.
     expect(result.look).toMatchObject({ turnedDown: 1, unchecked: 0 });
     expect(result.look!.seen).toBeGreaterThanOrEqual(4);
@@ -964,7 +964,7 @@ describe('the second look (Nov 22, night)', () => {
     expect(db.copied).toEqual([]);
     expect(db.forgotten).toEqual(['ckkeptcover01']);
     expect(result.deck.slides[0]!.people![0]!.image).toBeUndefined();
-    expect(result.empty).toEqual([
+    expect(result.empty.map(({ said: _said, ...miss }) => miss)).toEqual([
       { subject: 'Tom Joad', why: 'not the thing' },
     ]);
   });

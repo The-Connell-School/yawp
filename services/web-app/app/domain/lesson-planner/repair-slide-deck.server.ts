@@ -17,7 +17,7 @@ import {
   type SlideDeck,
 } from './slide-deck';
 
-export type DeckRepairOutcome = 'none' | 'repaired' | 'unrepaired';
+export type DeckRepairOutcome = 'none' | 'repaired' | 'unrepaired' | 'rebuilt';
 
 export type DeckRepair = {
   /** The reply to store and show — unchanged unless the deck was fixed. */
@@ -26,6 +26,18 @@ export type DeckRepair = {
   /** Why the first deck failed, when it did. Worth logging. */
   reason?: string;
 };
+
+const DECK_RULES = `- Every slide needs a non-empty "speakerNotes" string.
+- Every slide needs "layout" (one of title, statement, bullets, compare, prompt, steps, quote, closing, or a gallery layout below) and a "title" of at most 90 characters.
+- statement, prompt, and quote slides need "body" (at most 320 characters). Not "prompt", not "text" — "body".
+- bullets and steps slides need "bullets": 1 to 7 strings, each at most 200 characters.
+- compare slides need "left" and "right", each { "label": string, "text": string }.
+- quote slides may add "attribution". Any slide may add "minutes" as a number.
+- Gallery slides keep their layout (agenda, discuss, big_idea, write, notes, divider, read, look, excerpt, exit): agenda needs "agenda" ([{ "title", "minutes" }], up to 6); discuss and look need "question"; big_idea, write, excerpt and exit need "body"; notes needs "timeline" (up to 5 { "year", "caption" }) or "facts" (up to 3 strings); read needs "tasks" (3 or fewer { "verb", "text" }). "processStep" is 1 to 6; "choices" is 2 to 5 strings and "answer" the number of one of them; "button" is at most 40 characters; "color" is 1, 2 or 3. Keep "course", "mode" and any ~~N|text~~ color marks as written. Keep the deck's "unit", "colors" (at most three hex colors), "accent" and "art" as they are.
+- A quiz question is a discuss slide with "choices" (2 to 5 short strings, no letters typed in front) and, only on the slide that shows the answer, "answer" (the number of the right choice, from 1). There is no "quiz" layout. Keep the choices as "choices": never move them into the body.
+- Context slides keep their layout too (timeline, map, define, person, world, picture): timeline needs "events" (2 to 8 { "date", "title", "detail" }, "date" at most 24 characters, "title" at most 60, "detail" at most 220; optional "track" 1 or 2 with "tracks", two row names); map needs "places" (1 to 8 { "name", "where", "label", "note" }, "note" at most 200; optional "route", "shade" up to 4 country names, "shadeLabel", "wide"); define needs "terms" (1 to 3 { "word", "definition", "example" }, "word" at most 40, "definition" and "example" at most 200); person needs "people" (1 to 4 { "name", "role", "note", "image" }, "name" at most 60, "role" at most 80); world needs "scenes" (2 to 4 { "label", "note", "wants" }, "label" at most 60, "note" at most 160); picture needs "image" (the id of a picture, as written).
+- Fix only what the errors name, and leave every other slide exactly as it was written. Never turn a timeline, map, define, person, world or picture slide into notes, bullets or a statement: when one holds too many things, split it into two slides of the same kind, and when a line is too long, shorten that line. Keep every "image" id and every "wants" (on a slide, an event, a scene or a person) exactly as written.
+- Keep the wording short enough to read from the back of a room; move the talking into speakerNotes.`;
 
 export function buildDeckRepairInstruction({
   json,
@@ -43,19 +55,38 @@ The deck you wrote:
 ${json}
 
 Rules you have to satisfy:
-- Every slide needs a non-empty "speakerNotes" string.
-- Every slide needs "layout" (one of title, statement, bullets, compare, prompt, steps, quote, closing, or a gallery layout below) and a "title" of at most 90 characters.
-- statement, prompt, and quote slides need "body" (at most 320 characters). Not "prompt", not "text" — "body".
-- bullets and steps slides need "bullets": 1 to 7 strings, each at most 200 characters.
-- compare slides need "left" and "right", each { "label": string, "text": string }.
-- quote slides may add "attribution". Any slide may add "minutes" as a number.
-- Gallery slides keep their layout (agenda, discuss, big_idea, write, notes, divider, read, look, excerpt, exit): agenda needs "agenda" ([{ "title", "minutes" }], up to 6); discuss and look need "question"; big_idea, write, excerpt and exit need "body"; notes needs "timeline" (up to 5 { "year", "caption" }) or "facts" (up to 3 strings); read needs "tasks" (3 or fewer { "verb", "text" }). "processStep" is 1 to 6; "choices" is 2 to 5 strings and "answer" the number of one of them; "button" is at most 40 characters; "color" is 1, 2 or 3. Keep "course", "mode" and any ~~N|text~~ color marks as written. Keep the deck's "unit", "colors" (at most three hex colors), "accent" and "art" as they are.
-- A quiz question is a discuss slide with "choices" (2 to 5 short strings, no letters typed in front) and, only on the slide that shows the answer, "answer" (the number of the right choice, from 1). There is no "quiz" layout. Keep the choices as "choices": never move them into the body.
-- Context slides keep their layout too (timeline, map, define, person, world, picture): timeline needs "events" (2 to 8 { "date", "title", "detail" }, "date" at most 24 characters, "title" at most 60, "detail" at most 220; optional "track" 1 or 2 with "tracks", two row names); map needs "places" (1 to 8 { "name", "where", "label", "note" }, "note" at most 200; optional "route", "shade" up to 4 country names, "shadeLabel", "wide"); define needs "terms" (1 to 3 { "word", "definition", "example" }, "word" at most 40, "definition" and "example" at most 200); person needs "people" (1 to 4 { "name", "role", "note", "image" }, "name" at most 60, "role" at most 80); world needs "scenes" (2 to 4 { "label", "note", "wants" }, "label" at most 60, "note" at most 160); picture needs "image" (the id of a picture, as written).
-- Fix only what the errors name, and leave every other slide exactly as it was written. Never turn a timeline, map, define, person, world or picture slide into notes, bullets or a statement: when one holds too many things, split it into two slides of the same kind, and when a line is too long, shorten that line. Keep every "image" id and every "wants" (on a slide, an event, a scene or a person) exactly as written.
-- Keep the wording short enough to read from the back of a room; move the talking into speakerNotes.
+${DECK_RULES}
 
 Return only the corrected JSON object for the whole deck — { "title": ..., "slides": [ ... ] }. No explanation, no apology, no commentary before or after it.`;
+}
+
+/**
+ * A deck the teacher asked for and the reply does not have (rules test, Nov 23:
+ * the Odyssey reply ran out of room on a runaway blank before its deck; the
+ * Tell-Tale Heart reply, Nov 22, the same). Written from the lesson's own plan,
+ * step by step, so the slides teach what the plan teaches.
+ */
+export function buildDeckFromPlanInstruction(plan: string): string {
+  return `The teacher asked for a slide deck with this lesson and the reply has none: it ran out of room before the deck. Write the deck now, from the lesson below, one slide or a few for each step in its order: a title slide, an agenda, then the steps (the starter, the teaching, the reading with its passage, the talk, the writing), and the exit ticket. Use the lesson's own words, passages, questions and minutes; add nothing it does not have.
+
+The lesson:
+${plan}
+
+Rules you have to satisfy:
+${DECK_RULES}
+
+Return only the JSON object for the whole deck — { "title": ..., "slides": [ ... ] }. No explanation before or after it.`;
+}
+
+/** The lesson as the deck is written from: its prose and handouts, without any other fenced block, at most about 14,000 characters. */
+function planOf(reply: string): string {
+  const kept = reply.replace(/```(yawp-[a-z-]+)[\s\S]*?```/g, (block, kind: string) => (kind === 'yawp-material' ? block : ''));
+  return kept.length > 14_000 ? `${kept.slice(0, 14_000)}…` : kept;
+}
+
+/** A whole lesson, not a question back to the teacher or a unit map: long, with its steps as headings. */
+function looksLikeALesson(reply: string): boolean {
+  return reply.length > 3_000 && !/```yawp-unit/.test(reply) && (reply.match(/^#{2,4} /gm)?.length ?? 0) >= 3;
 }
 
 /** Pull a deck out of whatever shape the repair reply came back in. */
@@ -78,8 +109,11 @@ function readRepairedDeck(response: string): SlideDeck | null {
 export async function repairSlideDeck({
   reply,
   repair,
+  wanted = false,
 }: {
   reply: string;
+  /** The teacher asked for slides: a lesson with none gets one written from its plan. */
+  wanted?: boolean;
   /**
    * `reason` comes along so the caller can log why the deck failed. It is
    * schema vocabulary — field paths and rules — never the teacher's words.
@@ -87,6 +121,17 @@ export async function repairSlideDeck({
   repair: (attempt: { instruction: string; reason: string }) => Promise<string>;
 }): Promise<DeckRepair> {
   const outcome = readSlideDeck(reply);
+  if (outcome.kind === 'none' && wanted && looksLikeALesson(reply)) {
+    let written: string;
+    try {
+      written = await repair({ instruction: buildDeckFromPlanInstruction(planOf(reply)), reason: 'no deck in the reply' });
+    } catch {
+      return { reply, outcome: 'unrepaired', reason: 'no deck in the reply' };
+    }
+    const deck = readRepairedDeck(written);
+    if (!deck) return { reply, outcome: 'unrepaired', reason: 'no deck in the reply' };
+    return { reply: `${reply.trimEnd()}\n\n${fenceSlideDeck(deck)}`, outcome: 'rebuilt', reason: 'no deck in the reply' };
+  }
   if (outcome.kind !== 'unreadable') return { reply, outcome: 'none' };
 
   let response: string;

@@ -100,6 +100,11 @@ describe('what the quotations were checked against, on every lesson that quotes'
     expect(quiet.trimEnd().endsWith('Want changes?')).toBe(true);
   });
 
+  test('a text Yawp! holds but could not get in time says so, not that Yawp! does not have it', () => {
+    const out = withQuotationsLabel(`# Dulce\n\n${EXCERPT_DECK}`, { kind: 'unavailable', work: registered({ title: 'Poems by Wilfred Owen' }) }, { verified: 0, corrected: 0, unverified: 0 });
+    expect(out).toContain('Quotations not checked: Yawp! couldn’t get its copy of *Poems by Wilfred Owen* in time.');
+  });
+
   test('checked against the pages: what was found and corrected', () => {
     const pages = teacherPages([upload()])!;
     const reply = `# The Porch\n\n${EXCERPT_DECK}\n\nWant changes?`;

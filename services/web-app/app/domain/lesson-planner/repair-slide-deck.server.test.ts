@@ -178,4 +178,33 @@ describe('the repair keeps the slides that teach (preview, Nov 21: The Grapes of
     expect(instruction).toContain('split it into two slides of the same kind');
     expect(instruction).toContain('Keep every "image" id and every "wants"');
   });
+
+  test('a lesson whose deck was asked for and lost gets one written from its plan (rules test, Nov 23: the Odyssey deck)', async () => {
+    const plan = `# Hero or Show-Off?\n\n## 1. Class starter (5 min)\nWrite about a time.\n\n## 2. Read Book 9 (15 min)\nRead aloud.\n\n## 3. Talk (10 min)\nPairs.\n\n## 4. Write (15 min)\nA paragraph.\n\n${'More of the plan. '.repeat(200)}`;
+    let asked = '';
+    const result = await repairSlideDeck({
+      reply: plan,
+      wanted: true,
+      repair: async ({ instruction }) => {
+        asked = instruction;
+        return JSON.stringify(fixedDeck);
+      },
+    });
+    expect(asked).toContain('The teacher asked for a slide deck with this lesson and the reply has none');
+    expect(asked).toContain('## 2. Read Book 9 (15 min)');
+    expect(result.outcome).toBe('rebuilt');
+    expect(readSlideDeck(result.reply).kind).toBe('deck');
+    expect(result.reply.startsWith('# Hero or Show-Off?')).toBe(true);
+  });
+
+  test('no deck asked for, a question back to the teacher, or a unit map: no deck written', async () => {
+    const never = async () => {
+      throw new Error('should not be called');
+    };
+    expect((await repairSlideDeck({ reply: 'Which class is this for?', wanted: true, repair: never })).outcome).toBe('none');
+    const unit = `Here is the unit.\n\n\`\`\`yawp-unit\n{}\n\`\`\`\n\n## A\n## B\n## C\n${'x'.repeat(4000)}`;
+    expect((await repairSlideDeck({ reply: unit, wanted: true, repair: never })).outcome).toBe('none');
+    const lesson = `## A\n## B\n## C\n${'x'.repeat(4000)}`;
+    expect((await repairSlideDeck({ reply: lesson, repair: never })).outcome).toBe('none');
+  });
 });

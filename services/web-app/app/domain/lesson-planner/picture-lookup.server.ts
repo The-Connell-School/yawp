@@ -175,6 +175,8 @@ export type ResolvedPictures<T> = {
   empty: Array<{
     subject: string;
     why: Miss;
+    /** What the look said when it turned the picture down. */
+    said?: string;
   }>;
   /** The second look: pictures sent to it, turned down, and not answered for (none of those is kept). Null when there was none. */
   look: { seen: number; turnedDown: number; unchecked: number } | null;
@@ -447,6 +449,8 @@ export async function resolveDeckPictures<T extends SlideDeck>(
   const why = new Map<string, Miss>();
   let reused = 0;
   let searched = 0;
+  // What the look said when it turned a picture down, for the report (rules test, Nov 23).
+  const lookWhy = new Map<string, string>();
   let secondTried = 0;
   let secondShown = 0;
   let secondHits = 0;
@@ -583,6 +587,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         }
         if (!verdict.keep) {
           why.set(row.key, 'not the thing');
+          if (verdict.why) lookWhy.set(row.key, verdict.why);
           await deps.shelf.forget?.(row.id).catch(() => undefined);
           return;
         }
@@ -609,6 +614,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         }
         if (verdict && !verdict.keep) {
           why.set(key, 'not the thing');
+          if (verdict.why) lookWhy.set(key, verdict.why);
           return;
         }
         const size = imageDimensions(bytes);
@@ -715,6 +721,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
         };
         for (const [i, item] of fetched.entries()) {
           const verdict = second.verdicts.get(i + 1);
+          if (verdict && !verdict.keep && verdict.why && !ids.get(item.key)) lookWhy.set(item.key, `second try: ${verdict.why}`);
           // The first one kept for a subject is the one.
           if (!verdict?.keep || ids.get(item.key)) continue;
           const size = imageDimensions(item.bytes);
@@ -755,6 +762,7 @@ export async function resolveDeckPictures<T extends SlideDeck>(
     .map((want) => ({
       subject: want.subject,
       why: why.get(pictureKey(want.subject)) ?? ('unavailable' as const),
+      ...(lookWhy.get(pictureKey(want.subject)) ? { said: lookWhy.get(pictureKey(want.subject))!.slice(0, 120) } : {}),
     }));
   return {
     deck: withFoundPictures(deck, filled),

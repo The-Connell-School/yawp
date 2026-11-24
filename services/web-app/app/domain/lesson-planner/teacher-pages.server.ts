@@ -58,6 +58,8 @@ export function teacherPages(
 export type CheckedAgainst =
   | { kind: 'pages'; work: RegisteredWork; source: PreparedSource; names: string[] }
   | { kind: 'registered'; work: RegisteredWork }
+  /** A text Yawp! holds whose copy could not be had in time (Gutenberg refusing, Nov 23). */
+  | { kind: 'unavailable'; work: RegisteredWork }
   | { kind: 'none' };
 
 /**
@@ -125,7 +127,9 @@ export function withQuotationsLabel(
 ): string {
   if (QUOTATIONS_MARK.test(reply) || !lessonQuotes(reply)) return reply;
   let line: string;
-  if (checked.kind === 'none') {
+  if (checked.kind === 'unavailable') {
+    line = `Quotations not checked: Yawp! couldn’t get its copy of *${checked.work.title}* in time. Add your pages with the paperclip and they will be.`;
+  } else if (checked.kind === 'none') {
     const work = workNamedOnSlides(reply);
     line = `Quotations not checked: Yawp! doesn’t have ${work ? `*${work}*` : 'this text'}. Add your pages with the paperclip (a PDF, a photo or pasted text) and they will be.`;
   } else {

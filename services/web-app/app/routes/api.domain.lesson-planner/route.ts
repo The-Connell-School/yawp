@@ -145,6 +145,9 @@ const PLANNER_MAX_TOKENS = 16_000;
 // The repair pass rewrites one deck and nothing else.
 const DECK_REPAIR_MAX_TOKENS = 6_000;
 const DECK_REPAIR_DEADLINE_MS = 60_000;
+/** A whole deck written from the plan, when the reply lost it: more room, and more time. */
+const DECK_REBUILD_MAX_TOKENS = 10_000;
+const DECK_REBUILD_DEADLINE_MS = 100_000;
 // Enough rounds to walk the catalog: class report, Daily Pages search, writing
 // lesson list plus lookup, the Lounge, and the assignable types.
 const PLANNER_MAX_TOOL_ROUNDS = 8;
@@ -910,7 +913,11 @@ async function turnAction({ request }: ActionFunctionArgs) {
       // the teacher ever sees the reply; a failed repair changes nothing.
       const repaired = await repairSlideDeck({
         reply,
+        // A deck the teacher asked for and the reply lost is written from the
+        // lesson's plan (rules test, Nov 23: the Odyssey deck lost to a runaway blank).
+        wanted: /\b(?:slide ?deck|slides|deck|powerpoint|presentation)\b/i.test(turn.message),
         repair: async ({ instruction, reason }) => {
+          const rebuild = reason === 'no deck in the reply';
           // A deck is being written a second time: up to a minute more, and said so.
           clock.checkingDeck();
           try {
@@ -925,7 +932,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
             model: (process.env.AI_MODEL as any) ?? DEFAULT_ANTHROPIC_MODEL,
             system: DECK_REPAIR_SYSTEM,
             messages: [{ role: AgentType.User, content: instruction }],
-            maxTokens: DECK_REPAIR_MAX_TOKENS,
+            maxTokens: rebuild ? DECK_REBUILD_MAX_TOKENS : DECK_REPAIR_MAX_TOKENS,
             attribution: {
               organizationId: ctx.organizationId,
               membershipId: ctx.membershipId,
@@ -934,7 +941,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
               ipHash: computeIpHash(request),
             },
             allowFallbackProvider: false,
-            signal: AbortSignal.timeout(DECK_REPAIR_DEADLINE_MS),
+            signal: AbortSignal.timeout(rebuild ? DECK_REBUILD_DEADLINE_MS : DECK_REPAIR_DEADLINE_MS),
             logPayload: 'metadata-only',
             // Schema vocabulary only — field paths and rules, never the teacher's
             // words — so it survives redaction and makes the failure observable.
@@ -1024,7 +1031,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // how to fix it (Kevin, Nov 23). A text that could not be had in time
         // checked nothing, and says so.
         const finalCheck = requoted ?? quoted;
-        reply = withQuotationsLabel(reply, checkedSource ? against : { kind: 'none' }, {
+        reply = withQuotationsLabel(reply, checkedSource ? against : against.kind === 'registered' ? { kind: 'unavailable', work: against.work } : { kind: 'none' }, {
           verified: finalCheck.verified.length,
           corrected: quoted.corrections.length + (requoted?.corrections.length ?? 0),
           unverified: finalCheck.unverified.length,
@@ -1100,7 +1107,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
             ...pictured.counts,
             named: pictured.named,
             reasons: pictured.empty.reduce<Record<string, number>>((tally, miss) => ({ ...tally, [miss.why]: (tally[miss.why] ?? 0) + 1 }), {}),
-            misses: pictured.empty.map((miss) => `${miss.subject.slice(0, 60)}: ${miss.why}`).slice(0, 20),
+            misses: pictured.empty.map((miss) => `${miss.subject.slice(0, 60)}: ${miss.why}${miss.said ? ` (${miss.said})` : ''}`).slice(0, 20),
             ...(pictured.look ? { look: pictured.look } : {}),
             ms: Date.now() - lookedAt,
           };

@@ -26,6 +26,7 @@ describe('the planner never narrates its own process', () => {
     expect(withoutProcessTalk(lesson)).toBe('# Their Eyes Were Watching God — Chapter 1');
     const antigone = 'Good — I have everything I need. *Antigone* is in the public domain, so I can quote it directly. I\'ll write all three class starters and the Short Response from scratch, and build the full lesson and deck now.\n\n## Enter Antigone (50 min)';
     expect(withoutProcessTalk(antigone)).toBe('## Enter Antigone (50 min)');
+    expect(withoutProcessTalk('Here\'s the full plan. "Dulce et Decorum Est" is in the public domain, so all passages are quoted directly from Owen\'s text.\n\n## Step 1')).toBe('Here\'s the full plan.\n\n## Step 1');
   });
 
   test('the lesson’s own words, lists and fenced blocks are never touched', () => {
