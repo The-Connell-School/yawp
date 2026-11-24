@@ -1,0 +1,967 @@
+[
+ {
+  "id": "argument",
+  "secs": 114,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Got everything I need. Here's the full lesson and deck.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.96,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 114,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "big_idea",
+   "steps",
+   "compare",
+   "discuss",
+   "excerpt",
+   "write",
+   "discuss",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 4,
+   "with_visual": 2,
+   "words_only": [
+    "steps: Three parts of the move",
+    "compare: Fair or strawman?"
+   ]
+  },
+  "pictures_on_deck": 1,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 1,
+   "filled": 1,
+   "named": 1,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "drama",
+  "secs": 153,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "I'll use the three best class starters from the library — covering free will, ambition, and power — and build the deck around the lesson arc",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.98,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": "- “The historical Macbeth was a real Scottish king who ruled for 17 years.”: Macbeth became king in 1040 and reigned until 1057, so 17 years is right; the lesson's \"Scotland, 1040\" label is fine, but this line is not clearly wrong.\n- Quotations checked against Macbeth, the Project Gutenberg text of Macbeth: 7 found; 1 not found in it."
+  },
+  "R19": {
+   "pass": false,
+   "secs": 153,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "map",
+   "timeline",
+   "big_idea",
+   "define",
+   "diagram",
+   "discuss",
+   "read",
+   "excerpt",
+   "discuss",
+   "big_idea",
+   "exit"
+  ],
+  "R20": {
+   "pass": true,
+   "places": [
+    "Edinburgh -> Edinburgh, United Kingdom",
+    "Inverness -> Inverness, United Kingdom",
+    "Forres -> Forres, United Kingdom",
+    "London -> London, United Kingdom"
+   ]
+  },
+  "R21": {
+   "pass": true,
+   "events": 5,
+   "with_picture": 3,
+   "titles": [
+    "1040 Historical Macbeth",
+    "1597 Daemonologie [pic]",
+    "1603 James becomes king [pic]",
+    "1605 Gunpowder Plot [pic]",
+    "1606 Macbeth performed"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": true,
+   "content_slides": 8,
+   "with_visual": 6,
+   "words_only": [
+    "define: Words for Act 1",
+    "read: Act 1, Scene 1"
+   ]
+  },
+  "pictures_on_deck": 6,
+  "diagrams": 1,
+  "R24": {
+   "checks": {
+    "work": "macbeth",
+    "quotationsVerified": 7,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 1,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 8,
+   "filled": 6,
+   "named": 2,
+   "misses": [
+    "Historical Macbeth: none",
+    "Macbeth performed: not the thing (dense small type; it is a text page from a later printing, not a performance)"
+   ],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "grammar",
+  "secs": 102,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "The Fixing Comma Splices lesson is the perfect backbone here: semicolons are one of its four fixes, and the lesson's examples, quick tip, an",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 102,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "big_idea",
+   "bullets",
+   "compare",
+   "discuss",
+   "steps",
+   "steps",
+   "write",
+   "steps",
+   "discuss",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 6,
+   "with_visual": 0,
+   "words_only": [
+    "big_idea: Big idea",
+    "bullets: What a semicolon is not",
+    "compare: Watch the fix",
+    "steps: The Cover Test",
+    "steps: Decide and fix",
+    "steps: Repair your own writing"
+   ]
+  },
+  "pictures_on_deck": 0,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 0,
+   "filled": 0,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "memoir",
+  "secs": 168,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full lesson. The deck follows at the end.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": "- “1831 · Reads 'The Columbian Orator'”: Douglass bought The Columbian Orator around age twelve (c. 1830-31), described in Chapter 7; the date is approximate.\n- Quotations checked against Narrative of the Life of Frederick Douglass, the Project Gutenberg text of the Narrative (1845): 38 found; 9 corrected to match; 2 not found in it."
+  },
+  "R19": {
+   "pass": false,
+   "secs": 168,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "timeline",
+   "map",
+   "define",
+   "big_idea",
+   "read",
+   "discuss",
+   "big_idea",
+   "compare",
+   "steps",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": false,
+   "places": [
+    "Talbot County -> NOT FOUND",
+    "Baltimore -> Baltimore, Maryland, United States of America",
+    "New Bedford -> New Bedford, Massachusetts, United States of America"
+   ]
+  },
+  "R21": {
+   "pass": true,
+   "events": 6,
+   "with_picture": 4,
+   "titles": [
+    "c. 1818 Born in Maryland [pic]",
+    "1826 Sent to Baltimore",
+    "1831 Reads 'The Columbian Orator' [pic]",
+    "1838 Escapes to the North",
+    "1845 Narrative published [pic]",
+    "1847 Founds The North Star [pic]"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 8,
+   "with_visual": 2,
+   "words_only": [
+    "define: Words for this chapter",
+    "big_idea: Big idea",
+    "read: Chapter 7 — annotate as you go",
+    "big_idea: Big idea",
+    "compare: Analysis: before and after",
+    "steps: Your turn — write the analysis"
+   ]
+  },
+  "pictures_on_deck": 5,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "douglass-narrative",
+    "quotationsVerified": 38,
+    "quotationsCorrected": 8,
+    "quotationsUnverified": 2,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 7,
+   "filled": 5,
+   "named": 6,
+   "misses": [
+    "Baltimore: not a picture (second try: wrong place; not Baltimore)",
+    "New Bedford, Massachusetts: not the thing (second try: Shows a plaque for Captain Joshua Slocum, not the New Bedford waterfront or Douglass.)"
+   ],
+   "secondTried": 3,
+   "secondHits": 15,
+   "secondUsable": 6,
+   "secondShown": 6,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "novel",
+  "secs": 159,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "No library Short Response matched, so I'll write one for the opening passage.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.96,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": false,
+   "secs": 159,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "discuss",
+   "timeline",
+   "map",
+   "person",
+   "big_idea",
+   "define",
+   "read",
+   "discuss",
+   "discuss",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": true,
+   "places": [
+    "Salinas -> Salinas, California, United States of America",
+    "Soledad -> Soledad, California, United States of America",
+    "San Francisco -> San Francisco, California, United States of America"
+   ]
+  },
+  "R21": {
+   "pass": false,
+   "events": 4,
+   "with_picture": 1,
+   "titles": [
+    "1929 The Crash [pic]",
+    "1930s Mass unemployment",
+    "1930s Migrant labor",
+    "1937 Publication"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": true,
+   "content_slides": 6,
+   "with_visual": 4,
+   "words_only": [
+    "define: Words for Chapter 1",
+    "read: Chapter 1: The Opening"
+   ]
+  },
+  "pictures_on_deck": 4,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 7,
+   "filled": 4,
+   "named": 1,
+   "misses": [
+    "Mass unemployment: not a picture",
+    "Migrant labor: not the thing (modern photo of a present-day building, not the 1930s migrant labor itself)",
+    "Publication: for the teacher"
+   ],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "poem",
+  "secs": 135,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the complete lesson and deck.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 135,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "notes",
+   "person",
+   "diagram",
+   "excerpt",
+   "discuss",
+   "excerpt",
+   "big_idea",
+   "excerpt",
+   "write",
+   "discuss",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": true,
+   "content_slides": 7,
+   "with_visual": 6,
+   "words_only": [
+    "excerpt: The full poem"
+   ]
+  },
+  "pictures_on_deck": 3,
+  "diagrams": 1,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 3,
+   "filled": 3,
+   "named": 1,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "research",
+  "secs": 126,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "No class data came back (the class list is empty on this account), so I'm building for a standard 11th-grade room. Here's the full lesson.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 126,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "discuss",
+   "big_idea",
+   "steps",
+   "discuss",
+   "discuss",
+   "steps",
+   "discuss",
+   "write",
+   "discuss",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 3,
+   "with_visual": 0,
+   "words_only": [
+    "big_idea: Big idea",
+    "steps: Four criteria",
+    "steps: Rate the sources"
+   ]
+  },
+  "pictures_on_deck": 1,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 1,
+   "filled": 1,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "seminar",
+  "secs": 72,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the plan. The seminar runs on three questions, each bigger than the last, with a Short Response at the end to lock in individual thin",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.96,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 72,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "write",
+   "bullets",
+   "discuss",
+   "discuss",
+   "quote",
+   "discuss",
+   "write",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 2,
+   "with_visual": 0,
+   "words_only": [
+    "bullets: How this works",
+    "quote: The last page"
+   ]
+  },
+  "pictures_on_deck": 1,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 1,
+   "filled": 1,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "speech",
+  "secs": 159,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the plan — 50 minutes, built around the Address itself (public domain, so the full text goes on the handout and the slides), the Anal",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": false,
+   "secs": 159,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "notes",
+   "define",
+   "define",
+   "discuss",
+   "read",
+   "big_idea",
+   "steps",
+   "excerpt",
+   "write",
+   "discuss",
+   "discuss",
+   "big_idea",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 8,
+   "with_visual": 2,
+   "words_only": [
+    "define: Four terms for today",
+    "define: One more",
+    "read: The Gettysburg Address",
+    "big_idea: Big idea",
+    "steps: The three moves",
+    "big_idea: Big idea"
+   ]
+  },
+  "pictures_on_deck": 2,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 2,
+   "filled": 2,
+   "named": 0,
+   "misses": [],
+   "secondTried": 1,
+   "secondHits": 5,
+   "secondUsable": 2,
+   "secondShown": 2,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "story",
+  "secs": 150,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full lesson.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 150,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "notes",
+   "timeline",
+   "define",
+   "big_idea",
+   "read",
+   "excerpt",
+   "read",
+   "steps",
+   "discuss",
+   "write",
+   "discuss",
+   "exit"
+  ],
+  "R21": {
+   "pass": true,
+   "events": 4,
+   "with_picture": 2,
+   "titles": [
+    "1789 The Revolution [pic]",
+    "1850s Paris rebuilt",
+    "1880s The Belle Époque begins",
+    "1884 'The Necklace' published [pic]"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 8,
+   "with_visual": 3,
+   "words_only": [
+    "define: Words for the story",
+    "big_idea: Big idea",
+    "read: Chunk 1: Who is Mathilde?",
+    "read: Chunk 2: The necklace",
+    "steps: Close reading"
+   ]
+  },
+  "pictures_on_deck": 3,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 5,
+   "filled": 3,
+   "named": 0,
+   "misses": [
+    "Paris rebuilt: none",
+    "The Belle Époque begins: not the thing (collage of unrelated images, not the Belle Epoque)"
+   ],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "unit",
+  "secs": 113,
+  "kind": "unit",
+  "R14": {
+   "first_paragraph": "The *Narrative of the Life of Frederick Douglass* (1845) is in the public domain, so passages can be quoted and printed in full. Here is the",
+   "first_is_caveat": false,
+   "quotation_line_at": null,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R16": {
+   "pass": false,
+   "sentences_before_map": 4
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 113,
+   "limit": 120
+  },
+  "R24": {
+   "checks": {
+    "work": "douglass-narrative",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": null,
+   "quotes": false,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 0,
+   "filled": 0,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ }
+]
