@@ -453,6 +453,7 @@ export default function Route() {
               <NavStateSwitch>
                 {({ state, fetcher }) => (
                   <Button
+                    type="submit"
                     size="icon-sm"
                     variant="ghost"
                     className="hidden sm:inline-flex"
