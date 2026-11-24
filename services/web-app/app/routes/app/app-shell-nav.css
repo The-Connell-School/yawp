@@ -95,7 +95,8 @@
   white-space: nowrap;
 }
 
-[data-app-shell] > nav > div.flex.shrink-0 > a[data-testid='app-nav-need-help'],
+[data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-need-help']),
+[data-app-shell] > nav > div.flex.shrink-0 > form > button[data-testid='app-nav-collapse-toggle'],
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
   display: flex;

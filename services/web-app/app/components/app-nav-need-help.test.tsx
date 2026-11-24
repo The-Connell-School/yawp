@@ -12,6 +12,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  APP_NAV_NEED_HELP_GMAIL,
   APP_NAV_NEED_HELP_MAILTO,
   AppNavNeedHelp,
 } from './app-nav-need-help';
@@ -29,7 +30,7 @@ function renderTree(element: ReactElement) {
 }
 
 function footerLink(container: ParentNode) {
-  return container.querySelector<HTMLAnchorElement>(
+  return container.querySelector<HTMLElement>(
     '[data-testid="app-nav-need-help"]'
   );
 }
@@ -57,24 +58,29 @@ function AppShellFooter({
 }
 
 describe('AppNavNeedHelp', () => {
-  test('expanded footer link uses support mailto, label, and aria-label', () => {
+  test('expanded footer row shows the label and is a menu button, not a bare mailto', () => {
     const container = renderTree(<AppNavNeedHelp navExpanded />);
-    const link = footerLink(container);
-    expect(link).not.toBeNull();
-    expect(APP_NAV_NEED_HELP_MAILTO).toBe('mailto:support@yawp.school');
-    expect(link!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
-    expect(link!.getAttribute('aria-label')).toBe('Need help?');
-    expect(link!.textContent).toContain('Need help?');
+    const row = footerLink(container);
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('Need help?');
+    const trigger = row!.closest('button');
+    expect(trigger).not.toBeNull();
+    expect(trigger!.getAttribute('aria-label')).toBe('Need help?');
+    expect(trigger!.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
   });
 
-  test('collapsed footer keeps mailto with tooltip title and hides the label', () => {
+  test('support links point at support@yawp.school', () => {
+    expect(APP_NAV_NEED_HELP_MAILTO).toBe('mailto:support@yawp.school');
+    expect(APP_NAV_NEED_HELP_GMAIL).toContain('to=support%40yawp.school');
+  });
+
+  test('collapsed footer hides the label but keeps the accessible name', () => {
     const container = renderTree(<AppNavNeedHelp navExpanded={false} />);
-    const link = footerLink(container);
-    expect(link).not.toBeNull();
-    expect(link!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
-    expect(link!.getAttribute('aria-label')).toBe('Need help?');
-    expect(link!.getAttribute('title')).toBe('Need help?');
-    expect(link!.textContent).not.toContain('Need help?');
+    const row = footerLink(container);
+    expect(row).not.toBeNull();
+    expect(row!.textContent).not.toContain('Need help?');
+    expect(row!.closest('button')!.getAttribute('aria-label')).toBe('Need help?');
   });
 
   test('renders above Settings with or without the free-tier Usage row', () => {

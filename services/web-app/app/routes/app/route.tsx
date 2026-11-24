@@ -3,6 +3,7 @@ import './app-teacher-shell.css';
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import { AppNavNeedHelp } from '~/components/app-nav-need-help';
+import { AppNavCollapseToggle } from '~/components/app-nav-collapse-toggle';
 import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import {
   freeTierNavMobileWarningDot,
@@ -686,6 +687,9 @@ export default function Route() {
               </Form>
             </PopoverContent>
           </Popover>
+          {mobileDrawer ? null : (
+            <AppNavCollapseToggle navExpanded={navExpanded} />
+          )}
         </div>
       </nav>
       <div
