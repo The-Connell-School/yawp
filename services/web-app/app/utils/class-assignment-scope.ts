@@ -212,6 +212,24 @@ export function buildStudentClassDocumentsScope(params: {
   };
 }
 
+/**
+ * Teacher worklists keep archived student work that still has a submission
+ * (so a graded paper does not vanish if the student archives the draft).
+ * Archived Try-it / teacher preview documents are different: the teacher is
+ * cleaning those up, and they must leave the list even when submitted.
+ */
+export function teacherWorkListVisibilityWhere(): Prisma.DocumentWhereInput {
+  return {
+    OR: [
+      { archivedAt: null },
+      {
+        artifactKind: { not: 'TEACHER_ASSIGNMENT_PREVIEW' },
+        submissions: { some: {} },
+      },
+    ],
+  };
+}
+
 export function buildTeacherClassWorkDocumentWhere(params: {
   classIds: string[];
   classes?: { id: string; schoolYear: string }[];
@@ -234,7 +252,7 @@ export function buildTeacherClassWorkDocumentWhere(params: {
 
   const where: Prisma.DocumentWhereInput = {
     deletedAt: null,
-    OR: [{ archivedAt: null }, { submissions: { some: {} } }],
+    ...teacherWorkListVisibilityWhere(),
     AND: [classScope, HIDE_AP_HISTORY_DOCUMENT_WHERE],
   };
 

@@ -14,6 +14,8 @@ import {
 } from '~/components/teacher-document-work/teacher-document-work-panel';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { UnsubmitSubmissionsSheet } from '~/components/teacher-document-work/unsubmit-submissions-sheet';
+import { ArchiveTeacherPreviewDocumentsSheet } from '~/components/teacher-document-work/archive-teacher-preview-documents-sheet';
+import { TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
@@ -33,10 +35,12 @@ import {
 } from '~/utils/teacher-document-work-filter-options';
 import {
   buildReleaseGradeRows,
+  buildTeacherPreviewArchiveRows,
   buildTeacherUnsubmitRows,
   countTeacherDocumentWorkStatuses,
   formatClassLabel,
   type ReleaseGradeRow,
+  type TeacherPreviewArchiveRow,
   type TeacherUnsubmitRow,
   type TeacherDocumentWorkClassSummary,
   type TeacherDocumentWorkRow,
@@ -186,6 +190,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: true,
       title: true,
       updatedAt: true,
+      artifactKind: true,
       assignment: {
         select: {
           id: true,
@@ -273,23 +278,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const documents: TeacherDocumentWorkRow[] = allDocuments.map((document) => {
     const submissions = document.submissions;
+    const isTeacherAssignmentPreview =
+      document.artifactKind === 'TEACHER_ASSIGNMENT_PREVIEW';
+    const membership =
+      document.membership ??
+      ({
+        id: `group:${document.group?.id ?? document.id}`,
+        user: {
+          id: `group:${document.group?.id ?? document.id}`,
+          name: document.group?.label ?? 'Collaborative group',
+          email: '',
+        },
+        classesAsStudent: [],
+      } as const);
     return {
       id: document.id,
       title: document.title,
       updatedAt: new Date(document.updatedAt),
       // Teacher worklists render a group as a group. The compatibility-shaped
       // subject below is a view model only; it is never persisted as ownership.
-      membership:
-        document.membership ??
-        ({
-          id: `group:${document.group?.id ?? document.id}`,
-          user: {
-            id: `group:${document.group?.id ?? document.id}`,
-            name: document.group?.label ?? 'Collaborative group',
-            email: '',
-          },
-          classesAsStudent: [],
-        } as const),
+      membership: isTeacherAssignmentPreview
+        ? {
+            ...membership,
+            user: {
+              ...membership.user,
+              name: TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL,
+            },
+          }
+        : membership,
+      isTeacherAssignmentPreview,
       group: document.group,
       assignment: document.assignment,
       resolvedClass: resolveDocumentClass(document, {
@@ -347,6 +364,11 @@ export default function StudentWorkRoute() {
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
   const [isUnsubmitSheetOpen, setIsUnsubmitSheetOpen] = useState(false);
+  const [isArchivePreviewSheetOpen, setIsArchivePreviewSheetOpen] =
+    useState(false);
+  const [archivePreviewRowsForSheet, setArchivePreviewRowsForSheet] = useState<
+    TeacherPreviewArchiveRow[]
+  >([]);
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
@@ -471,6 +493,11 @@ export default function StudentWorkRoute() {
     [selectedDocuments]
   );
 
+  const archivePreviewRows = useMemo(
+    () => buildTeacherPreviewArchiveRows(selectedDocuments),
+    [selectedDocuments]
+  );
+
   const openReleaseSheet = () => {
     if (unreleasedGrades.length === 0) return;
     setReleaseGradesForSheet(unreleasedGrades);
@@ -491,6 +518,18 @@ export default function StudentWorkRoute() {
 
   const handleUnsubmitSuccess = () => {
     setUnsubmitRowsForSheet([]);
+    setSelectedDocumentIds([]);
+    window.location.reload();
+  };
+
+  const openArchivePreviewSheet = () => {
+    if (archivePreviewRows.length === 0) return;
+    setArchivePreviewRowsForSheet(archivePreviewRows);
+    setIsArchivePreviewSheetOpen(true);
+  };
+
+  const handleArchivePreviewSuccess = () => {
+    setArchivePreviewRowsForSheet([]);
     setSelectedDocumentIds([]);
     window.location.reload();
   };
@@ -626,6 +665,18 @@ export default function StudentWorkRoute() {
               disabled: unsubmitRows.length === 0,
               onSelect: openUnsubmitSheet,
             },
+            {
+              id: 'archive-preview',
+              label: 'Archive preview',
+              count:
+                archivePreviewRows.length > 0
+                  ? archivePreviewRows.length
+                  : undefined,
+              disabled:
+                selectedDocumentIds.length === 0 ||
+                archivePreviewRows.length === 0,
+              onSelect: openArchivePreviewSheet,
+            },
           ]}
           selection={{
             selectedDocumentIds,
@@ -652,6 +703,12 @@ export default function StudentWorkRoute() {
           isOpen={isUnsubmitSheetOpen}
           onClose={() => setIsUnsubmitSheetOpen(false)}
           onSuccess={handleUnsubmitSuccess}
+        />
+        <ArchiveTeacherPreviewDocumentsSheet
+          documents={archivePreviewRowsForSheet}
+          isOpen={isArchivePreviewSheetOpen}
+          onClose={() => setIsArchivePreviewSheetOpen(false)}
+          onSuccess={handleArchivePreviewSuccess}
         />
       </div>
     </section>

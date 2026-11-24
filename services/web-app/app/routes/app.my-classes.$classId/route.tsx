@@ -111,6 +111,7 @@ import {
 } from '~/components/ui/select';
 import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { teacherWorkListVisibilityWhere } from '~/utils/class-assignment-scope.server';
 import { TEACHER_ASSIGNMENT_TEST_SUBJECT_LABEL } from '~/domain/assignments/teacher-assignment-preview';
 import { parseDocumentGroupMode } from './class-documents-grouping';
 import {
@@ -1136,6 +1137,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           AND: [
             classDocumentScope,
             { deletedAt: null },
+            teacherWorkListVisibilityWhere(),
             HIDE_AP_HISTORY_DOCUMENT_WHERE,
           ],
         },
