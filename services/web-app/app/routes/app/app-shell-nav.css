@@ -179,6 +179,5 @@
 }
 
 [data-app-shell] > nav > div.flex.shrink-0 button[data-testid='app-nav-collapse-toggle'] {
-  font: inherit;
   cursor: pointer;
 }

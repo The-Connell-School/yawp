@@ -21,6 +21,65 @@ export const APP_NAV_NEED_HELP_GMAIL = `https://mail.google.com/mail/?view=cm&fs
 const menuItemClass =
   'flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-inherit no-underline hover:bg-foreground/5';
 
+export async function copySupportEmail(): Promise<'copied' | 'prompt'> {
+  try {
+    await navigator.clipboard.writeText(APP_NAV_SUPPORT_EMAIL);
+    return 'copied';
+  } catch {
+    window.prompt('Copy our support email:', APP_NAV_SUPPORT_EMAIL);
+    return 'prompt';
+  }
+}
+
+export function AppNavNeedHelpMenu({
+  copied,
+  onCopy,
+}: {
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div data-testid="app-nav-need-help-menu">
+      <div className="border-b p-3">
+        <p className="text-sm font-bold">Need help?</p>
+        <p className="text-sm text-muted-foreground">
+          Email the Yawp! team at{' '}
+          <span className="font-medium text-foreground">
+            {APP_NAV_SUPPORT_EMAIL}
+          </span>
+          . We&rsquo;ll get back to you soon.
+        </p>
+      </div>
+      <div className="p-1">
+        <a
+          href={APP_NAV_NEED_HELP_GMAIL}
+          target="_blank"
+          rel="noreferrer"
+          className={menuItemClass}
+          data-testid="app-nav-need-help-gmail"
+        >
+          Write in Gmail
+        </a>
+        <a
+          href={APP_NAV_NEED_HELP_MAILTO}
+          className={menuItemClass}
+          data-testid="app-nav-need-help-mailto"
+        >
+          Open my email app
+        </a>
+        <button
+          type="button"
+          onClick={onCopy}
+          className={`${menuItemClass} border-0 bg-transparent`}
+          data-testid="app-nav-need-help-copy"
+        >
+          {copied ? 'Copied!' : 'Copy email address'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AppNavNeedHelp({ navExpanded }: { navExpanded: boolean }) {
   const [copied, setCopied] = useState(false);
 
@@ -31,12 +90,8 @@ export function AppNavNeedHelp({ navExpanded }: { navExpanded: boolean }) {
   }, [copied]);
 
   const copyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(APP_NAV_SUPPORT_EMAIL);
-      setCopied(true);
-    } catch {
-      window.prompt('Copy our support email:', APP_NAV_SUPPORT_EMAIL);
-    }
+    const result = await copySupportEmail();
+    if (result === 'copied') setCopied(true);
   };
 
   const trigger = (
@@ -73,44 +128,8 @@ export function AppNavNeedHelp({ navExpanded }: { navExpanded: boolean }) {
         align="end"
         collisionPadding={8}
         className="m-1 w-72 p-0"
-        data-testid="app-nav-need-help-menu"
       >
-        <div className="border-b p-3">
-          <p className="text-sm font-bold">Need help?</p>
-          <p className="text-sm text-muted-foreground">
-            Email the Yawp! team at{' '}
-            <span className="font-medium text-foreground">
-              {APP_NAV_SUPPORT_EMAIL}
-            </span>
-            . We&rsquo;ll get back to you soon.
-          </p>
-        </div>
-        <div className="p-1">
-          <a
-            href={APP_NAV_NEED_HELP_GMAIL}
-            target="_blank"
-            rel="noreferrer"
-            className={menuItemClass}
-            data-testid="app-nav-need-help-gmail"
-          >
-            Write in Gmail
-          </a>
-          <a
-            href={APP_NAV_NEED_HELP_MAILTO}
-            className={menuItemClass}
-            data-testid="app-nav-need-help-mailto"
-          >
-            Open my email app
-          </a>
-          <button
-            type="button"
-            onClick={copyAddress}
-            className={`${menuItemClass} border-0 bg-transparent`}
-            data-testid="app-nav-need-help-copy"
-          >
-            {copied ? 'Copied!' : 'Copy email address'}
-          </button>
-        </div>
+        <AppNavNeedHelpMenu copied={copied} onCopy={copyAddress} />
       </PopoverContent>
     </Popover>
   );

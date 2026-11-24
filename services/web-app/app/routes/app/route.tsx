@@ -3,7 +3,10 @@ import './app-teacher-shell.css';
 import './free-account.css';
 import { readFreeAccountUsage } from '~/domain/free-tier/inapp-usage.server';
 import { AppNavNeedHelp } from '~/components/app-nav-need-help';
-import { AppNavCollapseToggle } from '~/components/app-nav-collapse-toggle';
+import {
+  AppNavCollapseToggle,
+  AppNavHeaderCollapseButton,
+} from '~/components/app-nav-collapse-toggle';
 import { FreeTierSidebarUsage } from '~/components/free-tier/free-tier-sidebar-usage';
 import {
   freeTierNavMobileWarningDot,
@@ -32,7 +35,6 @@ import { appSidebarIcons } from '~/components/app-sidebar-icons';
 import { useCallback, useEffect, useState, useRef, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
-  DoubleArrowLeftIcon,
   DoubleArrowRightIcon,
   ExitIcon,
   HamburgerIcon,
@@ -451,17 +453,10 @@ export default function Route() {
                 />
               </Link>
               <NavStateSwitch>
-                {({ state, fetcher }) => (
-                  <Button
-                    type="submit"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="hidden sm:inline-flex"
-                    aria-label="Collapse app navigation"
+                {({ fetcher }) => (
+                  <AppNavHeaderCollapseButton
                     disabled={['submitting', 'loading'].includes(fetcher.state)}
-                  >
-                    <DoubleArrowLeftIcon />
-                  </Button>
+                  />
                 )}
               </NavStateSwitch>
             </>
