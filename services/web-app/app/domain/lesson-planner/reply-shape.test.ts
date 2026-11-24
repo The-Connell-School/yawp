@@ -26,6 +26,9 @@ describe('the planner never narrates its own process', () => {
     expect(withoutProcessTalk(lesson)).toBe('# Their Eyes Were Watching God — Chapter 1');
     const antigone = 'Good — I have everything I need. *Antigone* is in the public domain, so I can quote it directly. I\'ll write all three class starters and the Short Response from scratch, and build the full lesson and deck now.\n\n## Enter Antigone (50 min)';
     expect(withoutProcessTalk(antigone)).toBe('## Enter Antigone (50 min)');
+    expect(withoutProcessTalk("Here's the full plan and deck. I'm using F. Storr's 1912 translation (public domain) for all quoted passages, and I'll note that on the handout.\n\n## Step 1")).toBe("Here's the full plan and deck.\n\n## Step 1");
+    expect(withoutProcessTalk('The Odyssey is in the public domain (Homer, composed ~8th century BCE), so I can quote it directly — I\'ll use Samuel Butler\'s translation.\n\n## Step 1')).toBe('## Step 1');
+    expect(withoutProcessTalk('Now for the deck:\n\n## Slides')).toBe('## Slides');
     expect(withoutProcessTalk('Here\'s the full plan. "Dulce et Decorum Est" is in the public domain, so all passages are quoted directly from Owen\'s text.\n\n## Step 1')).toBe('Here\'s the full plan.\n\n## Step 1');
   });
 

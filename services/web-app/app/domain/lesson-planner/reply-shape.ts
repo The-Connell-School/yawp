@@ -19,6 +19,9 @@ const PROCESS_TALK = [
   /\bI['’]ll (?:write|draft|create|make|build)\b[^.!?]*\b(?:myself|from scratch)\b/i,
   /\bI['’]ll\b[^.!?]*\bbuild the (?:full |whole )?(?:lesson|unit|map|deck)\b[^.!?]*\bnow\b/i,
   /\bis in the public domain, so (?:I|all|every|the|its|it|we)\b/i,
+  /\bis in the public domain\b[^.!?]*\bso (?:I|all|every|the|its|it|we)\b/i,
+  /\bI['’]m using\b[^.!?]*\b(?:translation|edition|text)\b/i,
+  /^(?:Now|And now|Next),? (?:for|here['’]s|here is) the (?:deck|handout|slides|slide deck|materials?)\b/i,
   /^(?:Now )?(?:let me|I['’]ll now|I will now|now I['’]ll)\s+(?:build|write|draft|put|make|create|pull|search|look)\b/i,
   /\b(?:nothing|no lessons?|no decks?) in the (?:Teacher['’]s )?Lounge (?:covers|matches|fits)\b/i,
   /\bthe (?:Short Response|class starter|Daily Pages|writing lesson) library (?:has|had|doesn['’]t have|does not have)\b/i,
@@ -29,7 +32,8 @@ const PROCESS_TALK = [
 const BARE_OPENER = /^(?:good|great|okay|ok|alright|all right|perfect|got it)\s*[—–,.!:-]*\s*$/i;
 
 function splitSentences(paragraph: string): string[] {
-  return paragraph.split(/(?<=[.!?:])\s+(?=[A-Z“"'‘(*])/);
+  // Not after an initial ("F. Storr", "Martin Luther King Jr." is fine): one sentence, not two.
+  return paragraph.split(/(?<=[.!?:])(?<!\b[A-Z]\.)\s+(?=[A-Z“"'‘(*])/);
 }
 
 /** A paragraph with its process talk taken out; '' when nothing is left. */
