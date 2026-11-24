@@ -11,7 +11,7 @@ import { StudentDocumentFiltersBar } from '~/components/student-document-filters
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
-import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
+import { ALL_SCHOOL_YEARS, createdAtInSchoolYear } from '~/utils/school-year';
 import {
   groupStudentDocumentsByClass,
   type StudentDocumentGroupingRow,
@@ -104,9 +104,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // so this page and My Classes cannot disagree about what year it is.
   //
   // Class work is scoped by the class it belongs to. A document attached to no
-  // class — a free write the student started themselves — has no year to be
-  // outside of, so it stays on the list whichever year is selected. Hiding it
-  // would lose the student's own writing rather than tidy their view.
+  // class — a free write, or work unlinked when an assignment was deleted —
+  // is scoped by when it was created, so last year's writing stays in last
+  // year's view instead of following the student into a new class.
   const schoolYearScope = await resolveStudentSchoolYearScope(
     request,
     profile.id
@@ -152,7 +152,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   {
                     classAssignment: { class: { schoolYear: schoolYearScope } },
                   },
-                  { classAssignment: { is: null } },
+                  {
+                    classAssignment: { is: null },
+                    ...createdAtInSchoolYear(schoolYearScope),
+                  },
                 ],
               },
             ]),

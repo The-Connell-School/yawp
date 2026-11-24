@@ -4,6 +4,8 @@ import { documentReadWhere } from '~/utils/document-access.server';
 const prisma = {
   user: { findUniqueOrThrow: mock() },
   documentImage: { findFirst: mock() },
+  class: { findMany: mock() },
+  documentClassForensic: { findMany: mock() },
 };
 
 const requireUserId = mock();
@@ -35,6 +37,8 @@ describe('api.image.document.$id', () => {
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
+    prisma.class.findMany.mockResolvedValue([]);
+    prisma.documentClassForensic.findMany.mockResolvedValue([]);
     prisma.documentImage.findFirst.mockResolvedValue({
       contentType: 'image/png',
       altText: 'Revenue by year',

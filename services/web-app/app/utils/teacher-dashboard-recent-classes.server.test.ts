@@ -25,6 +25,7 @@ describe('resolveDocumentClassIds', () => {
           classAssignmentId: 'ca-1',
           classAssignment: { classId: 'class-a' },
           assignmentId: 'assignment-1',
+          createdAt: new Date('2026-02-06T00:00:00.000Z'),
           membership: { classesAsStudent: [{ id: 'class-b' }] },
         },
         teacherClassIdSet,
@@ -33,7 +34,7 @@ describe('resolveDocumentClassIds', () => {
     ).toEqual(['class-a']);
   });
 
-  test('attributes unassigned documents to each enrolled teacher class', () => {
+  test('attributes unassigned documents to same-year enrolled teacher classes', () => {
     expect(
       resolveDocumentClassIds({
         documentId: 'doc-2',
@@ -41,14 +42,42 @@ describe('resolveDocumentClassIds', () => {
           classAssignmentId: null,
           classAssignment: null,
           assignmentId: null,
+          createdAt: new Date('2026-02-06T00:00:00.000Z'),
           membership: {
             classesAsStudent: [{ id: 'class-a' }, { id: 'class-b' }],
           },
         },
         teacherClassIdSet,
+        teacherClassYears: new Map([
+          ['class-a', '2025-2026'],
+          ['class-b', '2025-2026'],
+        ]),
         forensicClassIdByDocumentId: new Map(),
       })
     ).toEqual(['class-a', 'class-b']);
+  });
+
+  test('does not attribute a prior-year unassigned document to a new-year class', () => {
+    expect(
+      resolveDocumentClassIds({
+        documentId: 'doc-2',
+        document: {
+          classAssignmentId: null,
+          classAssignment: null,
+          assignmentId: null,
+          createdAt: new Date('2026-02-06T00:00:00.000Z'),
+          membership: {
+            classesAsStudent: [{ id: 'class-a' }, { id: 'class-b' }],
+          },
+        },
+        teacherClassIdSet,
+        teacherClassYears: new Map([
+          ['class-a', '2025-2026'],
+          ['class-b', '2026-2027'],
+        ]),
+        forensicClassIdByDocumentId: new Map(),
+      })
+    ).toEqual(['class-a']);
   });
 
   test('uses forensic and enrollment class linkage for legacy documents', () => {
@@ -59,9 +88,14 @@ describe('resolveDocumentClassIds', () => {
           classAssignmentId: null,
           classAssignment: null,
           assignmentId: null,
+          createdAt: new Date('2026-02-06T00:00:00.000Z'),
           membership: { classesAsStudent: [{ id: 'class-b' }] },
         },
         teacherClassIdSet,
+        teacherClassYears: new Map([
+          ['class-b', '2025-2026'],
+          ['class-c', '2025-2026'],
+        ]),
         forensicClassIdByDocumentId: new Map([['doc-legacy', 'class-c']]),
       }).sort()
     ).toEqual(['class-b', 'class-c']);
@@ -176,6 +210,10 @@ describe('getTeacherRecentActiveClassIds', () => {
 
     await getTeacherRecentActiveClassIds({
       teacherClassIds: ['class-a', 'class-b'],
+      classes: [
+        { id: 'class-a', schoolYear: '2026-2027' },
+        { id: 'class-b', schoolYear: '2026-2027' },
+      ],
     });
 
     expect(prisma.document.findMany).toHaveBeenCalledWith(
@@ -187,6 +225,10 @@ describe('getTeacherRecentActiveClassIds', () => {
             {
               classAssignmentId: null,
               assignmentId: null,
+              createdAt: {
+                gte: new Date(Date.UTC(2026, 6, 1)),
+                lt: new Date(Date.UTC(2027, 6, 1)),
+              },
               membership: {
                 classesAsStudent: { some: { id: { in: ['class-a', 'class-b'] } } },
               },

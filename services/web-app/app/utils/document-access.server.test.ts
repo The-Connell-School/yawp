@@ -128,13 +128,59 @@ describe('documentOwnerWhere', () => {
 });
 
 describe('documentReadWhere', () => {
-  test('the owner and their teacher may read', () => {
+  test('the owner may read their solo document', () => {
     expect(matches(documentReadWhere({ profileId: OWNER }), soloDocument)).toBe(
       true
     );
+  });
+
+  test('a later teacher is not granted every document of an enrolled student', () => {
+    // The old enrollment branch let any teacher of any of the student's
+    // classes open every document, including work from another teacher.
     expect(
       matches(documentReadWhere({ profileId: TEACHER }), soloDocument)
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  test('assignmentless teacher access is split by the class school year', () => {
+    const where = documentReadWhere({
+      profileId: TEACHER,
+      teacherClasses: [
+        { id: 'class-old', schoolYear: '2025-2026' },
+        { id: 'class-new', schoolYear: '2026-2027' },
+      ],
+    });
+
+    expect(where).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          {
+            classAssignmentId: null,
+            createdAt: {
+              gte: new Date(Date.UTC(2025, 6, 1)),
+              lt: new Date(Date.UTC(2026, 6, 1)),
+            },
+            membership: {
+              classesAsStudent: {
+                some: { id: { in: ['class-old'] } },
+              },
+            },
+          },
+          {
+            classAssignmentId: null,
+            createdAt: {
+              gte: new Date(Date.UTC(2026, 6, 1)),
+              lt: new Date(Date.UTC(2027, 6, 1)),
+            },
+            membership: {
+              classesAsStudent: {
+                some: { id: { in: ['class-new'] } },
+              },
+            },
+          },
+        ]),
+      })
+    );
   });
 
   test('an unrelated student may not read', () => {

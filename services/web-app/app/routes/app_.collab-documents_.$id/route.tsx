@@ -28,7 +28,7 @@ import { prisma } from '~/utils/db.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
   documentAuthorWhere,
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { CollabEditor } from './collab-editor';
@@ -151,7 +151,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // road. Anything else, including every document that exists today, stays
       // with the solo editor so the two never mix at runtime.
       ...collaborationRoomWhere(),
-      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+      AND: [await documentReadWhereForProfile({ profileId: profile.id, isAdmin })],
     },
     select: {
       id: true,

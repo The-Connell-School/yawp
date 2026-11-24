@@ -7,6 +7,8 @@ import {
   resolveSchoolYearScope,
   schoolYearOptions,
   selectableSchoolYears,
+  schoolYearDateRange,
+  createdAtInSchoolYear,
 } from './school-year';
 
 describe('school year', () => {
@@ -69,5 +71,18 @@ describe('school year', () => {
     expect(
       schoolYearOptions({ years: ['2024-2025', '2025-2026', 'junk'], now })
     ).toEqual(['2026-2027', '2025-2026', '2024-2025']);
+  });
+
+  test('date range is July 1 UTC to the next July 1 UTC', () => {
+    expect(schoolYearDateRange('2025-2026')).toEqual({
+      gte: new Date(Date.UTC(2025, 6, 1)),
+      lt: new Date(Date.UTC(2026, 6, 1)),
+    });
+    expect(createdAtInSchoolYear('2025-2026')).toEqual({
+      createdAt: {
+        gte: new Date(Date.UTC(2025, 6, 1)),
+        lt: new Date(Date.UTC(2026, 6, 1)),
+      },
+    });
   });
 });

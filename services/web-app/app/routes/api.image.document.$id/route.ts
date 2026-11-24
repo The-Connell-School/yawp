@@ -2,7 +2,7 @@ import { invariantResponse } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { documentReadWhere } from '~/utils/document-access.server';
+import { documentReadWhereForProfile } from '~/utils/document-access.server';
 
 /**
  * Serve one student-uploaded figure.
@@ -37,7 +37,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // page that renders with every figure broken.
       document: {
         deletedAt: null,
-        ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+        ...await documentReadWhereForProfile({ profileId: profile.id, isAdmin: user.isAdmin }),
       },
     },
     select: { contentType: true, blob: true, altText: true },

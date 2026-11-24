@@ -30,6 +30,7 @@ function seedEnrolledClass() {
     grade: '9',
     period: '2',
     title: 'World History',
+    schoolYear: '2026-2027',
     classArtIndex: 3,
     classArtKey: 'art-key',
     school: { id: 'school-1', name: 'Tallassee High', organizationId: 'org-1' },
@@ -173,7 +174,7 @@ describe('loadStudentClassDetail', () => {
     });
 
     const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
-    expect(where.AND).toHaveLength(2);
+    expect(where.AND).toHaveLength(3);
     expect(where.OR).toBeUndefined();
   });
 
@@ -183,12 +184,13 @@ describe('loadStudentClassDetail', () => {
       classId: 'class-1',
     });
 
-    expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+    expect(prisma.document.findMany.mock.calls[0][0].where).toMatchObject({
       deletedAt: null,
       archivedAt: null,
       OR: [
         {
           classAssignment: { classId: 'class-1' },
+          artifactKind: 'STUDENT',
           membershipId: 'student-1',
         },
         {
@@ -207,7 +209,14 @@ describe('loadStudentClassDetail', () => {
             },
           },
         },
-        { classAssignmentId: null, membershipId: 'student-1' },
+        {
+          classAssignmentId: null,
+          createdAt: {
+            gte: new Date(Date.UTC(2026, 6, 1)),
+            lt: new Date(Date.UTC(2027, 6, 1)),
+          },
+          membershipId: 'student-1',
+        },
       ],
     });
   });

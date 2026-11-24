@@ -4,7 +4,7 @@ import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 
@@ -24,7 +24,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const document = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...documentReadWhere({
+      ...await documentReadWhereForProfile({
         profileId: profile.id,
         isAdmin: await getIsPlatformAdmin(userId),
       }),

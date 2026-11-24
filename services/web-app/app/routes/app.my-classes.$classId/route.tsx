@@ -1121,8 +1121,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classId,
     legacyClassDocumentIds,
     enrolledStudent
-      ? { membershipId: enrolledStudent.id }
-      : { enrolledMembershipIds: klass.students.map((student) => student.id) }
+      ? { membershipId: enrolledStudent.id, schoolYear: klass.schoolYear }
+      : {
+          enrolledMembershipIds: klass.students.map((student) => student.id),
+          schoolYear: klass.schoolYear,
+        }
   );
 
   // Get all submissions for this class

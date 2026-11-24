@@ -25,6 +25,7 @@ const DOC_B: ScopedDocument = {
   id: 'doc-b',
   membershipId: 'profile-b',
   teacherProfileIds: ['profile-teacher'],
+  classAssignmentTeacherProfileIds: ['profile-teacher'],
 };
 
 function makeRequest(docId: string) {
@@ -121,7 +122,7 @@ describe('api.document.$id.revisions authorization', () => {
     expect(body.entries.map((entry: any) => entry.id)).toContain('rev-1');
   });
 
-  test('returns the history to a teacher of the class the student is in', async () => {
+  test("returns the history to a teacher of the document class", async () => {
     requireMembership.mockResolvedValue({
       id: 'profile-teacher',
       role: 'TEACHER',

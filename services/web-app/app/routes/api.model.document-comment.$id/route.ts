@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 
@@ -58,7 +58,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             ? { archivedAt: { not: null } }
             : { archivedAt: null }),
         document: {
-          is: documentReadWhere({ profileId: profile.id, isAdmin }),
+          is: await documentReadWhereForProfile({ profileId: profile.id, isAdmin }),
         },
       },
       select: {

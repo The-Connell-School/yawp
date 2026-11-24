@@ -353,6 +353,7 @@ describe('app index loader assignments', () => {
             grade: '9',
             period: '1',
             title: 'First Class',
+            schoolYear: '2026-2027',
             classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
             classArtIndex: 12,
             school: {
@@ -367,6 +368,7 @@ describe('app index loader assignments', () => {
             grade: '9',
             period: '2',
             title: 'Second Class',
+            schoolYear: '2026-2027',
             classArtKey: 'af-klint-ten-largest-youth::center-10pct',
             classArtIndex: 3,
             school: {
@@ -421,6 +423,10 @@ describe('app index loader assignments', () => {
     expect(data.totalTeacherClassCount).toBe(2);
     expect(getTeacherRecentActiveClassIds).toHaveBeenCalledWith({
       teacherClassIds: ['class-1', 'class-2'],
+      classes: [
+        { id: 'class-1', schoolYear: '2026-2027' },
+        { id: 'class-2', schoolYear: '2026-2027' },
+      ],
     });
     expect(data.teacherClassCards).toHaveLength(2);
     expect(data.teacherClassCards[0]).toMatchObject({
