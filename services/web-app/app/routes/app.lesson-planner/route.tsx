@@ -1928,8 +1928,18 @@ function MessageBubble({
   // A unit map is a board with a way into every day, not a table of prose.
   // Like a deck, a map that failed the schema still gets its JSON stripped.
   const unitOutcome = readUnitPlan(withoutDeck);
+  // The map where the reply put it (rules test, Nov 23: the reply led with the
+  // map, and the page still drew it under every paragraph). A short lead-in,
+  // then the map, then the rest; a reply with its prose first keeps that order.
+  const unitAt = unitOutcome.kind === 'unit' ? withoutDeck.indexOf(unitOutcome.block) : -1;
+  const unitLead = unitAt > 0 ? withoutDeck.slice(0, unitAt) : '';
+  const unitFirst =
+    unitOutcome.kind === 'unit' &&
+    unitAt >= 0 &&
+    unitLead.trim().length <= 400 &&
+    unitOutcome.body.startsWith(unitLead);
   const withMaterials =
-    unitOutcome.kind === 'none' ? withoutDeck : unitOutcome.body;
+    unitOutcome.kind === 'none' ? withoutDeck : unitFirst ? unitOutcome.body.slice(unitLead.length).trim() : unitOutcome.body;
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
   const { asks: requestedAsks, body: withParts } =
@@ -2014,6 +2024,29 @@ function MessageBubble({
     stackHasPieces: stackV2 && stackHasPieces,
     offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
+
+  const unitCard =
+    unitOutcome.kind === 'unit' ? (
+      <div className="mt-3">
+              <UnitPlanCard
+                unit={unitOutcome.unit}
+                onBuildDay={onSuggestion}
+                builtDays={builtDays}
+                disabled={disabled}
+              />
+              {savedUnit ? (
+                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                  <span>
+                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
+                    whenever you're ready.
+                  </span>
+                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
+                    Open the unit
+                  </Link>
+                </p>
+              ) : null}
+            </div>
+    ) : null;
 
   const renderPart = (
     part: ReplyPart,
@@ -2212,6 +2245,14 @@ function MessageBubble({
               hands over, then the next step. Everything used to be lifted out
               and stacked below the plan, so the button to assign a warm-up sat
               inches away from the warm-up. */}
+          {unitFirst ? (
+            <>
+              {unitLead.trim() ? (
+                <MarkdownContent content={teacherFacingMarkdown(unitLead.trim())} codeAsText markdownClassName={LESSON_PLANNER_MARKDOWN_CLASS} />
+              ) : null}
+              {unitCard}
+            </>
+          ) : null}
           {groupOptionParts(parts).map((group) =>
             group.kind === 'single' ? (
               renderPart(parts[group.index]!, group.index)
@@ -2240,27 +2281,7 @@ function MessageBubble({
               disabled={disabled}
             />
           ) : null}
-          {unitOutcome.kind === 'unit' ? (
-            <div className="mt-3">
-              <UnitPlanCard
-                unit={unitOutcome.unit}
-                onBuildDay={onSuggestion}
-                builtDays={builtDays}
-                disabled={disabled}
-              />
-              {savedUnit ? (
-                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                  <span>
-                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
-                    whenever you're ready.
-                  </span>
-                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
-                    Open the unit
-                  </Link>
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {unitOutcome.kind === 'unit' && !unitFirst ? unitCard : null}
           {unitOutcome.kind === 'unreadable' ? (
             <p
               className={cn('text-sm text-muted-foreground', body && 'mt-3')}
