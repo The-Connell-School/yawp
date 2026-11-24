@@ -47,6 +47,7 @@ const DOC_B: ScopedDocument = {
   id: 'document-1',
   membershipId: 'student-profile-1',
   teacherProfileIds: ['profile-teacher'],
+  classAssignmentTeacherProfileIds: ['profile-teacher'],
 };
 
 const { action } = await import('./route');

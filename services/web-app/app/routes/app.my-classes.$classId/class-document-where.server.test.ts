@@ -3,6 +3,7 @@ import {
   buildClassStudentWorkOnAssignmentBranches,
   buildClassTeacherAssignmentTestDocumentBranch,
 } from '~/utils/class-assignment-scope';
+import { createdAtInSchoolYear } from '~/utils/school-year';
 import { buildClassDocumentScope } from './class-document-where.server';
 
 describe('buildClassDocumentScope', () => {
@@ -19,6 +20,7 @@ describe('buildClassDocumentScope', () => {
     expect(
       buildClassDocumentScope('class-1', [], {
         enrolledMembershipIds: ['membership-1', 'membership-2'],
+        schoolYear: '2026-2027',
       })
     ).toEqual({
       OR: [
@@ -26,6 +28,7 @@ describe('buildClassDocumentScope', () => {
         buildClassTeacherAssignmentTestDocumentBranch('class-1'),
         {
           classAssignmentId: null,
+          ...createdAtInSchoolYear('2026-2027'),
           membershipId: { in: ['membership-1', 'membership-2'] },
         },
       ],
@@ -34,7 +37,10 @@ describe('buildClassDocumentScope', () => {
 
   test('narrows to one student assignment and practice docs when filtered', () => {
     expect(
-      buildClassDocumentScope('class-1', [], { membershipId: 'membership-1' })
+      buildClassDocumentScope('class-1', [], {
+        membershipId: 'membership-1',
+        schoolYear: '2026-2027',
+      })
     ).toEqual({
       OR: [
         {
@@ -61,7 +67,11 @@ describe('buildClassDocumentScope', () => {
             },
           },
         },
-        { classAssignmentId: null, membershipId: 'membership-1' },
+        {
+          classAssignmentId: null,
+          ...createdAtInSchoolYear('2026-2027'),
+          membershipId: 'membership-1',
+        },
       ],
     });
   });

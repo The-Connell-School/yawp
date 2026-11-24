@@ -70,7 +70,7 @@ import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
-import { documentReadWhere } from '~/utils/document-access.server';
+import { documentReadWhereForProfile } from '~/utils/document-access.server';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -249,12 +249,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // exactly as it did. Scoped to what this person may read so the redirect does
   // not answer "is this id a shared draft?" for someone guessing ids — they get
   // the same not-found the query below would have given them.
+  const documentAccessWhere = await documentReadWhereForProfile({
+    profileId: profile.id,
+    isAdmin,
+  });
   const collaborative = await prisma.document.findFirst({
     where: {
       id: params.id,
       artifactKind: 'STUDENT',
       ...collaborationRoomWhere(),
-      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+      AND: [documentAccessWhere],
     },
     select: { id: true },
   });
@@ -265,26 +269,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...(hasEffectivePlatformAdmin(user?.isAdmin)
-        ? {}
-        : {
-            OR: [
-              { membershipId: profile.id },
-              {
-                membership: {
-                  classesAsStudent: {
-                    some: {
-                      teachers: {
-                        some: {
-                          id: profile.id,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          }),
+      ...documentAccessWhere,
     },
     select: {
       id: true,

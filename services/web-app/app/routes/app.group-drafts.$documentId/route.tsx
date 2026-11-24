@@ -35,7 +35,7 @@ import { formatUserDisplayName } from '~/utils/user-display';
 import { prisma } from '~/utils/db.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import {
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { ContributionPanel } from './contribution-panel';
@@ -85,7 +85,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: params.documentId,
       // Only an opened collaborative draft has contributions to break down.
       ...collaborationRoomWhere(),
-      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+      AND: [await documentReadWhereForProfile({ profileId: profile.id, isAdmin })],
     },
     select: {
       id: true,
@@ -197,7 +197,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: {
       id: params.documentId,
       ...collaborationRoomWhere(),
-      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+      AND: [await documentReadWhereForProfile({ profileId: profile.id, isAdmin })],
     },
     select: {
       id: true,

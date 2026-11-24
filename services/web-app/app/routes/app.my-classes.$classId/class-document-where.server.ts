@@ -19,17 +19,21 @@ export function buildClassDocumentScope(
   options?: {
     membershipId?: string | null;
     enrolledMembershipIds?: string[];
+    schoolYear: string;
   }
 ): ClassDocumentScope {
+  const schoolYear = options?.schoolYear ?? '';
   const scope: ClassDocumentScope = {
     OR: options?.membershipId
       ? buildStudentClassDocumentsScope({
           classId,
           membershipId: options.membershipId,
+          schoolYear,
         }).OR
       : buildEnrolledClassDocumentsScope(
           classId,
-          options?.enrolledMembershipIds ?? []
+          options?.enrolledMembershipIds ?? [],
+          schoolYear
         ).OR,
   };
 

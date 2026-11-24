@@ -1,4 +1,5 @@
 import { type Prisma } from '@app/prisma';
+import { assignmentlessBranchesForTeacherClasses } from '~/utils/class-assignment-scope';
 import { prisma } from './db.server';
 import { hasEffectivePlatformAdmin } from './preview-access.server';
 
@@ -14,8 +15,10 @@ import { hasEffectivePlatformAdmin } from './preview-access.server';
  * Three rules exist, and they are not interchangeable:
  *
  * - READ scope (`documentReadWhere`) — the student who owns a solo document, active
- *   group members, plus the teacher of the artifact's ClassAssignment. The legacy
- *   enrollment branch remains for assignmentless solo documents.
+ *   group members, plus the teacher of the artifact's ClassAssignment. Assignmentless
+ *   writing is only readable by a teacher of a class the student is in during the
+ *   school year the document was created, or by a teacher of a forensic old class.
+ *   A later teacher of the same student must not inherit last year's work.
  * - AUTHOR scope (`documentAuthorWhere`) — the owner and the document's active
  *   co-authors. This is the collaborative write scope: it guards the shared draft
  *   itself. Teachers are excluded for the same reason they are excluded from owner
@@ -70,11 +73,17 @@ function activeGroupMemberClause(profileId: string): Prisma.DocumentWhereInput {
 export function documentReadWhere({
   profileId,
   isAdmin,
+  teacherClasses = [],
+  legacyDocumentIds = [],
 }: {
   profileId: string;
   isAdmin?: boolean | null;
+  teacherClasses?: { id: string; schoolYear: string }[];
+  legacyDocumentIds?: string[];
 }): Prisma.DocumentWhereInput {
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
+
+  const assignmentless = assignmentlessBranchesForTeacherClasses(teacherClasses);
 
   return {
     OR: [
@@ -85,15 +94,48 @@ export function documentReadWhere({
           is: { class: { teachers: { some: { id: profileId } } } },
         },
       },
-      {
-        membership: {
-          classesAsStudent: {
-            some: { teachers: { some: { id: profileId } } },
-          },
-        },
-      },
+      ...assignmentless,
+      ...(legacyDocumentIds.length > 0
+        ? [{ id: { in: legacyDocumentIds } }]
+        : []),
     ],
   };
+}
+
+/** Loads the teacher class / forensic scope and folds it into documentReadWhere. */
+export async function documentReadWhereForProfile({
+  profileId,
+  isAdmin,
+}: {
+  profileId: string;
+  isAdmin?: boolean | null;
+}): Promise<Prisma.DocumentWhereInput> {
+  if (hasEffectivePlatformAdmin(isAdmin)) return {};
+
+  // Unit tests often stub a partial Prisma client. Missing models fail closed:
+  // no teacher classes means no assignmentless or forensic teacher access.
+  const teacherClasses =
+    typeof prisma.class?.findMany === 'function'
+      ? await prisma.class.findMany({
+          where: { teachers: { some: { id: profileId } } },
+          select: { id: true, schoolYear: true },
+        })
+      : [];
+  const forensicRows =
+    teacherClasses.length === 0 ||
+    typeof prisma.documentClassForensic?.findMany !== 'function'
+      ? []
+      : await prisma.documentClassForensic.findMany({
+          where: { oldClassId: { in: teacherClasses.map((klass) => klass.id) } },
+          select: { documentId: true },
+        });
+
+  return documentReadWhere({
+    profileId,
+    isAdmin,
+    teacherClasses,
+    legacyDocumentIds: forensicRows.map((row) => row.documentId),
+  });
 }
 
 /**
@@ -229,16 +271,18 @@ export function documentOwnerSessionWhere({
  * Returns `{}` for a platform admin for the same reason as `documentOwnerSessionWhere`:
  * so no query carries a `document: { is: {} }` no-op.
  */
-export function documentCommentReadWhere({
+export async function documentCommentReadWhere({
   profileId,
   isAdmin,
 }: {
   profileId: string;
   isAdmin?: boolean | null;
-}): Prisma.DocumentCommentWhereInput {
+}): Promise<Prisma.DocumentCommentWhereInput> {
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
-  return { document: { is: documentReadWhere({ profileId }) } };
+  return {
+    document: { is: await documentReadWhereForProfile({ profileId, isAdmin }) },
+  };
 }
 
 export async function getIsPlatformAdmin(userId: string) {

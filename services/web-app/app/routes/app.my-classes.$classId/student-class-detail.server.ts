@@ -84,6 +84,7 @@ export async function loadStudentClassDetail({
       grade: true,
       period: true,
       title: true,
+      schoolYear: true,
       classArtIndex: true,
       classArtKey: true,
       school: { select: { id: true, name: true, organizationId: true } },
@@ -159,7 +160,11 @@ export async function loadStudentClassDetail({
       where: {
         deletedAt: null,
         archivedAt: null,
-        ...buildStudentClassDocumentsScope({ classId: klass.id, membershipId }),
+        ...buildStudentClassDocumentsScope({
+          classId: klass.id,
+          membershipId,
+          schoolYear: klass.schoolYear,
+        }),
         ...HIDE_AP_HISTORY_DOCUMENT_WHERE,
       },
       include: studentDocumentInclude(membershipId),

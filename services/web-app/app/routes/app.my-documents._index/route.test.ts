@@ -52,9 +52,10 @@ describe('my documents route', () => {
   /**
    * The student's work has to be scoped by the same year their classes are, or
    * My Documents and My Classes disagree about what year it is. Work the
-   * student started outside a class has no year, so it is never scoped away.
+   * student started outside a class is scoped by when it was created, so last
+   * year's free writes stay in last year's view.
    */
-  test('scopes class work to the selected year and keeps unassigned work', async () => {
+  test('scopes class work and unassigned work to the selected year', async () => {
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
     prisma.document.findMany.mockResolvedValue([]);
 
@@ -67,7 +68,13 @@ describe('my documents route', () => {
             {
               OR: [
                 { classAssignment: { class: { schoolYear: '2025-2026' } } },
-                { classAssignment: { is: null } },
+                {
+                    classAssignment: { is: null },
+                    createdAt: {
+                      gte: new Date(Date.UTC(2025, 6, 1)),
+                      lt: new Date(Date.UTC(2026, 6, 1)),
+                    },
+                  },
               ],
             },
           ]),

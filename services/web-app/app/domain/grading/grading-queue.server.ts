@@ -102,7 +102,7 @@ export async function loadGradingQueueNeighbors(params: GradingQueueLoaderParams
       // A class-scoped queue never reaches outside the class it came from.
       ...(scope.kind === 'class' && scope.classId ? { id: scope.classId } : {}),
     },
-    select: { id: true, grade: true, period: true, title: true },
+    select: { id: true, grade: true, period: true, title: true, schoolYear: true },
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
@@ -126,6 +126,10 @@ export async function loadGradingQueueNeighbors(params: GradingQueueLoaderParams
         AND: [
           buildTeacherClassWorkDocumentWhere({
             classIds,
+            classes: classes.map((klass) => ({
+              id: klass.id,
+              schoolYear: klass.schoolYear,
+            })),
             legacyDocumentIds: forensicRows.map((row) => row.documentId),
           }),
           buildTeacherDocumentAccessWhere({

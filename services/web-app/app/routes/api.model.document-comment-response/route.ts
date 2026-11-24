@@ -31,7 +31,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const comment = await prisma.documentComment.findFirst({
     where: {
       id: data.commentId,
-      ...documentCommentReadWhere({
+      ...await documentCommentReadWhere({
         profileId: profile.id,
         isAdmin: await getIsPlatformAdmin(userId),
       }),

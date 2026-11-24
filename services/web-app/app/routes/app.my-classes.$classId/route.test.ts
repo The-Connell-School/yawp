@@ -1230,6 +1230,7 @@ describe('class detail loader for students', () => {
       grade: '9',
       period: '2',
       title: 'World History',
+      schoolYear: '2026-2027',
       classArtIndex: 3,
       classArtKey: 'art-key',
       school: {
@@ -1343,7 +1344,14 @@ describe('class detail loader for students', () => {
             },
           },
         },
-        { classAssignmentId: null, membershipId: 'student-1' },
+        {
+          classAssignmentId: null,
+          createdAt: {
+            gte: new Date(Date.UTC(2026, 6, 1)),
+            lt: new Date(Date.UTC(2027, 6, 1)),
+          },
+          membershipId: 'student-1',
+        },
       ],
     });
   });
