@@ -100,6 +100,12 @@ export function workNamedOnSlides(reply: string): string | null {
   return null;
 }
 
+/** Whether a work is read on the slides: an excerpt, or a reading slide that names its work. */
+function readsAWork(reply: string): boolean {
+  const outcome = readSlideDeck(reply);
+  return outcome.kind === 'deck' && outcome.deck.slides.some((slide) => slide.layout === 'excerpt' || (slide.layout === 'read' && Boolean(slide.work)));
+}
+
 /** Whether the lesson reads from a text: an excerpt or reading slide, or quotations in its words. */
 export function lessonQuotes(reply: string): boolean {
   // A unit map assigns reading; it quotes nothing until a day is built.
@@ -126,6 +132,9 @@ export function withQuotationsLabel(
   counts: { verified: number; corrected: number; unverified: number }
 ): string {
   if (QUOTATIONS_MARK.test(reply) || !lessonQuotes(reply)) return reply;
+  // A lesson with no work at its center (a grammar or argument lesson whose
+  // examples Yawp! wrote) has nothing to check against: no line (types test, Nov 24).
+  if (checked.kind === 'none' && !readsAWork(reply)) return reply;
   let line: string;
   if (checked.kind === 'unavailable') {
     line = `Quotations not checked: Yawp! couldn’t get its copy of *${checked.work.title}* in time. Add your pages with the paperclip and they will be.`;

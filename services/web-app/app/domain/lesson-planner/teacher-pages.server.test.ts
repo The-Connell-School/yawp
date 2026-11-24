@@ -142,4 +142,9 @@ describe('what the quotations were checked against, on every lesson that quotes'
     const handout = "```yawp-material\nkind: handout\n\n\"Life for me ain't been no crystal stair.\"\n```";
     expect(lessonQuotes(handout)).toBe(true);
   });
+
+  test('a skill lesson with no work at its center gets no line, though its examples are in quotation marks (types test, Nov 24)', () => {
+    const grammar = `# Semicolons\n\nCompare: "I wanted to go to the game; my brother wanted to stay home and sleep."\n\n${deckWith([{ layout: 'title', title: 'Semicolons', speakerNotes: 'n' }, { layout: 'big_idea', title: 'Two sentences', body: 'Join two complete sentences.', speakerNotes: 'n' }])}`;
+    expect(withQuotationsLabel(grammar, { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 })).toBe(grammar);
+  });
 });
