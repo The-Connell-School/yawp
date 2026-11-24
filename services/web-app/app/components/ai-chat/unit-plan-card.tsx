@@ -90,7 +90,11 @@ export function UnitPlanCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{unit.title}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {[`${periods} ${periods === 1 ? 'day' : 'days'}`, unit.subtitle]
+            {[
+              // A subtitle that already counts the days ("English 10 · Period 3 · 15 days") is not told it twice.
+              unit.subtitle && /\b\d+\s*(?:days?|periods?)\b/i.test(unit.subtitle) ? null : `${periods} ${periods === 1 ? 'day' : 'days'}`,
+              unit.subtitle,
+            ]
               .filter(Boolean)
               .join(' · ')}
           </p>
@@ -189,7 +193,9 @@ export function UnitPlanCard({
 function DayAtAGlance({ day }: { day: UnitPlan['days'][number] }) {
   const reading = shortReading(day.reading);
   // A named reading says "read" itself, with the book; no second book beside it.
-  const activities = unitDayActivities(day).filter((kind) => !(reading && kind === 'read'));
+  // A class starter opens nearly every day, so it tells a teacher nothing at a
+  // glance (rules test, Nov 23); it stays in the day's details.
+  const activities = unitDayActivities(day).filter((kind) => kind !== 'starter' && !(reading && kind === 'read'));
   if (!activities.length && !reading) return null;
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
