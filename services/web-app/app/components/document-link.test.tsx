@@ -9,17 +9,17 @@ try {
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, type ReactElement } from 'react';
+import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 const submit = mock(() => {});
 
 mock.module('./ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children?: unknown }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children?: unknown }) => (
+  DropdownMenu: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => (
     <div>{children}</div>
   ),
-  DropdownMenuContent: ({ children }: { children?: unknown }) => (
+  DropdownMenuContent: ({ children }: { children?: ReactNode }) => (
     <div>{children}</div>
   ),
   DropdownMenuItem: ({
@@ -27,7 +27,7 @@ mock.module('./ui/dropdown-menu', () => ({
     onSelect,
     onClick,
   }: {
-    children?: unknown;
+    children?: ReactNode;
     onSelect?: () => void;
     onClick?: (event: MouseEvent) => void;
   }) => (
@@ -50,7 +50,7 @@ mock.module('react-router', () => ({
     to,
     ...props
   }: {
-    children?: unknown;
+    children?: ReactNode;
     to: string;
     className?: string;
   }) => (
@@ -64,7 +64,7 @@ mock.module('react-router', () => ({
       children,
       ...props
     }: {
-      children?: unknown;
+      children?: ReactNode;
       method?: string;
       action?: string;
     }) => <form {...props}>{children}</form>,
