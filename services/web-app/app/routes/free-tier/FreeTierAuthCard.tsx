@@ -26,6 +26,7 @@ export function FreeTierAuthCard({
   belowCard,
   stackAfterCard,
   splitAside,
+  setupColumn = false,
 }: {
   title: string;
   subtitle?: string;
@@ -40,10 +41,16 @@ export function FreeTierAuthCard({
   /** @deprecated Use splitAside for admin approve split view. */
   stackAfterCard?: ReactNode;
   splitAside?: ReactNode;
+  /**
+   * Share one 640px column with the setup timeline. Public sign-up passes
+   * aboveCard for the What is Yawp! link and must stay the narrow card.
+   */
+  setupColumn?: boolean;
 }) {
   const faqColumn = splitAside ?? stackAfterCard;
   const split = Boolean(faqColumn);
   const stacked = Boolean(faqColumn || belowCard) && !split;
+  const introStack = Boolean(aboveCard) && !setupColumn && !split && !stacked;
   return (
     <div
       className={`free-tier-page${
@@ -54,7 +61,7 @@ export function FreeTierAuthCard({
             : aside
               ? ' free-tier-approval-v2'
               : ''
-      }${aboveCard ? ' free-tier-setup-page' : ''}`}
+      }${setupColumn ? ' free-tier-setup-page' : ''}`}
     >
       <AuthPageShell>
         {aside && !stacked && !split ? (
@@ -88,7 +95,15 @@ export function FreeTierAuthCard({
             <div className="free-tier-approval-split-right">{faqColumn}</div>
           </div>
         ) : (
-          <div className={stacked ? 'free-tier-approval-column' : undefined}>
+          <div
+            className={
+              stacked
+                ? 'free-tier-approval-column'
+                : introStack
+                  ? 'flex w-full flex-col items-center gap-4'
+                  : undefined
+            }
+          >
             {aboveCard ? (
               <div className="free-tier-above-card">{aboveCard}</div>
             ) : null}
