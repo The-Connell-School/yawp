@@ -368,6 +368,7 @@ export default function FreeTierOnboardingRoute() {
       title={onboardingV2 ? 'One last step: your administrator’s approval' : 'Who can approve Yawp!'}
       footer={<FreeTierSignOut />}
       subtitle={onboardingV2 ? undefined : 'A site or district administrator. Department chairs and teachers can’t.'}
+      setupColumn={onboardingV2}
       aboveCard={
         onboardingV2 ? (
           <FreeTierSetupTimelineCard phase="admin-approval" />

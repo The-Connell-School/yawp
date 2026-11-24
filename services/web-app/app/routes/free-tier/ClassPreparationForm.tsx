@@ -27,6 +27,7 @@ export function ClassPreparationForm({
 }) {
   return (
     <FreeTierAuthCard
+      setupColumn
       aboveCard={<FreeTierSetupTimelineCard phase="class-setup" />}
       title="Tell us about your class"
       subtitle="Your administrator approves Yawp! next. Then you can invite students."
