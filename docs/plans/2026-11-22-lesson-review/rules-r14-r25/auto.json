@@ -1,0 +1,734 @@
+[
+ {
+  "id": "antigone",
+  "secs": 171,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full plan and deck. I'm using F. Storr's 1912 translation (public domain) for all quoted passages, and I'll note that on the hand",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": false,
+   "secs": 171,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "big_idea",
+   "map",
+   "timeline",
+   "define",
+   "diagram",
+   "read",
+   "discuss",
+   "big_idea",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": true,
+   "places": [
+    "Athens -> Athens, Greece",
+    "Thebes -> Thebes, Greece (the ancient city; today Thiva)",
+    "Argos -> Árgos, Greece"
+   ]
+  },
+  "R21": {
+   "pass": false,
+   "events": 4,
+   "with_picture": 0,
+   "titles": [
+    "Before Oedipus rules Thebes",
+    "Before The brothers' pact",
+    "Yesterday The battle at the gates",
+    "This morning Creon takes power"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 7,
+   "with_visual": 2,
+   "words_only": [
+    "big_idea: The morning after",
+    "timeline: What happened before the play begins",
+    "define: One word to know",
+    "read: Prologue & Parodos",
+    "big_idea: Two arguments"
+   ]
+  },
+  "pictures_on_deck": 1,
+  "diagrams": 1,
+  "R24": {
+   "checks": {
+    "work": "sophocles-theban",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 7,
+   "filled": 1,
+   "named": 2,
+   "misses": [
+    "Antigone: not the thing",
+    "Antigone (Sophocles play): not the thing",
+    "Oedipus rules Thebes: none",
+    "The brothers' pact: not the thing",
+    "The battle at the gates: none",
+    "Creon takes power: not the thing"
+   ],
+   "secondTried": 2,
+   "secondHits": 7,
+   "secondUsable": 4,
+   "secondShown": 4,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "dulce",
+  "secs": 204,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full plan. \"Dulce et Decorum Est\" is in the public domain, so all passages are quoted directly from Owen's text.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.98,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": "- “Owen arrives on the Western Front. Within weeks he is buried by a shell blast an…”: The shell-shock breakdown came in spring 1917 (April), around three months after arrival, and the Somme battle itself was in 1916.\n- Quotations not checked: Yawp! doesn’t have *Dulce et Decorum Est*. Add your pages with the paperclip (a PDF, a photo or pasted text) and they will be."
+  },
+  "R19": {
+   "pass": false,
+   "secs": 204,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "timeline",
+   "map",
+   "define",
+   "big_idea",
+   "steps",
+   "excerpt",
+   "excerpt",
+   "excerpt",
+   "compare",
+   "discuss",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": false,
+   "places": [
+    "Ypres -> Ieper, Belgium",
+    "Somme -> NOT FOUND",
+    "Craigie Hospital -> NOT FOUND"
+   ]
+  },
+  "R21": {
+   "pass": false,
+   "events": 5,
+   "with_picture": 1,
+   "titles": [
+    "1893 Owen born [pic]",
+    "1915 Enlists",
+    "Jan 1917 The Somme",
+    "1917 Craigie Hospital",
+    "Nov 1918 Killed in action"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 9,
+   "with_visual": 5,
+   "words_only": [
+    "define: Words for the poem",
+    "big_idea: The Latin line",
+    "steps: Read aloud",
+    "compare: What the poem showed vs. what the Latin says"
+   ]
+  },
+  "pictures_on_deck": 2,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "wilfred-owen",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 7,
+   "filled": 2,
+   "named": 1,
+   "misses": [
+    "Dulce et Decorum est: none",
+    "Enlists: not the thing",
+    "The Somme: not a picture",
+    "Craigie Hospital: none",
+    "Killed in action: not the thing"
+   ],
+   "secondTried": 1,
+   "secondHits": 3,
+   "secondUsable": 2,
+   "secondShown": 2,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "gatsby",
+  "secs": 147,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full lesson and deck.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.98,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": "- “1919 · Prohibition begins”: Prohibition took effect in January 1920 (the 18th Amendment was ratified in 1919), and the lesson text itself says 1920.\n- “Between the Eggs and the city”: The Valley of Ashes lies on the road from West Egg to New York, not between the Eggs.\n- Quotations checked against The Great Gatsby, the 1925 text (Project Gutenberg): 0 found; 1 not found in it."
+  },
+  "R19": {
+   "pass": true,
+   "secs": 147,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "map",
+   "timeline",
+   "define",
+   "person",
+   "big_idea",
+   "big_idea",
+   "world",
+   "diagram",
+   "diagram",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": false,
+   "places": [
+    "New York City -> New York City, New York, United States of America",
+    "Great Neck -> Great Neck, New York, United States of America",
+    "Kings Point -> Kings Point, New York, United States of America",
+    "Flushing -> NOT FOUND"
+   ]
+  },
+  "R21": {
+   "pass": true,
+   "events": 6,
+   "with_picture": 4,
+   "titles": [
+    "1919 Prohibition begins [pic]",
+    "1920 Women vote [pic]",
+    "1920s The Jazz Age [pic]",
+    "1923 Stock market soars",
+    "1925 Gatsby published",
+    "1929 The crash [pic]"
+   ]
+  },
+  "R22": {
+   "world_slides": 1,
+   "scenes": [
+    "A Jazz Age party [pic]",
+    "A Gold Coast estate [pic]",
+    "A speakeasy [pic]",
+    "The ash heaps"
+   ],
+   "pass": true
+  },
+  "R23": {
+   "pass": true,
+   "content_slides": 9,
+   "with_visual": 8,
+   "words_only": [
+    "define: Words for the 1920s"
+   ]
+  },
+  "pictures_on_deck": 11,
+  "diagrams": 2,
+  "R24": {
+   "checks": {
+    "work": "great-gatsby",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 1,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 12,
+   "filled": 10,
+   "named": 5,
+   "misses": [
+    "Corona Ash Dumps: none",
+    "Stock market soars: not a picture"
+   ],
+   "secondTried": 3,
+   "secondHits": 11,
+   "secondUsable": 5,
+   "secondShown": 5,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "king",
+  "secs": 141,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the full context day.",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 141,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "discuss",
+   "map",
+   "big_idea",
+   "timeline",
+   "person",
+   "big_idea",
+   "excerpt",
+   "discuss",
+   "define",
+   "big_idea",
+   "exit"
+  ],
+  "R20": {
+   "pass": true,
+   "places": [
+    "Birmingham -> Birmingham, Alabama, United States of America",
+    "Montgomery -> Montgomery, Alabama, United States of America",
+    "Atlanta -> Atlanta, Georgia, United States of America",
+    "Washington -> Washington, D.C., District Of Columbia, United States of America"
+   ]
+  },
+  "R21": {
+   "pass": false,
+   "events": 6,
+   "with_picture": 2,
+   "titles": [
+    "April 3 Project C begins [pic]",
+    "April 10 Injunction issued",
+    "April 12 King arrested",
+    "April 12–16 Letter written",
+    "May 2–3 Children's Crusade [pic]",
+    "May 10 Agreement reached"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 8,
+   "with_visual": 3,
+   "words_only": [
+    "big_idea: Why Birmingham?",
+    "person: Who: The key figures",
+    "big_idea: The clergymen's argument",
+    "define: Two terms for the letter",
+    "big_idea: The form of the letter"
+   ]
+  },
+  "pictures_on_deck": 3,
+  "diagrams": 0,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations not checked",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 12,
+   "filled": 3,
+   "named": 4,
+   "misses": [
+    "Birmingham, Alabama: not the thing",
+    "Martin Luther King Jr.: not the thing",
+    "Letter from Birmingham Jail: not the thing",
+    "Injunction issued: not the thing",
+    "King arrested: none",
+    "Letter written: not a picture",
+    "Agreement reached: not the thing",
+    "Bull Connor: not the thing",
+    "The Eight Clergymen: none"
+   ],
+   "secondTried": 3,
+   "secondHits": 12,
+   "secondUsable": 6,
+   "secondShown": 6,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "macbeth",
+  "secs": 120,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "**English 12 · 50 minutes**",
+   "first_is_caveat": false,
+   "quotation_line_at": 0.97,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": "- “Thane of Cawdor · True, but he doesn't know it yet. · line 72”: The witches' three greetings come in Act 1, Scene 3 around lines 48-50, not lines 71-73.\n- Quotations checked against Macbeth, the Project Gutenberg text of Macbeth: 5 found; 2 not found in it."
+  },
+  "R19": {
+   "pass": true,
+   "secs": 120,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "big_idea",
+   "define",
+   "notes",
+   "diagram",
+   "read",
+   "excerpt",
+   "excerpt",
+   "steps",
+   "discuss",
+   "write",
+   "exit"
+  ],
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": true,
+   "content_slides": 8,
+   "with_visual": 5,
+   "words_only": [
+    "define: Words for Act 1, Scene 3",
+    "read: Act 1, Scene 3, lines 48–156",
+    "steps: Close reading in pairs"
+   ]
+  },
+  "pictures_on_deck": 3,
+  "diagrams": 1,
+  "R24": {
+   "checks": {
+    "work": "macbeth",
+    "quotationsVerified": 5,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 2,
+    "excerptsFromSource": 2
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 3,
+   "filled": 3,
+   "named": 2,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "odyssey",
+  "secs": 174,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "The Odyssey is in the public domain (Homer, composed ~8th century BCE), so I can quote it directly — I'll use Samuel Butler's translation.",
+   "first_is_caveat": false,
+   "quotation_line_at": 1.0,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": false,
+   "secs": 174,
+   "limit": 150
+  },
+  "R24": {
+   "checks": {
+    "work": "odyssey",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 4,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": "Quotations checked against",
+   "quotes": true,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 0,
+   "filled": 0,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "theireyes",
+  "secs": 165,
+  "kind": "lesson",
+  "R14": {
+   "first_paragraph": "Here's the lesson. Their Eyes Were Watching God is still in copyright, so the handout below includes a labeled slot for the chapter 1 passag",
+   "first_is_caveat": false,
+   "quotation_line_at": null,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": false,
+   "secs": 165,
+   "limit": 150
+  },
+  "layouts": [
+   "title",
+   "agenda",
+   "write",
+   "discuss",
+   "notes",
+   "map",
+   "person",
+   "big_idea",
+   "diagram",
+   "define",
+   "diagram",
+   "read",
+   "discuss",
+   "big_idea",
+   "write",
+   "exit"
+  ],
+  "R20": {
+   "pass": true,
+   "places": [
+    "Eatonville -> Eatonville, Florida, United States of America",
+    "Orlando -> Orlando, Florida, United States of America"
+   ]
+  },
+  "R22": {
+   "world_slides": 0,
+   "scenes": [],
+   "pass": false
+  },
+  "R23": {
+   "pass": false,
+   "content_slides": 9,
+   "with_visual": 4,
+   "words_only": [
+    "notes: Eatonville, Florida",
+    "big_idea: Big idea",
+    "define: Words for chapter 1",
+    "read: Reading chapter 1",
+    "big_idea: Big idea"
+   ]
+  },
+  "pictures_on_deck": 2,
+  "diagrams": 2,
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 1
+  },
+  "R25": {
+   "line": null,
+   "quotes": false,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 4,
+   "filled": 2,
+   "named": 2,
+   "misses": [
+    "Eatonville, Florida: not the thing",
+    "Mules and Men: none"
+   ],
+   "secondTried": 2,
+   "secondHits": 9,
+   "secondUsable": 4,
+   "secondShown": 4,
+   "secondFailed": null
+  }
+ },
+ {
+  "id": "unit",
+  "secs": 94,
+  "kind": "unit",
+  "R14": {
+   "first_paragraph": "Here's the unit board.",
+   "first_is_caveat": false,
+   "quotation_line_at": null,
+   "pass": true
+  },
+  "R15": {
+   "pass": true,
+   "hits": []
+  },
+  "R16": {
+   "pass": true,
+   "sentences_before_map": 1
+  },
+  "R17": {
+   "pass": true,
+   "notes": ""
+  },
+  "R19": {
+   "pass": true,
+   "secs": 94,
+   "limit": 120
+  },
+  "R24": {
+   "checks": {
+    "work": "none",
+    "quotationsVerified": 0,
+    "quotationsCorrected": 0,
+    "quotationsUnverified": 0,
+    "excerptsFromSource": 0
+   },
+   "slots": 0
+  },
+  "R25": {
+   "line": null,
+   "quotes": false,
+   "pass": true
+  },
+  "pictures_report": {
+   "wanted": 0,
+   "filled": 0,
+   "named": 0,
+   "misses": [],
+   "secondTried": null,
+   "secondHits": null,
+   "secondUsable": null,
+   "secondShown": null,
+   "secondFailed": null
+  }
+ }
+]
