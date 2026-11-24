@@ -144,6 +144,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       grade: true,
       period: true,
       title: true,
+      schoolYear: true,
       school: { select: { id: true, name: true, organizationId: true } },
     },
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
@@ -176,6 +177,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const documentWhere: Prisma.DocumentWhereInput =
     buildTeacherClassWorkDocumentWhere({
       classIds,
+      classes: classes.map((klass) => ({
+        id: klass.id,
+        schoolYear: klass.schoolYear,
+      })),
       legacyDocumentIds: forensicRows.map((row) => row.documentId),
     });
 

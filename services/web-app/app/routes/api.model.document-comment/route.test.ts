@@ -27,6 +27,7 @@ const DOC_B: ScopedDocument = {
   id: 'doc-b',
   membershipId: 'profile-b',
   teacherProfileIds: ['profile-teacher'],
+  classAssignmentTeacherProfileIds: ['profile-teacher'],
 };
 
 function commentRequest(documentId: string) {
@@ -93,7 +94,7 @@ describe('api.model.document-comment authorization', () => {
     expect(prisma.documentComment.create).toHaveBeenCalledTimes(1);
   });
 
-  test('lets a teacher of the class comment on the student work', async () => {
+  test("lets a teacher of the document class comment on the student work", async () => {
     requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue({
       id: 'profile-teacher',

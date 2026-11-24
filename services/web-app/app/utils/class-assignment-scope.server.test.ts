@@ -6,12 +6,17 @@ import {
   buildTeacherClassWorkDocumentWhere,
   teacherWorkListVisibilityWhere,
 } from './class-assignment-scope';
+import { createdAtInSchoolYear } from './school-year';
 
 describe('buildTeacherClassWorkDocumentWhere', () => {
-  test('includes assignmentless documents for students enrolled in teacher classes', () => {
+  test('includes same-year assignmentless documents for students enrolled in teacher classes', () => {
     expect(
       buildTeacherClassWorkDocumentWhere({
         classIds: ['class-a', 'class-b'],
+        classes: [
+          { id: 'class-a', schoolYear: '2026-2027' },
+          { id: 'class-b', schoolYear: '2026-2027' },
+        ],
       })
     ).toEqual({
       deletedAt: null,
@@ -25,6 +30,7 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
             buildClassTeacherAssignmentTestDocumentBranch('class-b'),
             {
               classAssignmentId: null,
+              ...createdAtInSchoolYear('2026-2027'),
               membership: {
                 classesAsStudent: {
                   some: { id: { in: ['class-a', 'class-b'] } },
@@ -36,6 +42,26 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
         HIDE_AP_HISTORY_DOCUMENT_WHERE,
       ],
     });
+  });
+
+  test('does not attach a prior-year unassigned document to a later-year class', () => {
+    const where = buildTeacherClassWorkDocumentWhere({
+      classIds: ['class-new'],
+      classes: [{ id: 'class-new', schoolYear: '2026-2027' }],
+    });
+    const classScope = (where.AND as any)[0].OR;
+    const assignmentless = classScope.filter(
+      (branch: any) => branch.classAssignmentId === null
+    );
+    expect(assignmentless).toEqual([
+      {
+        classAssignmentId: null,
+        ...createdAtInSchoolYear('2026-2027'),
+        membership: {
+          classesAsStudent: { some: { id: { in: ['class-new'] } } },
+        },
+      },
+    ]);
   });
 
   test('keeps archived submitted student work while excluding archived empty drafts', () => {
@@ -105,14 +131,6 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
           OR: [
             ...buildClassStudentWorkOnAssignmentBranches('class-a'),
             buildClassTeacherAssignmentTestDocumentBranch('class-a'),
-            {
-              classAssignmentId: null,
-              membership: {
-                classesAsStudent: {
-                  some: { id: { in: ['class-a'] } },
-                },
-              },
-            },
             { id: { in: ['doc-legacy'] } },
           ],
         },

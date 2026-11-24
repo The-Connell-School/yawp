@@ -8,7 +8,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
   documentAuthorWhere,
-  documentReadWhere,
+  documentReadWhereForProfile,
   whereSoloAuthorDocumentArtifactKind,
 } from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
@@ -115,7 +115,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     where: {
       id: params.id,
       ...(snapshotId
-        ? documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin })
+        ? await documentReadWhereForProfile({ profileId: profile.id, isAdmin: user.isAdmin })
         : {
             AND: [
               whereSoloAuthorDocumentArtifactKind(),
@@ -464,7 +464,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
         // the predicate is what refuses the write, and it should not depend on a
         // lookup fifty lines earlier staying scoped.
         AND: [
-          documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+          await documentReadWhereForProfile({ profileId: profile.id, isAdmin: user.isAdmin }),
         ],
         ...(hasBodyMutation && data.baseRevision !== undefined
           ? { revision: data.baseRevision }

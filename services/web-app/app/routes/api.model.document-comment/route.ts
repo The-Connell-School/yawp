@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 
@@ -31,7 +31,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const document = await prisma.document.findFirst({
     where: {
       id: data.documentId,
-      ...documentReadWhere({
+      ...await documentReadWhereForProfile({
         profileId: profile.id,
         isAdmin: await getIsPlatformAdmin(userId),
       }),

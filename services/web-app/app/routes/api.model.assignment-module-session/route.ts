@@ -6,7 +6,7 @@ import { prisma } from '~/utils/db.server.js';
 import {
   documentAuthorWhere,
   documentOwnerWhere,
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
@@ -59,7 +59,7 @@ export async function action({ request }: ActionFunctionArgs) {
     prisma.document.findFirst({
       where: {
         id: data.documentId,
-        ...documentReadWhere({ profileId: profile.id, isAdmin }),
+        ...await documentReadWhereForProfile({ profileId: profile.id, isAdmin }),
       },
       select: {
         id: true,

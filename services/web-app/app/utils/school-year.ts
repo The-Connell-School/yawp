@@ -43,6 +43,25 @@ export function resolveSchoolYearScope(
  * when it falls outside that window, so opening an old class to edit its title
  * cannot quietly move it to a different year.
  */
+
+/**
+ * Inclusive start and exclusive end of a stored school year, in UTC, rolling
+ * over at July 1. This matches `currentSchoolYear()` when the clock is UTC,
+ * which is how the existing school-year tests are written.
+ */
+export function schoolYearDateRange(schoolYear: string): { gte: Date; lt: Date } {
+  const start = Number(schoolYear.slice(0, 4));
+  return {
+    gte: new Date(Date.UTC(start, 6, 1)),
+    lt: new Date(Date.UTC(start + 1, 6, 1)),
+  };
+}
+
+/** Prisma `createdAt` fragment that keeps a row inside one school year. */
+export function createdAtInSchoolYear(schoolYear: string) {
+  return { createdAt: schoolYearDateRange(schoolYear) };
+}
+
 export function selectableSchoolYears(params?: {
   now?: Date;
   include?: string | null;

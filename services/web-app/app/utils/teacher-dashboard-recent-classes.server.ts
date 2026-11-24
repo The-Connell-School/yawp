@@ -1,4 +1,6 @@
 import { prisma } from '~/utils/db.server';
+import { assignmentlessBranchesForTeacherClasses } from '~/utils/class-assignment-scope';
+import { schoolYearDateRange } from '~/utils/school-year';
 
 export const TEACHER_DASHBOARD_RECENT_CLASS_LIMIT = 6;
 
@@ -8,6 +10,7 @@ type RecentDocumentForClassActivity = {
   classAssignmentId: string | null;
   classAssignment: { classId: string } | null;
   assignmentId: string | null;
+  createdAt: Date;
   membership: { classesAsStudent: { id: string }[] } | null;
 };
 
@@ -15,9 +18,10 @@ export function resolveDocumentClassIds(params: {
   documentId: string;
   document: Pick<
     RecentDocumentForClassActivity,
-    'classAssignmentId' | 'classAssignment' | 'assignmentId' | 'membership'
+    'classAssignmentId' | 'classAssignment' | 'assignmentId' | 'membership' | 'createdAt'
   >;
   teacherClassIdSet: Set<string>;
+  teacherClassYears?: Map<string, string>;
   forensicClassIdByDocumentId: Map<string, string>;
 }): string[] {
   const classIds = new Set<string>();
@@ -41,9 +45,18 @@ export function resolveDocumentClassIds(params: {
     params.document.assignmentId === null
   ) {
     for (const klass of params.document.membership?.classesAsStudent ?? []) {
-      if (params.teacherClassIdSet.has(klass.id)) {
-        classIds.add(klass.id);
+      if (!params.teacherClassIdSet.has(klass.id)) continue;
+      const schoolYear = params.teacherClassYears?.get(klass.id);
+      if (schoolYear) {
+        const range = schoolYearDateRange(schoolYear);
+        if (
+          params.document.createdAt < range.gte ||
+          params.document.createdAt >= range.lt
+        ) {
+          continue;
+        }
       }
+      classIds.add(klass.id);
     }
   }
 
@@ -51,6 +64,7 @@ export function resolveDocumentClassIds(params: {
 }
 
 function buildTeacherClassDocumentWhere(
+  teacherClasses: { id: string; schoolYear: string }[],
   teacherClassIds: string[],
   legacyDocumentIds: string[]
 ) {
@@ -58,22 +72,16 @@ function buildTeacherClassDocumentWhere(
     deletedAt: null,
     OR: [
       { classAssignment: { classId: { in: teacherClassIds } } },
-      {
-        classAssignmentId: null,
+      ...assignmentlessBranchesForTeacherClasses(teacherClasses).map((branch) => ({
+        ...branch,
         assignmentId: null,
-        membership: {
-          classesAsStudent: { some: { id: { in: teacherClassIds } } },
-        },
-      },
+      })),
     ] as Array<
       | { classAssignment: { classId: { in: string[] } } }
-      | {
-          classAssignmentId: null;
+      | ReturnType<typeof assignmentlessBranchesForTeacherClasses>[number]
+      | (ReturnType<typeof assignmentlessBranchesForTeacherClasses>[number] & {
           assignmentId: null;
-          membership: {
-            classesAsStudent: { some: { id: { in: string[] } } };
-          };
-        }
+        })
       | { id: { in: string[] } }
     >,
   };
@@ -87,9 +95,15 @@ function buildTeacherClassDocumentWhere(
 
 export async function getTeacherRecentActiveClassIds(params: {
   teacherClassIds: string[];
+  classes?: { id: string; schoolYear: string }[];
   limit?: number;
 }): Promise<string[]> {
   const { teacherClassIds } = params;
+  const teacherClasses =
+    params.classes ?? teacherClassIds.map((id) => ({ id, schoolYear: '' }));
+  const teacherClassYears = new Map(
+    teacherClasses.map((klass) => [klass.id, klass.schoolYear])
+  );
   const limit = params.limit ?? TEACHER_DASHBOARD_RECENT_CLASS_LIMIT;
 
   if (teacherClassIds.length === 0 || limit <= 0) {
@@ -107,10 +121,15 @@ export async function getTeacherRecentActiveClassIds(params: {
   const legacyDocumentIds = forensicRows.map((row) => row.documentId);
 
   const recentDocuments = await prisma.document.findMany({
-    where: buildTeacherClassDocumentWhere(teacherClassIds, legacyDocumentIds),
+    where: buildTeacherClassDocumentWhere(
+      teacherClasses,
+      teacherClassIds,
+      legacyDocumentIds
+    ),
     select: {
       id: true,
       updatedAt: true,
+      createdAt: true,
       classAssignmentId: true,
       classAssignment: { select: { classId: true } },
       assignmentId: true,
@@ -133,6 +152,7 @@ export async function getTeacherRecentActiveClassIds(params: {
       documentId: document.id,
       document,
       teacherClassIdSet,
+      teacherClassYears,
       forensicClassIdByDocumentId,
     });
 

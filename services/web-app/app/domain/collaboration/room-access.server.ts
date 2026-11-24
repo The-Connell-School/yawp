@@ -2,7 +2,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   documentAuthorWhere,
-  documentReadWhere,
+  documentReadWhereForProfile,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import { collaborationRoomWhere } from './room.server';
@@ -56,7 +56,7 @@ export async function requireCollabRoomAccess(
       id: documentId,
       ...(scope === 'author'
         ? documentAuthorWhere({ profileId: profile.id, isAdmin })
-        : documentReadWhere({ profileId: profile.id, isAdmin })),
+        : await documentReadWhereForProfile({ profileId: profile.id, isAdmin })),
     },
     select: { id: true },
   });

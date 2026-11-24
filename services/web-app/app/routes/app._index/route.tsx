@@ -191,6 +191,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           grade: true,
           period: true,
           title: true,
+          schoolYear: true,
           classArtIndex: true,
           ...(hideTeachingSecrets ? {} : { code: true }),
           classArtKey: true,
@@ -208,6 +209,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!useStudentExperience && teacherClasses.length > 0) {
     recentActiveClassIds = await getTeacherRecentActiveClassIds({
       teacherClassIds: teacherClasses.map((klass) => klass.id),
+      classes: teacherClasses.map((klass) => ({
+        id: klass.id,
+        schoolYear: klass.schoolYear,
+      })),
     });
     const recentClassIdRank = new Map(
       recentActiveClassIds.map((classId, index) => [classId, index])
