@@ -4,42 +4,48 @@
  * and an end card. They are for Brian's marketing, not for any page in the
  * app, so they are written outside public/.
  *
- *   tutor             The student Tutor: coaching, not ghostwriting.
- *   grading-assistant The Grading Assistant: rubric scores and feedback.
- *   lesson-planner    The Lesson Planner: a timed plan and a deck to present.
+ *   tutor             The student Tutor on a real essay step: it gives
+ *                     feedback and asks questions, and never writes for them.
+ *   grading-assistant The Grading Assistant on a full essay: rubric scores,
+ *                     feedback, and the purple grammar highlights.
+ *   reporter          Yawp Reporter: who needs attention, and why.
  *
  * Not part of any test run. With the e2e dev server up on :5173:
  *   bunx playwright test -c playwright.marketing-demos.config.ts
- * MARKETING_DEMOS_ONLY=tutor,lesson-planner records just those. It writes
+ * MARKETING_DEMOS_ONLY=tutor,reporter records just those. It writes
  * docs/marketing/demo-videos/<name>.mp4 and <name>.jpg (needs ffmpeg).
+ *
+ * The app is set up the way production is: the original document editor
+ * (document-editor-v2 off) and the production Thesis-Driven Essay Tutor steps
+ * (packages/prisma/fixtures/prod-fidelity), not the e2e stubs.
  *
  * Video is captured with the DevTools screencast at 1.5x device scale, so the
  * 1280x720 page comes out as sharp 1920x1080 frames (Playwright's own video
  * recorder is low bitrate and soft at this size).
  *
  * What the AI says is scripted: the e2e server has no model key, so the
- * Tutor's reply and the Grading Assistant's comments are set by the
- * recording. Keep them to what the product actually does (the Tutor asks
- * questions and never writes for the student; the teacher reviews and
- * releases every grade).
+ * Tutor's reply, the Grading Assistant's comments and grammar issues, and
+ * Reporter's report are set by the recording. Keep them to what the product
+ * actually does (the Tutor never writes for the student; the teacher reviews
+ * and releases every grade; Reporter reads released grades and comments).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Browser, Locator, Page } from '@playwright/test';
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { createDeployedAssignment } from '../db-helpers';
-import {
-  setLessonPlannerReviewFlag,
-  type LessonPlannerReviewFlag,
-} from '../feature-flags';
+import { setFeatureFlag } from '../feature-flags';
 import { submitUnifiedLogin } from '../helpers/unified-login';
-import { DAY_ONE_REPLY } from '../fixtures/lesson-planner/day-one-reply';
 import type { E2EContext } from '../seed-e2e';
 
 const OUT = resolve(process.cwd(), '../../docs/marketing/demo-videos');
+const PROD_FIDELITY = resolve(
+  process.cwd(),
+  '../../packages/prisma/fixtures/prod-fidelity'
+);
 const VIEWPORT = { width: 1280, height: 720 };
 const SCALE = 1.5; // 1920x1080 frames
 const BASE_URL = 'http://127.0.0.1:5173';
@@ -48,7 +54,7 @@ const STUDENT_PASSWORD = 'johndoe';
 const ONLY = process.env.MARKETING_DEMOS_ONLY?.split(',') ?? [
   'tutor',
   'grading-assistant',
-  'lesson-planner',
+  'reporter',
 ];
 const want = (key: string) => ONLY.includes(key);
 
@@ -117,10 +123,13 @@ function stage() {
 
 const pause = (page: Page, ms = 1000) => page.waitForTimeout(ms);
 
+/** Where captions centre: the middle, unless a take's controls sit under it. */
+let captionCentre = '50%';
+
 /** The caption for this beat, along the bottom. */
 async function say(page: Page, text: string, hold = 2200) {
   await page.evaluate(
-    ([t, ink]) => {
+    ([t, ink, centre]) => {
       let el = document.getElementById('__rec_caption');
       if (!el) {
         el = document.createElement('div');
@@ -147,9 +156,10 @@ async function say(page: Page, text: string, hold = 2200) {
         document.body.appendChild(el);
       }
       el.style.opacity = '1';
+      el.style.left = centre;
       el.textContent = t;
     },
-    [text, INK] as const
+    [text, INK, captionCentre] as const
   );
   await pause(page, hold);
 }
@@ -417,16 +427,21 @@ function cut(name: string, raw: string, frames: Frame[], posterAt: number) {
 const PROMPT =
   'Is Jay Gatsby “great”? Take a position and defend it with evidence from the novel.';
 const TITLE = 'Is Gatsby Great?';
+
+/** Maya's essay, mistakes and all: a real draft for the Grading Assistant to read. */
 const ESSAY = [
-  'In The Great Gatsby, Jay Gatsby is not great; he is a man who mistakes money for meaning.',
-  'From the first party, Fitzgerald shows us a crowd that drinks Gatsby’s champagne but never knows his name. Nick notes that guests “came and went like moths among the whisperings and the champagne and the stars.” The parties are enormous but they are empty.',
-  'Gatsby believes that if he can buy the right house he can buy back the past. When Nick tells him “you can’t repeat the past” Gatsby answers, “Why of course you can!” That certainty is what ruins him.',
+  'In F. Scott Fitzgerald’s The Great Gatsby, Jay Gatsby throws the biggest parties on Long Island, buys a mansion across the bay from the woman he loves, and reinvents his entire past. Many readers see him as a romantic hero. But Gatsby is not great; he is a man who mistakes money for meaning, and his belief that wealth can buy back the past is exactly what destroys him.',
+  'First, Gatsby’s parties show that his wealth attracts crowds but not friends. Nick describes how guests “came and went like moths among the whisperings and the champagne and the stars.” Most of the guests has never even met Gatsby, they just show up for the free champagne. The parties are enormous but they are empty, and when Gatsby needs someone at the end, none of them are there.',
+  'Second, Gatsby believes money can buy back the past. When Nick tells him “you can’t repeat the past” Gatsby answers, “Why of course you can!” He gives Daisy a tour of his mansion and throws his shirts in front of her like their proof that he is finally good enough. Its as if he thinks love is something you can earn with a bank account.',
+  'Finally, the green light shows that Gatsby’s dream was always out of reach. Every night he reaches toward the light at the end of Daisy’s dock, but the closer he gets to Daisy the more the dream fades. Once they are together again, Nick realizes that “the colossal significance of that light had now vanished forever.” The real Daisy could never live up to the one Gatsby imagined.',
+  'In the end, Gatsby dies alone in his pool, and almost no one comes to his funeral. Fitzgerald shows that a life built on money and image is a life without meaning. Gatsby is not great, he is a warning about what happens when we confuse having things with being someone.',
 ];
 const html = (paragraphs: string[]) =>
-  paragraphs.map((p) => `<p>${p}</p>`).join('<p></p>');
+  paragraphs.map((p) => `<p>${p}</p>`).join('');
 
-/** Names a teacher would recognize, in place of the e2e fixtures'. */
+/** Names a teacher would recognize, and the app as production runs it. */
 async function dressTheSet(ctx: E2EContext) {
+  await setFeatureFlag('document-editor-v2', false);
   const prisma = createE2EPrismaClient();
   try {
     await prisma.user.update({
@@ -441,13 +456,93 @@ async function dressTheSet(ctx: E2EContext) {
       where: { id: ctx.classId },
       data: { title: 'English 10', period: '3rd' },
     });
+    await prisma.organization.update({
+      where: { id: ctx.organizationId },
+      data: { reporterEnabled: true },
+    });
   } finally {
     await prisma.$disconnect();
   }
 }
 
-/** The Gatsby essay assignment, Maya's draft of it, and (optionally) her submission. */
-async function gatsbyEssay(ctx: E2EContext, submitted: boolean) {
+type FixtureRow = Record<string, unknown> & { id: string };
+const fixture = (name: string) =>
+  JSON.parse(
+    readFileSync(join(PROD_FIDELITY, `${name}.json`), 'utf8')
+  ) as FixtureRow[];
+
+/**
+ * The e2e Thesis-Driven Essay has one stub step ("Draft"). Give it the
+ * production steps (Welcome, Pre-writing, Thesis Statement, Introduction,
+ * Body Paragraphs, …) with their instructions and buttons, from the
+ * prod-fidelity export. The stub is soft-deleted, not removed.
+ */
+async function useProductionThesisEssay(ctx: E2EContext) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const typeId = ctx.thesisEssayAssignmentTypeId;
+    const live = await prisma.assignmentModule.findMany({
+      where: { assignmentTypeId: typeId, deletedAt: null },
+      select: { id: true, title: true },
+    });
+    if (live.some((m) => m.title.trim() === 'Body Paragraphs')) return;
+    await prisma.assignmentModule.updateMany({
+      where: { assignmentTypeId: typeId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    const prodType = fixture('assignment-types').find(
+      (t) => t.title === 'The Thesis-Driven Essay'
+    )!;
+    const modules = fixture('assignment-modules')
+      .filter((m) => m.assignmentTypeId === prodType.id && !m.deletedAt)
+      .sort((a, b) => (a.position as number) - (b.position as number));
+    const instructions = fixture('assignment-module-instructions');
+    const buttons = fixture('assignment-module-instruction-buttons');
+    for (const m of modules) {
+      await prisma.assignmentModule.create({
+        data: {
+          assignmentTypeId: typeId,
+          title: m.title as string,
+          position: m.position as number,
+          description: (m.description as string | null) ?? null,
+          tutorInstructions: (m.tutorInstructions as string | null) ?? null,
+          isSelfGuided: Boolean(m.isSelfGuided),
+          instructions: {
+            create: instructions
+              .filter((i) => i.assignmentModuleId === m.id)
+              .map((i) => ({
+                title: i.title as string,
+                position: i.position as number,
+                prompt: i.prompt as string,
+                showChatButton: i.showChatButton as boolean,
+                showNextButton: i.showNextButton as boolean,
+                tutorInstructions:
+                  (i.tutorInstructions as string | null) ?? null,
+                buttons: {
+                  create: buttons
+                    .filter((b) => b.assignmentModuleInstructionId === i.id)
+                    .map((b) => ({
+                      label: b.label as string,
+                      action: b.action as string,
+                      position: b.position as number,
+                    })),
+                },
+              })),
+          },
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** The Gatsby essay assignment, and Maya's document for it (optionally submitted). */
+async function gatsbyEssay(
+  ctx: E2EContext,
+  paragraphs: string[],
+  submitted: boolean
+) {
   const prisma = createE2EPrismaClient();
   try {
     const { assignment, classAssignment } = await createDeployedAssignment({
@@ -457,12 +552,12 @@ async function gatsbyEssay(ctx: E2EContext, submitted: boolean) {
       title: TITLE,
       prompt: PROMPT,
     });
-    const text = ESSAY.join('\n\n');
+    const text = paragraphs.join('\n\n');
     const document = await prisma.document.create({
       data: {
         title: TITLE,
         text,
-        html: html(ESSAY),
+        html: html(paragraphs),
         membershipId: ctx.membershipId,
         assignmentTypeId: ctx.thesisEssayAssignmentTypeId,
         assignmentId: assignment.id,
@@ -474,7 +569,7 @@ async function gatsbyEssay(ctx: E2EContext, submitted: boolean) {
     const submission = await prisma.submission.create({
       data: {
         documentId: document.id,
-        html: html(ESSAY),
+        html: html(paragraphs),
         text,
         title: TITLE,
         submittedAt: new Date(),
@@ -487,14 +582,79 @@ async function gatsbyEssay(ctx: E2EContext, submitted: boolean) {
   }
 }
 
-// ------------------------------------------------------------- the scripts
-
-const TUTOR_REPLY =
-  'Your thesis takes a clear side, which is a strong start. Right now “mistakes money for meaning” could describe a lot of characters. What does Gatsby think money will get him, and where in the novel do you see that most clearly?';
+// ------------------------------------------------------ React Router's wire
 
 /**
- * The Tutor's reply, scripted: the request still goes to the real route so
- * the session and message are saved, then the reply text is swapped in.
+ * Fetcher responses are React Router's turbo-stream: one flat array where an
+ * object is {"_<key index>": <value index>}. Rewrite a top-level field of the
+ * action's data by appending the new value to the array.
+ */
+function setTurboField(body: string, field: string, value: unknown): string {
+  const [first, ...rest] = body.split('\n');
+  const arr = JSON.parse(first!) as unknown[];
+  const encode = (v: unknown): number => {
+    if (Array.isArray(v)) {
+      const at = arr.push(null) - 1;
+      arr[at] = v.map(encode);
+      return at;
+    }
+    if (v && typeof v === 'object') {
+      const at = arr.push(null) - 1;
+      const out: Record<string, number> = {};
+      for (const [k, val] of Object.entries(v))
+        out[`_${encode(k)}`] = encode(val);
+      arr[at] = out;
+      return at;
+    }
+    return arr.push(v) - 1;
+  };
+  const keyAt = arr.indexOf(field);
+  if (keyAt < 0) throw new Error(`no ${field} in the response`);
+  const holder = arr.find(
+    (x): x is Record<string, number> =>
+      !!x && typeof x === 'object' && !Array.isArray(x) && `_${keyAt}` in x
+  );
+  if (!holder) throw new Error(`no object holds ${field}`);
+  holder[`_${keyAt}`] = encode(value);
+  return [JSON.stringify(arr), ...rest].join('\n');
+}
+
+/** A fetcher response that is just `data`, in turbo-stream form. */
+function turboData(data: Record<string, unknown>): string {
+  const arr: unknown[] = [{ _1: 2 }, 'data', null];
+  const encode = (v: unknown): number => {
+    if (Array.isArray(v)) {
+      const at = arr.push(null) - 1;
+      arr[at] = v.map(encode);
+      return at;
+    }
+    if (v && typeof v === 'object') {
+      const at = arr.push(null) - 1;
+      const out: Record<string, number> = {};
+      for (const [k, val] of Object.entries(v))
+        out[`_${encode(k)}`] = encode(val);
+      arr[at] = out;
+      return at;
+    }
+    return arr.push(v) - 1;
+  };
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(data))
+    out[`_${encode(k)}`] = encode(val);
+  arr[2] = out;
+  return `${JSON.stringify(arr)}\n`;
+}
+
+// ------------------------------------------------------------- the scripts
+
+const TUTOR_REPLY = [
+  'Nice work! Your thesis is clear, and your first body paragraph backs it up with a strong quotation about the guests.',
+  'One thing to push on: in your second body paragraph you quote “Why of course you can!” and then move right on. What does that line reveal about how Gatsby thinks money works? Add a sentence or two of your own analysis right after the quote.',
+].join('\n\n');
+
+/**
+ * The Tutor's reply, scripted: the student's message and the reply are saved
+ * to the session the way the real route saves them, then returned.
  */
 async function scriptTutor(page: Page, reply: string) {
   const prisma = createE2EPrismaClient();
@@ -504,7 +664,7 @@ async function scriptTutor(page: Page, reply: string) {
     const said =
       /name="response"\r\n\r\n([\s\S]*?)\r\n--/.exec(body)?.[1] ?? '';
     if (!cmsId) return route.continue();
-    await new Promise((r) => setTimeout(r, 1400));
+    await new Promise((r) => setTimeout(r, 1600));
     const session = await prisma.assignmentModuleSession.findUniqueOrThrow({
       where: { id: cmsId },
       select: {
@@ -519,10 +679,9 @@ async function scriptTutor(page: Page, reply: string) {
         },
       },
     });
-    const instructions = session.assignmentModule.instructions;
-    const instructionId = (
-      instructions[session.instructionsCompleted] ?? instructions.at(-1)!
-    ).id;
+    const list = session.assignmentModule.instructions;
+    const instructionId = (list[session.instructionsCompleted] ?? list.at(-1)!)
+      .id;
     await prisma.assignmentModuleSessionMessage.create({
       data: {
         assignmentModuleSessionId: cmsId,
@@ -571,204 +730,215 @@ async function scriptTutor(page: Page, reply: string) {
   return () => prisma.$disconnect();
 }
 
-const GRADING_COMMENTS: Record<string, string> = {
+const GRADING_COMMENTS = {
   overall:
-    'Maya, your thesis takes a real position and your second paragraph proves it with a well-chosen quotation. Push your evidence further: tell us why the green light or the “repeat the past” line shows Gatsby mistaking money for meaning.',
-  thesis: 'Clear, arguable thesis that answers the prompt directly.',
+    'Maya, this is a strong, arguable thesis, and every body paragraph supports it. Your next step is evidence: after each quotation, explain how it proves that Gatsby mistakes money for meaning. Then proofread for comma splices. The highlighted sentences show you where.',
+  thesis: 'A clear, arguable thesis that takes a real position on the prompt.',
   organization:
-    'Each paragraph has one job. Add a sentence that links the parties to the past.',
+    'Three body paragraphs, each with one job, and strong topic sentences.',
   evidence:
-    'Good quotations. Explain how each one proves your claim, not just what it says.',
-  voice:
-    'Confident and readable. “The parties are enormous” sets up a sharp contrast.',
+    'Well-chosen quotations. Explain how each one proves your claim, not just what it says.',
+  voice: 'Confident and readable. “Enormous but empty” is a sharp contrast.',
   grammar:
-    'Watch your commas: several sentences run two ideas together without one. Read it aloud to catch them.',
+    'Several comma splices and a few its/they’re slips. See the highlighted sentences.',
 };
 
-/** The e2e Grading Assistant is a fixture with test wording: swap in a teacher's. */
-async function scriptGrading(page: Page) {
+/** What the Grading Assistant's grammar pass flags in Maya's essay. */
+const GRAMMAR_ISSUES = [
+  {
+    excerpt: 'Most of the guests has',
+    kind: 'error',
+    rule: 'Subject–verb agreement',
+    message: '“Most of the guests” is plural, so the verb should be “have.”',
+  },
+  {
+    excerpt: 'met Gatsby, they just show up',
+    kind: 'error',
+    rule: 'Comma splice',
+    message:
+      'Two complete sentences are joined with only a comma. Use a period or a semicolon.',
+  },
+  {
+    excerpt: 'The parties are enormous but they are empty',
+    kind: 'style',
+    rule: 'Comma before a conjunction',
+    message: 'Add a comma before “but” when it joins two complete sentences.',
+  },
+  {
+    excerpt: 'the past” Gatsby answers',
+    kind: 'error',
+    rule: 'Punctuating quotations',
+    message:
+      'Add a comma inside the quotation marks: “…the past,” Gatsby answers.',
+  },
+  {
+    excerpt: 'like their proof',
+    kind: 'error',
+    rule: 'their / they’re',
+    message: 'Use “they’re” (they are) here, not the possessive “their.”',
+  },
+  {
+    excerpt: 'Its as if',
+    kind: 'error',
+    rule: 'its / it’s',
+    message: 'Use “It’s,” the contraction of “it is.”',
+  },
+  {
+    excerpt: 'the closer he gets to Daisy the more the dream fades',
+    kind: 'style',
+    rule: 'Comma in a comparison',
+    message:
+      'Add a comma between the two halves: “the closer he gets to Daisy, the more the dream fades.”',
+  },
+  {
+    excerpt: 'Gatsby is not great, he is a warning',
+    kind: 'error',
+    rule: 'Comma splice',
+    message:
+      'This joins two complete sentences with only a comma. Try a semicolon: “Gatsby is not great; he is a warning.”',
+  },
+].map((issue, i) => ({ id: `demo-grammar-${i + 1}`, occurrence: 1, ...issue }));
+
+/** The e2e Grading Assistant is a fixture with test wording: swap in a teacher's, and Maya's grammar. */
+async function scriptGrading(page: Page, submissionId: string) {
   await page.route('**/api/domain/grade-essay-ai**', async (route) => {
     const response = await route.fetch();
-    const body = (await response.text())
+    // The route saved the fixture's grammar pass; save Maya's, so the page
+    // still shows them after it reloads its data.
+    const prisma = createE2EPrismaClient();
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { grammarIssues: { version: 1, issues: GRAMMAR_ISSUES } },
+    });
+    await prisma.$disconnect();
+    let body = (await response.text())
       .replace(
         /[A-Z][a-z]+, these legacy grading assistant suggestions still apply\./g,
-        GRADING_COMMENTS.overall!
+        GRADING_COMMENTS.overall
       )
       .replace(
         /Legacy thesis feedback from deterministic E2E\./g,
-        GRADING_COMMENTS.thesis!
+        GRADING_COMMENTS.thesis
       )
       .replace(
         /Legacy organization feedback from deterministic E2E\./g,
-        GRADING_COMMENTS.organization!
+        GRADING_COMMENTS.organization
       )
       .replace(
         /Legacy evidence feedback from deterministic E2E\./g,
-        GRADING_COMMENTS.evidence!
+        GRADING_COMMENTS.evidence
       )
       .replace(
         /Legacy voice feedback from deterministic E2E\./g,
-        GRADING_COMMENTS.voice!
+        GRADING_COMMENTS.voice
       )
       .replace(
         /Legacy grammar feedback from deterministic E2E\./g,
-        GRADING_COMMENTS.grammar!
+        GRADING_COMMENTS.grammar
       )
       .replace(/Deterministic E2E feedback for [^".]+\./g, '');
+    if (body.includes('"grammarIssues"')) {
+      body = setTurboField(body, 'grammarIssues', {
+        version: 1,
+        issues: GRAMMAR_ISSUES,
+      });
+    }
     await route.fulfill({ response, body });
   });
 }
 
-const PLANNER_FLAGS: LessonPlannerReviewFlag[] = [
-  'lesson_planner_stack_v2',
-  'lesson_planner_stack_v3',
-  'lesson_planner_run_show',
-  'lesson_planner_templates',
-  'lesson_planner_share',
-  'lesson_planner_deck_v2',
-  'lesson_planner_deck_gallery',
-  'lesson_planner_plan_export_v2',
-];
+const REPORTER_QUESTION = 'Who needs attention?';
+const REPORTER_REPLY = `**Three students in English 10 need your attention this week.**
 
-const notes = { speakerNotes: 'Let it land, then move on.' };
-const DECK = {
-  title: 'What we carry',
-  unit: 'The Things They Carried',
-  art: 'turner-temeraire',
-  slides: [
-    {
-      layout: 'title',
-      title: 'What we carry',
-      subtitle: 'The weight of small things',
-      course: 'English 10',
-      ...notes,
-    },
-    {
-      layout: 'agenda',
-      title: 'The things they carried',
-      agenda: [
-        { title: 'Class starter', minutes: 5 },
-        { title: 'What’s in your bag?', minutes: 15 },
-        { title: 'Framing', minutes: 10 },
-        { title: 'Read aloud', minutes: 12 },
-        { title: 'Daily Pages', minutes: 5 },
-        { title: 'Closing', minutes: 3 },
-      ],
-      ...notes,
-    },
-    {
-      layout: 'write',
-      title: 'Write',
-      body: 'What is one thing you carry every day that nobody else can see?',
-      seconds: 240,
-      step: 1,
-      ...notes,
-    },
-    {
-      layout: 'discuss',
-      title: 'Talk',
-      question:
-        'Which one object would tell a stranger something true about you?',
-      grouping: 'Pairs · 4 min',
-      step: 2,
-      ...notes,
-    },
-    {
-      layout: 'notes',
-      title: 'The war, and the writer',
-      timeline: [
-        { year: '1965', caption: 'U.S. ground troops arrive' },
-        { year: '1968', caption: 'O’Brien is drafted', mark: 'ink' },
-        { year: '1973', caption: 'The last troops leave' },
-        { year: '1990', caption: 'The book', mark: 'open' },
-      ],
-      step: 3,
-      ...notes,
-    },
-    {
-      layout: 'exit',
-      title: 'Before you go',
-      body: 'One object, one sentence: why it matters.',
-      button: 'Exit ticket',
-      nextLesson: 'Love',
-      step: 6,
-      ...notes,
-    },
-  ],
-};
+| Student | Average | Trend | Slipping skill |
+| --- | --- | --- | --- |
+| Jordan Ellis | 61% | 78% → 52% | Evidence/Support |
+| Priya Shah | 68% | 74% → 63% | Thesis/Content |
+| Marcus Webb | 70% | steady | Grammar/Syntax |
 
-/** A planned lesson (Day One of The Things They Carried), filed, with its deck. */
-async function plannedLesson(ctx: E2EContext, teacher: StorageState) {
-  for (const flag of PLANNER_FLAGS)
-    await setLessonPlannerReviewFlag(flag, true);
+### Jordan Ellis
+Jordan's last four essays fell from 78% to 52%. Your own comments name the same pattern each time: *"the quotations are there, but you never explain them."* Jordan scores about the same with the Tutor on or off, so this is a skill gap, not a support gap.
+
+**Try:** a five-minute conference on one body paragraph: the quotation, then two sentences that start "This shows…"
+
+### Priya Shah
+Priya's theses have gotten broader since October. Two of your last three comments ask her to "pick a side." A Thesis Builder warm-up before the next essay would target exactly that.
+
+### Marcus Webb
+Marcus's ideas are strong (4/5 on Thesis/Content every time), but comma splices cost him points on every essay.
+
+\`\`\`suggestions
+Draft a growth plan for Jordan
+Compare cold and warm writes for English 10
+\`\`\``;
+
+/**
+ * Reporter's answer, scripted: the conversation is saved the way the real
+ * route saves it, then the action's data goes back to the page.
+ */
+async function scriptReporter(page: Page, ctx: E2EContext) {
   const prisma = createE2EPrismaClient();
-  try {
-    await prisma.lessonPlanTemplate.deleteMany({
-      where: { membershipId: ctx.teacherMembershipId },
-    });
-    await prisma.lessonPlanConversation.deleteMany({
-      where: { membershipId: ctx.teacherMembershipId },
-    });
-    const lesson = await prisma.lessonPlanConversation.create({
+  await page.route('**/api/domain/reporter.data**', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const asked =
+      new URLSearchParams(route.request().postData() ?? '').get('message') ??
+      REPORTER_QUESTION;
+    await new Promise((r) => setTimeout(r, 2200));
+    const askedAt = new Date();
+    const conversation = await prisma.reporterConversation.create({
       data: {
         membershipId: ctx.teacherMembershipId,
         organizationId: ctx.organizationId,
-        title: 'Day One: What We Carry',
-        periodMinutes: 50,
-        lessonClassLabel: 'English 10 · Period 3',
+        title: REPORTER_QUESTION,
         messages: {
           create: [
-            {
-              role: 'user',
-              content:
-                'Day one of The Things They Carried, English 10, 50 minutes.',
-              createdAt: new Date(Date.UTC(2026, 10, 30, 10, 0, 0)),
-            },
+            { role: 'user', content: asked, createdAt: askedAt },
             {
               role: 'assistant',
-              content: DAY_ONE_REPLY,
-              createdAt: new Date(Date.UTC(2026, 10, 30, 10, 0, 1)),
+              content: REPORTER_REPLY,
+              createdAt: new Date(askedAt.getTime() + 1),
             },
           ],
         },
       },
-      include: { messages: { where: { role: 'assistant' } } },
+      select: { id: true },
     });
-    const { request } = await import('@playwright/test');
-    const api = await request.newContext({
-      baseURL: BASE_URL,
-      storageState: teacher,
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/x-script',
+      body: turboData({
+        conversationId: conversation.id,
+        reply: REPORTER_REPLY,
+        isNewConversation: true,
+        growthPlanProposals: [],
+      }),
     });
-    const filed = await api.post('/api/domain/lesson-planner/packet', {
-      form: {
-        intent: 'keep-all',
-        conversationId: lesson.id,
-        messageId: lesson.messages[0]!.id,
-      },
-    });
-    expect(filed.ok()).toBe(true);
-    await api.dispose();
-    const deck = await prisma.lessonPlanMaterial.create({
-      data: {
-        conversationId: lesson.id,
-        sourceMessageId: lesson.messages[0]!.id,
-        sourceCreatedAt: new Date(Date.UTC(2026, 10, 30, 10, 0, 2)),
-        blockKey: 'deck',
-        slot: 'deck',
-        kind: 'slides',
-        title: 'What we carry',
-        audience: 'teacher',
-        content: '```yawp-slides\n' + JSON.stringify(DECK) + '\n```',
-      },
-    });
-    await prisma.lessonPlanConversation.update({
-      where: { id: lesson.id },
-      data: { lessonDate: new Date('2026-12-01T12:00:00Z') },
-    });
-    return { lessonId: lesson.id, deckId: deck.id };
-  } finally {
-    await prisma.$disconnect();
-  }
+  });
+  return () => prisma.$disconnect();
+}
+
+/** The caret, placed just after `needle` in the editor (the way a click would). */
+async function caretAfter(page: Page, needle: string) {
+  const [x, y] = await page.evaluate((text) => {
+    const root = document.querySelector('.ProseMirror')!;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const at = n.textContent!.indexOf(text);
+      if (at < 0) continue;
+      const range = document.createRange();
+      range.setStart(n, at);
+      range.setEnd(n, at + text.length);
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+      const last = rects.at(-1)!;
+      return [last.right, last.top + last.height / 2];
+    }
+    throw new Error(`"${text}" is not in the editor`);
+  }, needle);
+  await page.mouse.move(x! - 1, y!, { steps: 16 });
+  await pause(page, 200);
+  await page.mouse.click(x! - 1, y!);
+  // Out of the way of the words being typed.
+  await page.mouse.move(x! + 40, y! + 70, { steps: 8 });
 }
 
 const END = { heading: 'Yawp! Writing that stays human.', sub: 'yawp.school' };
@@ -778,6 +948,7 @@ const END = { heading: 'Yawp! Writing that stays human.', sub: 'yawp.school' };
 test('record the marketing demos', async ({ browser, e2eContext }) => {
   test.setTimeout(900_000);
   await dressTheSet(e2eContext);
+  await useProductionThesisEssay(e2eContext);
   const teacher = await signedIn(
     browser,
     e2eContext.teacherEmail,
@@ -792,17 +963,24 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
 
   // ------------------------------------------------------------------ Tutor
   if (want('tutor')) {
-    const { documentId } = await gatsbyEssay(e2eContext, false);
+    // Maya is on Body Paragraphs: her intro and two body paragraphs are in.
+    const { documentId } = await gatsbyEssay(
+      e2eContext,
+      ESSAY.slice(0, 3),
+      false
+    );
     const frames = await take(browser, raw, student, async (page, roll) => {
       const done = await scriptTutor(page, TUTOR_REPLY);
-      await open(page, `/app/documents/${documentId}`);
+      await open(page, `/app/documents/${documentId}?cmsIdx=3`);
       const editor = page.locator('.ProseMirror').first();
       await expect(editor).toBeVisible();
-      const input = page.getByTestId('tutor-chat-input');
-      if (!(await input.isVisible().catch(() => false)))
-        await page.getByTestId('tutor-chat-open').click();
-      await expect(input).toBeVisible();
+      const header = page.getByTestId('tutor-module-header');
+      await expect(header).toContainText('Body Paragraphs');
+      const feedback = page.getByRole('button', { name: 'Give me feedback!' });
+      await expect(feedback).toBeVisible();
       await roll();
+      // Keep captions over the essay, clear of the Tutor's buttons.
+      captionCentre = '63%';
       await card(
         page,
         'title',
@@ -810,74 +988,46 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
         'The Yawp! Tutor',
         2600
       );
-      await say(page, 'Students draft their essays in Yawp!', 1800);
-      await say(page, 'Stuck? They ask the Tutor.', 300);
-      await point(page, input);
-      await input.pressSequentially('Is my thesis strong enough?', {
-        delay: 45,
-      });
-      await pause(page, 350);
-      await point(page, page.getByTestId('tutor-chat-send'));
+      await say(
+        page,
+        'The Tutor walks students through every step of the essay.',
+        300
+      );
+      await point(page, header, false);
+      await pause(page, 2200);
+      await say(page, 'When they want feedback, they ask for it.', 300);
+      await point(page, feedback);
       await expect(page.getByText(TUTOR_REPLY.slice(0, 40))).toBeVisible({
         timeout: 15_000,
       });
-      await say(page, 'It asks the questions a great teacher would…', 3600);
-      await say(page, '…so the thinking, and the writing, stay theirs.', 300);
-      // Maya sharpens her thesis.
-      const phrase = editor
-        .getByText('mistakes money for meaning', { exact: false })
-        .first();
-      await phrase.scrollIntoViewIfNeeded();
-      // The phrase wraps, so drag from its first line's start to its last line's end.
-      const [x0, y0, x1, y1] = await page.evaluate((needle) => {
-        const root = document.querySelector('.ProseMirror')!;
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-          const at = n.textContent!.indexOf(needle);
-          if (at < 0) continue;
-          const range = document.createRange();
-          range.setStart(n, at);
-          range.setEnd(n, at + needle.length);
-          const rects = [...range.getClientRects()].filter((r) => r.width > 0);
-          const a = rects[0]!;
-          const b = rects.at(-1)!;
-          return [
-            a.left + 1,
-            a.top + a.height / 2,
-            b.right - 1,
-            b.top + b.height / 2,
-          ];
-        }
-        throw new Error('phrase not found');
-      }, 'mistakes money for meaning');
-      await page.mouse.move(x0!, y0!, { steps: 16 });
-      await page.mouse.down();
-      await page.mouse.move(x1!, y1!, { steps: 14 });
-      await page.mouse.up();
-      await expect
-        .poll(() =>
-          page.evaluate(() =>
-            window.getSelection()?.toString().replace(/\s+/g, ' ')
-          )
-        )
-        .toBe('mistakes money for meaning');
-      await pause(page, 500);
-      await page.keyboard.type(
-        'believes money can buy back the past, and that belief destroys him',
-        { delay: 32 }
+      await pause(page, 600);
+      await say(
+        page,
+        'It points out what’s working, and asks the questions a great teacher would.',
+        4200
       );
-      await pause(page, 1800);
+      await say(page, 'The thinking, and the writing, stay theirs.', 300);
+      await caretAfter(page, 'Why of course you can!”');
+      await pause(page, 300);
+      await page.keyboard.type(
+        ' Gatsby truly believes that with enough money, even time will bend for him.',
+        {
+          delay: 34,
+        }
+      );
+      await pause(page, 1600);
       await card(page, 'end', END.heading, END.sub, 2600);
       await done();
     });
+    captionCentre = '50%';
     cut('tutor', raw, frames, 1.4);
   }
 
   // ------------------------------------------------------ Grading Assistant
   if (want('grading-assistant')) {
-    const { submissionId } = await gatsbyEssay(e2eContext, true);
+    const { submissionId } = await gatsbyEssay(e2eContext, ESSAY, true);
     const frames = await take(browser, raw, teacher, async (page, roll) => {
-      await scriptGrading(page);
+      await scriptGrading(page, submissionId!);
       await open(page, `/app/submissions/${submissionId}`);
       await roll();
       await card(
@@ -887,10 +1037,9 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
         'The Yawp! Grading Assistant',
         2600
       );
-      await say(page, 'Open a student’s essay.', 1600);
       await say(
         page,
-        'One click: the Grading Assistant scores it against your rubric…',
+        'Open a student’s essay. One click on the Grading Assistant…',
         300
       );
       await point(page, page.getByTestId('grading-assistant-generate'));
@@ -904,21 +1053,36 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
         '',
         { timeout: 60_000 }
       );
-      await pause(page, 1500);
-      await say(page, '…and drafts specific, encouraging feedback.', 300);
+      const marks = page.locator('[data-grammar-issue-id]');
+      await expect(marks.first()).toBeVisible({ timeout: 10_000 });
+      await say(
+        page,
+        '…scores it against your rubric, drafts feedback, and marks every grammar slip.',
+        2600
+      );
+      await say(page, 'Hover any highlight to see what’s wrong, and why.', 300);
+      const agreement = marks
+        .filter({ hasText: 'Most of the guests has' })
+        .first();
+      await point(page, agreement, false);
+      await pause(page, 2600);
+      const splice = marks
+        .filter({ hasText: 'Gatsby is not great, he is a warning' })
+        .first();
+      await point(page, splice, false);
+      await pause(page, 2400);
+      await page.mouse.move(VIEWPORT.width * 0.2, VIEWPORT.height * 0.75, {
+        steps: 12,
+      });
+      await say(page, 'Every rubric score comes with a reason.', 300);
       const evidence = page
         .getByRole('button', { name: /Evidence\/Support/ })
         .first();
-      if (await evidence.isVisible().catch(() => false)) {
-        await point(page, evidence);
-        await pause(page, 900);
-        // Bring the criterion's comment into view in the grading panel.
-        await wheel(page, 260, 8);
-        await pause(page, 2600);
-        await wheel(page, -260, 8);
-      } else {
-        await pause(page, 3200);
-      }
+      await point(page, evidence);
+      await pause(page, 700);
+      await wheel(page, 260, 8);
+      await pause(page, 2400);
+      await wheel(page, -260, 8);
       await say(
         page,
         'You stay in charge: edit anything, then release it.',
@@ -926,61 +1090,80 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
       );
       const overall = page.getByTestId('grading-overall-comment');
       await point(page, overall);
-      await page.keyboard.press('End');
       await page.keyboard.press('Control+End');
-      await page.keyboard.type(' Great revision, Maya!', { delay: 40 });
-      await pause(page, 600);
+      await page.keyboard.type(' Great progress, Maya!', { delay: 40 });
+      await pause(page, 500);
       await point(
         page,
         page.getByRole('button', { name: 'Save', exact: true }),
         false
       );
-      await pause(page, 1600);
+      await pause(page, 1400);
       await card(page, 'end', END.heading, END.sub, 2600);
     });
     cut('grading-assistant', raw, frames, 1.4);
   }
 
-  // --------------------------------------------------------- Lesson Planner
-  if (want('lesson-planner')) {
-    const { lessonId, deckId } = await plannedLesson(e2eContext, teacher);
+  // --------------------------------------------------------------- Reporter
+  if (want('reporter')) {
+    const prisma = createE2EPrismaClient();
+    await prisma.reporterConversation.deleteMany({
+      where: { membershipId: e2eContext.teacherMembershipId },
+    });
+    await prisma.$disconnect();
     const frames = await take(browser, raw, teacher, async (page, roll) => {
-      await open(page, `/app/lesson-planner?c=${lessonId}`);
-      await wheel(page, -6000, 2);
+      const done = await scriptReporter(page, e2eContext);
+      await open(page, '/app/reporter');
+      const starter = page
+        .getByRole('button', { name: /who needs attention/i })
+        .first();
+      await expect(starter).toBeVisible();
       await roll();
       await card(
         page,
         'title',
-        'Tomorrow’s lesson, planned in minutes.',
-        'The Yawp! Lesson Planner',
+        'Know who needs you, before report cards do.',
+        'Yawp! Reporter',
         2600
       );
+      await say(page, 'Ask about your classes in plain language.', 1200);
       await say(
         page,
-        'Tell it the class, the text and the time you have.',
-        1600
+        'Reporter reads every grade and comment you’ve released…',
+        300
       );
-      await say(page, 'Get a complete, timed lesson plan, step by step.', 300);
-      await wheel(page, 560, 14);
-      await pause(page, 2200);
-      await open(page, `/app/lesson-planner/${lessonId}/packet`);
-      await say(page, 'Every minute accounted for, ready to adjust.', 300);
-      await wheel(page, 300, 10);
-      await pause(page, 2400);
-      await open(page, `/present/${lessonId}/${deckId}`);
-      // Presenting is keyboard-driven: no cursor over the slides.
-      await page.evaluate(() => {
-        const cursor = document.getElementById('__rec_cursor');
-        if (cursor) cursor.style.visibility = 'hidden';
+      await point(page, starter);
+      await expect(page.getByText('Three students in English 10')).toBeVisible({
+        timeout: 15_000,
       });
-      await say(page, 'And a slide deck, ready to present.', 1200);
-      await unsay(page);
-      for (let i = 0; i < 4; i += 1) {
-        await page.keyboard.press('ArrowRight');
-        await pause(page, 1500);
-      }
+      // The page lands at the end of the answer: start from its top.
+      await page.mouse.move(VIEWPORT.width * 0.6, VIEWPORT.height * 0.5, {
+        steps: 10,
+      });
+      await page
+        .getByText('Three students in English 10')
+        .scrollIntoViewIfNeeded();
+      await page
+        .getByText('Three students in English 10')
+        .evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await pause(page, 500);
+      await say(page, '…and tells you who’s slipping, and why.', 3000);
+      await wheel(page, 300, 18);
+      await pause(page, 2400);
+      await say(page, 'With a next step you can use tomorrow.', 300);
+      await wheel(page, 400, 18);
+      await pause(page, 600);
+      await point(
+        page,
+        page
+          .getByRole('button', { name: /Draft a growth plan for Jordan/ })
+          .first(),
+        false
+      );
+      await pause(page, 1800);
       await card(page, 'end', END.heading, END.sub, 2600);
+      await done();
     });
-    cut('lesson-planner', raw, frames, 1.4);
+    cut('reporter', raw, frames, 1.4);
   }
 });
