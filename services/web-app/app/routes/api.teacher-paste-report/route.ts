@@ -31,15 +31,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
       { status: 400, headers: privateHeaders }
     );
   }
+  const teacherClassAccess = buildTeacherDocumentAccessWhere({
+    membershipId: actor.membershipId,
+    organizationId: actor.organizationId,
+    isAdmin: actor.isAdmin,
+  });
   const access = {
     deletedAt: null,
-    artifactKind: 'STUDENT' as const,
-    membership: { is: { userId: { not: actor.userId } } },
-    ...buildTeacherDocumentAccessWhere({
-      membershipId: actor.membershipId,
-      organizationId: actor.organizationId,
-      isAdmin: actor.isAdmin,
-    }),
+    OR: [
+      {
+        AND: [
+          { artifactKind: 'STUDENT' as const },
+          { membership: { is: { userId: { not: actor.userId } } } },
+          ...(Object.keys(teacherClassAccess).length ? [teacherClassAccess] : []),
+        ],
+      },
+      {
+        artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW' as const,
+        membershipId: actor.membershipId,
+        teacherPreviewClassAssignment: {
+          is: {
+            class: {
+              teachers: {
+                some: { id: actor.membershipId, isActive: true },
+              },
+            },
+          },
+        },
+      },
+    ],
   };
   let id: string;
   let submittedAt: Date | undefined;

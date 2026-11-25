@@ -397,6 +397,48 @@ describe('api.domain.submit-document', () => {
     );
   });
 
+  test('uses the teacher assignment title for the submission when the document is class-bound', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      html: '<p>Draft</p>',
+      text: 'Draft',
+      title: '',
+      submissions: [],
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'ca-1',
+      assignment: { title: 'Should not win' },
+      classAssignment: {
+        assignment: { title: 'Monday Exit Ticket' },
+        class: null,
+      },
+      membership: {
+        organizationId: 'org-1',
+        organization: { plan: 'SCHOOL' },
+        classesAsStudent: [],
+      },
+    });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+    form.append('title', 'Student Typed Title');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.submission.create.mock.calls[0][0].data.title).toBe(
+      'Monday Exit Ticket'
+    );
+    expect(prisma.document.updateMany.mock.calls[0][0].data).toEqual({
+      updatedAt: expect.any(Date),
+      title: 'Monday Exit Ticket',
+    });
+  });
+
   test('uses updatedAt as the active-submission concurrency token', async () => {
     const form = new FormData();
     form.append('documentId', 'doc-1');

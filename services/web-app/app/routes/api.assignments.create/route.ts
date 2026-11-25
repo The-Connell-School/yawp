@@ -104,8 +104,16 @@ export async function action({ request }: ActionFunctionArgs) {
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
   const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
-  const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
+  const parsedTitle = (await import('~/utils/assignment-title-validation'))
+    .parseRequiredAssignmentTitle(titleRaw);
+  if (!parsedTitle.ok) {
+    return dataResponse(
+      { success: false, message: parsedTitle.message },
+      { status: 400 }
+    );
+  }
+  const title = parsedTitle.title;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
   const gradingAssistantStrictnessLevel = strictnessRaw
     ? parseGradingAssistantStrictnessLevel(strictnessRaw)

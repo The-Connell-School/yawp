@@ -58,12 +58,16 @@ describe('teacher paste report authorization and snapshot boundary', () => {
     expect(prisma.document.findFirst.mock.calls[0][0].where).toMatchObject({
       id: 'doc',
       deletedAt: null,
-      artifactKind: 'STUDENT',
+    });
+    const branches = prisma.document.findFirst.mock.calls[0][0].where.OR;
+    expect(branches).toHaveLength(2);
+    expect(branches[0].AND[0]).toEqual({ artifactKind: 'STUDENT' });
+    expect(branches[0].AND[1]).toEqual({
       membership: { is: { userId: { not: 'teacher-user' } } },
-      OR: [
-        { classAssignment: { class: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } },
-        { classAssignment: { is: null }, membership: { is: { organizationId: 'org', classesAsStudent: { some: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } } } },
-      ],
+    });
+    expect(branches[1]).toMatchObject({
+      artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
+      membershipId: 'teacher',
     });
     expect(prisma.pasteAlert.findMany.mock.calls[0][0]).toMatchObject({
       where: { documentId: 'doc' },
@@ -78,13 +82,11 @@ describe('teacher paste report authorization and snapshot boundary', () => {
   test('submissions use their frozen HTML era, never later draft paste events', async () => {
     await load('submissionId=sub');
     expect(
-      prisma.submission.findFirst.mock.calls[0][0].where.document.is
-    ).toMatchObject({
-      OR: [
-        { classAssignment: { class: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } },
-        { classAssignment: { is: null }, membership: { is: { organizationId: 'org', classesAsStudent: { some: { school: { organizationId: 'org' }, teachers: { some: { id: 'teacher', isActive: true } } } } } } },
-      ],
-    });
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is.OR
+    ).toHaveLength(2);
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is.OR[0].AND[0]
+    ).toEqual({ artifactKind: 'STUDENT' });
     expect(prisma.pasteAlert.findMany.mock.calls[0][0].where).toEqual({
       documentId: 'doc',
       createdAt: { lte: new Date('2026-01-01') },
@@ -156,7 +158,7 @@ test('admin scope still excludes same-user owners and every assignment-group art
   prisma.document.findFirst.mockResolvedValue(null);
   expect(status(await load('documentId=own-solo-or-group'))).toBe(404);
   const where = prisma.document.findFirst.mock.calls[0][0].where;
-  expect(where.artifactKind).toBe('STUDENT');
-  expect(where.membership.is.userId).toEqual({ not: 'teacher-user' });
+  expect(where.OR[0].AND[0].artifactKind).toBe('STUDENT');
+  expect(where.OR[0].AND[1].membership.is.userId).toEqual({ not: 'teacher-user' });
   expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
 });

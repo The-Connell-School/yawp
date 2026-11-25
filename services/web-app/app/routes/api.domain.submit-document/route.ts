@@ -19,6 +19,7 @@ import {
   isFirstFreeTierEssayInTx,
   captureFirstFreeTierEssay,
 } from '~/domain/free-tier/first-essay-analytics.server';
+import { assignmentDocumentTitleFromAssignment } from '~/domain/documents/assignment-document-title.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -71,8 +72,12 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       revision: true,
       updatedAt: true,
       artifactKind: true,
+      assignmentId: true,
+      classAssignmentId: true,
+      assignment: { select: { title: true } },
       classAssignment: {
         select: {
+          assignment: { select: { title: true } },
           class: {
             select: {
               id: true,
@@ -121,10 +126,15 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const html = document.html ?? '';
   const text = document.text ?? '';
   const now = new Date();
-  const submittedTitle =
-    data.title?.trim() || (document.title?.trim() ?? '');
+  const boundAssignmentTitle = assignmentDocumentTitleFromAssignment(
+    document.classAssignment?.assignment?.title ??
+      document.assignment?.title
+  );
+  const submittedTitle = boundAssignmentTitle
+    ? boundAssignmentTitle
+    : data.title?.trim() || (document.title?.trim() ?? '');
   const backfillDocumentTitle =
-    Boolean(data.title?.trim()) && !document.title?.trim();
+  Boolean(submittedTitle) && !document.title?.trim();
   const documentOrganizationId = document.membership.organizationId;
   // A teacher's "Try it" preview submits like student work, but it is never
   // a free classroom's first student essay, so it skips that bookkeeping.

@@ -318,11 +318,15 @@ export function AssignmentBuilderV3({
     createFetcher.data
   );
 
+  const titleValid = title.trim().length > 0;
+  const showTitleError = Boolean(formError === 'Add an assignment title.');
+
   const canCreate =
     !isEdit &&
     Boolean(assignmentTypeId) &&
     classIds.length > 0 &&
     prompt.trim().length > 0 &&
+    titleValid &&
     (!isExitTicket || prompt.trim().length > 0);
 
   const canSave =
@@ -330,6 +334,7 @@ export function AssignmentBuilderV3({
     dirty &&
     (classesLocked || classIds.length > 0) &&
     prompt.trim().length > 0 &&
+    titleValid &&
     (!isExitTicket || prompt.trim().length > 0);
 
   const tutorLocked = isEdit;
@@ -426,7 +431,7 @@ export function AssignmentBuilderV3({
     for (const id of classIds) {
       fd.append('classIds', id);
     }
-    if (title.trim()) fd.set('title', title.trim());
+    fd.set('title', title.trim());
     fd.set('prompt', prompt);
     fd.set('submitForGrade', submitForGrade ? 'true' : 'false');
     if (submitForGrade && pointValue.trim()) {
@@ -457,7 +462,7 @@ export function AssignmentBuilderV3({
     fd.set('intent', 'update-assignment');
     fd.set('assignmentId', editing.assignmentId);
     fd.set('assignmentTypeId', assignmentTypeId);
-    if (title.trim()) fd.set('title', title.trim());
+    fd.set('title', title.trim());
     fd.set('prompt', prompt);
     fd.set('submitForGrade', submitForGrade ? 'true' : 'false');
     if (submitForGrade && pointValue.trim()) {
@@ -486,6 +491,10 @@ export function AssignmentBuilderV3({
   }
 
   function handleCreate() {
+    if (!title.trim()) {
+      setFormError('Add an assignment title.');
+      return;
+    }
     if (!canCreate || teachingLoading) return;
     if (teachingLocked) {
       setLocalApprovalRequired(true);
@@ -502,6 +511,10 @@ export function AssignmentBuilderV3({
   }
 
   function handleSave() {
+    if (!title.trim()) {
+      setFormError('Add an assignment title.');
+      return;
+    }
     if (!canSave || !editing || teachingLocked || teachingLoading) return;
     setFormError(null);
     void updateFetcher.submit(buildUpdateFormData(), {
@@ -717,20 +730,27 @@ export function AssignmentBuilderV3({
 
             <div>
               <label htmlFor="abv3-title" className="abv3-field-label">
-                Title{' '}
-                <span className="abv3-field-label-muted">(optional)</span>
+                Title
               </label>
               <input
                 id="abv3-title"
                 type="text"
                 className="abv3-input"
                 value={title}
-                placeholder="e.g. Community Gardens — Prewriting"
+                required
+                aria-invalid={showTitleError || undefined}
+                placeholder="e.g. Class Starter 11/25"
                 onChange={(e) => {
                   setTitle(e.target.value);
+                  if (e.target.value.trim()) setFormError(null);
                   markDirty();
                 }}
               />
+              {showTitleError ? (
+                <p className="abv3-field-label-muted mt-1.5 text-xs text-destructive">
+                  Add an assignment title.
+                </p>
+              ) : null}
             </div>
 
             <div>

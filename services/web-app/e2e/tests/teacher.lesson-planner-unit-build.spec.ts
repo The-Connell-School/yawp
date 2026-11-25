@@ -443,6 +443,7 @@ test.describe("Kevin's unit-build feedback (Oct 25)", () => {
     await page.getByTestId('exit-ticket-create').click();
     await expect(page).toHaveURL(new RegExp(`/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`));
     await page.getByLabel(/Grade 9th .* Period 1st/).check();
+    await page.locator('#assignment-create-title').fill('Monday exit ticket');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/app/lesson-planner\\?c=${conversationId}`));

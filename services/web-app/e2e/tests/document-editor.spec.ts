@@ -274,14 +274,14 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
     await editor.click();
     const appendedText = ' Content that should survive a title edit.';
     await editor.pressSequentially(appendedText);
 
-    const titleInput = page.getByPlaceholder('Untitled document');
+    const titleInput = page.getByTestId('document-title-input');
     await expect(titleInput).toBeVisible({ timeout: 10000 });
     await titleInput.fill('Updated E2E Title');
     await titleInput.blur();
@@ -599,7 +599,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     }
   });
 
-  test('submit dialog default title matches live nav title without reload', async ({
+  test('submit dialog uses the bound class assignment title without a title field', async ({
     page,
     signIn,
     e2eContext,
@@ -608,13 +608,32 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
 
+    await page.getByTestId('document-submit-button').click();
+    await expect(page.getByTestId('document-submit-confirm-popover')).toBeVisible();
+    await expect(
+      page.getByTestId('document-submit-confirm-popover')
+    ).toContainText('E2E Class Assignment');
+    await expect(
+      page.getByRole('textbox', { name: /^submission title$/i })
+    ).toHaveCount(0);
+  });
+
+  test('submit dialog default title matches live nav title on an unbound document', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+
     const liveTitle = `E2E nav title ${Date.now()}`;
     await page.getByTestId('document-title-input').fill(liveTitle);
     await helpers.getEditor().click();
 
     await page.waitForResponse(
       (r) =>
-        r.url().includes(`/api/model/document/${e2eContext.editedDocumentId}`) &&
+        r.url().includes(`/api/model/document/${e2eContext.freshDocumentId}`) &&
         r.request().method() === 'POST',
       { timeout: 15000 }
     );
