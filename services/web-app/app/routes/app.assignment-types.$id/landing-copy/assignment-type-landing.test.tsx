@@ -97,7 +97,7 @@ describe('LandingDescription', () => {
     }
     const root = render(<LandingDescription page={LANDING_PAGES.prewriting} />);
     expect(root.querySelector('p strong')?.textContent).toBe(
-      'Step one of the critical essay writing process.'
+      'Step one of the Thesis-driven Essay writing process.'
     );
     expect(root.textContent).toContain('big, hot, rambling mess');
     expect(root.querySelector('h2')).toBeNull();
