@@ -13,6 +13,7 @@
 - **R1–R13:** Kevin, Nov 21–22.
 - **R14–R25:** Kevin's notes on the Antigone lesson and unit, Nov 23. See `2026-11-23-kevin-rules-r14-r25.md`.
 - **R26–R32:** Kevin on theme and thematic topic, Nov 24. See `2026-11-24-theme-and-thematic-topic-r26-r32.md`.
+- **R33:** Kevin on title-slide pictures, Nov 25.
 - **B1–B8:** Brian's review points.
 - **S1–S9:** the standards that came out of the 13-lesson review, Nov 22.
 - **Y1–Y3:** Yawp!'s own values.
@@ -84,7 +85,9 @@
 
 **R21 Timelines with pictures.** Events carry pictures, visible on the whole line, and famous events get pictures of the event itself. *(code: the picture editor names each event; the line draws them all)*
 
-**R4 Who.** Real people get their faces, and the author is on the title slide. Main characters are introduced by name before students meet them. *(instructions + code: author picture)*
+**R4 Who.** Real people get their faces on the slide that talks about them. Main characters are introduced by name before students meet them. *(instructions)*
+
+**R33 The title slide is a poster of the book's world.** The title slide shows where the work is set (a real place, from a real photo) drawn as a screen print in a few flat inks, beside the title on the deck's color. Never a candid snapshot of the author, an engraved portrait (it reads as an obituary) or a modern book cover. Only when no place is known does the author's portrait take the title slide. *(code: Kevin, Nov 25)*
 
 **R5 Words.** A word a student of this grade may not know is defined on screen, at or before its first use. *(instructions)*
 
