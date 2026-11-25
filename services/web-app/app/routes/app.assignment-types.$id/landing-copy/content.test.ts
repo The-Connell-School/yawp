@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   LANDING_PAGES,
@@ -458,11 +460,28 @@ describe('landingPageFor (Brian, Nov 17)', () => {
 describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
   const howToTeach = () => section('five-paragraph-essay', 'how-to-teach-it');
 
-  test('keeps the heading and opens with his note, word for word', () => {
+  test('keeps the heading and opens with his note, then How long, word for word', () => {
     expect(howToTeach().heading).toBe('How to Teach It');
     expect(paragraphs(howToTeach().blocks)).toEqual([
       'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.',
+      '**How long.** Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.',
     ]);
+  });
+
+  test('the student grading rubric downloads as a PDF right above the modules (Brian, Nov 25)', () => {
+    const blocks = howToTeach().blocks;
+    const index = blocks.findIndex((b) => b.type === 'download');
+    expect(blocks[index + 1]!.type).toBe('steps');
+    const rubric = blocks[index]!;
+    if (rubric.type !== 'download') throw new Error('no rubric');
+    expect(rubric).toEqual({
+      type: 'download',
+      label: 'Grading rubric',
+      href: '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf',
+      fileName: 'Yawp! 5-Paragraph Essay Student Rubric.pdf',
+    });
+    const file = readFileSync(join(import.meta.dir, '../../../../public', rubric.href));
+    expect(file.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
   test('does not mention the Lesson Planner', () => {
@@ -473,10 +492,10 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     ).toBe(false);
   });
 
-  test('the note leads straight into the steps; the old intro lines are gone', () => {
+  test('the note and How long lead into the rubric and the steps; the old intro lines are gone', () => {
     const blocks = howToTeach().blocks;
-    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'steps']);
-    const steps = blocks[1]!;
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'download', 'steps']);
+    const steps = blocks[3]!;
     expect(steps.type === 'steps' && steps.lead).toBeFalsy();
     const text = landingPagePlainText(page('five-paragraph-essay'));
     expect(text).not.toContain('Teach the steps below in order.');

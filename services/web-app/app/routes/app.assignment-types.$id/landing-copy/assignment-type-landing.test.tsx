@@ -583,7 +583,8 @@ describe('LandingSections', () => {
     );
     const rows = root.querySelectorAll('[data-testid="how-to-teach-step"]');
     expect(rows).toHaveLength(4);
-    expect(root.querySelectorAll('a')).toHaveLength(0);
+    // The only link is the grading rubric (Brian, Nov 25).
+    expect([...root.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Grading rubric']);
   });
 
   it('renders no steps when a multi-step page somehow has no modules', () => {
@@ -657,10 +658,41 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
       />
     );
     const paragraphs = [...box(root).querySelectorAll('p')];
-    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs).toHaveLength(2);
     expect(paragraphs[0]!.textContent).toStartWith('Most English teachers already have a way');
     expect(box(root).textContent).not.toMatch(/Lesson Planner/i);
-    expect(box(root).querySelectorAll('a')).toHaveLength(0);
+    // The only link is the rubric download.
+    expect([...box(root).querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Grading rubric']);
+  });
+
+  it('How long follows the note, with "How long." in bold (Brian, Nov 25)', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
+    );
+    const howLong = [...box(root).querySelectorAll('p')][1]!;
+    expect(howLong.textContent).toBe(
+      'How long. Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.'
+    );
+    expect(howLong.querySelector('strong')!.textContent).toBe('How long.');
+  });
+
+  it('the grading rubric downloads as a PDF, with a document icon, right above the modules (Brian, Nov 25)', () => {
+    const root = render(
+      <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
+    );
+    const rubric = box(root).querySelector('a')!;
+    expect(rubric.textContent).toBe('Grading rubric');
+    expect(rubric.getAttribute('href')).toBe(
+      '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf'
+    );
+    expect(rubric.getAttribute('download')).toBe('Yawp! 5-Paragraph Essay Student Rubric.pdf');
+    expect(rubric.getAttribute('aria-label')).toBe('Grading rubric (PDF)');
+    expect(rubric.querySelector('svg')).not.toBeNull();
+    // Below How long, above the first module.
+    const howLong = [...box(root).querySelectorAll('p')][1]!;
+    const firstStep = box(root).querySelector('[data-testid="how-to-teach-step"]')!;
+    expect(howLong.compareDocumentPosition(rubric) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rubric.compareDocumentPosition(firstStep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('each step opens its description when a teacher clicks it', () => {

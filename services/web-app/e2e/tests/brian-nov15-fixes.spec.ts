@@ -89,3 +89,14 @@ for (const width of [1280, 390, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+test('5-Paragraph Essay: How long, then the grading rubric download, in How to Teach It (Brian, Nov 25)', async ({ page }) => {
+  await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=five-paragraph-essay');
+  const box = page.getByTestId('how-to-teach-spotlight');
+  await expect(box.locator('p strong', { hasText: 'How long.' })).toBeVisible();
+  await expect(box).toContainText('Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.');
+  const rubric = box.getByRole('link', { name: 'Grading rubric (PDF)', exact: true });
+  await expect(rubric).toBeVisible();
+  await expect(rubric).toHaveAttribute('href', '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf');
+  await expect(rubric).toHaveAttribute('download', 'Yawp! 5-Paragraph Essay Student Rubric.pdf');
+});
