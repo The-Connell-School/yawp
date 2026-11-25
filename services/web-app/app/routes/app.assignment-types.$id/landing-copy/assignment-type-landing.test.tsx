@@ -671,22 +671,22 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     );
     const howLong = [...box(root).querySelectorAll('p')][1]!;
     expect(howLong.textContent).toBe(
-      'How long. Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.'
+      'How long. Plan on 5 to 7 class periods if students are writing in class (which we support and recommend!). Most students finish one or two modules a day.'
     );
     expect(howLong.querySelector('strong')!.textContent).toBe('How long.');
   });
 
-  it('the grading rubric downloads as a PDF, with a document icon, right above the modules (Brian, Nov 25)', () => {
+  it('the grading rubric downloads as a Word file, with a document icon, right above the modules (Brian, Nov 25)', () => {
     const root = render(
       <LandingSections page={LANDING_PAGES['five-paragraph-essay']} modules={FIVE_MODULES} />
     );
     const rubric = box(root).querySelector('a')!;
     expect(rubric.textContent).toBe('Grading rubric');
     expect(rubric.getAttribute('href')).toBe(
-      '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf'
+      '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.docx'
     );
-    expect(rubric.getAttribute('download')).toBe('Yawp! 5-Paragraph Essay Student Rubric.pdf');
-    expect(rubric.getAttribute('aria-label')).toBe('Grading rubric (PDF)');
+    expect(rubric.getAttribute('download')).toBe('Yawp! 5-Paragraph Essay Student Rubric.docx');
+    expect(rubric.getAttribute('aria-label')).toBe('Grading rubric (Word)');
     expect(rubric.querySelector('svg')).not.toBeNull();
     // Below How long, above the first module.
     const howLong = [...box(root).querySelectorAll('p')][1]!;

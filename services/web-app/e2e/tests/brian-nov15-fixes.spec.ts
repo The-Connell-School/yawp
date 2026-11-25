@@ -94,9 +94,9 @@ test('5-Paragraph Essay: How long, then the grading rubric download, in How to T
   await page.goto('/e2e/fixtures/brian-fixes/index.html?landing=five-paragraph-essay');
   const box = page.getByTestId('how-to-teach-spotlight');
   await expect(box.locator('p strong', { hasText: 'How long.' })).toBeVisible();
-  await expect(box).toContainText('Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.');
-  const rubric = box.getByRole('link', { name: 'Grading rubric (PDF)', exact: true });
+  await expect(box).toContainText('Plan on 5 to 7 class periods if students are writing in class (which we support and recommend!). Most students finish one or two modules a day.');
+  const rubric = box.getByRole('link', { name: 'Grading rubric (Word)', exact: true });
   await expect(rubric).toBeVisible();
-  await expect(rubric).toHaveAttribute('href', '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf');
-  await expect(rubric).toHaveAttribute('download', 'Yawp! 5-Paragraph Essay Student Rubric.pdf');
+  await expect(rubric).toHaveAttribute('href', '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.docx');
+  await expect(rubric).toHaveAttribute('download', 'Yawp! 5-Paragraph Essay Student Rubric.docx');
 });

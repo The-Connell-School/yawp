@@ -464,11 +464,11 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     expect(howToTeach().heading).toBe('How to Teach It');
     expect(paragraphs(howToTeach().blocks)).toEqual([
       'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.',
-      '**How long.** Plan on five to seven class periods, or about a week of lessons at home. Most students finish one or two modules a day.',
+      '**How long.** Plan on 5 to 7 class periods if students are writing in class (which we support and recommend!). Most students finish one or two modules a day.',
     ]);
   });
 
-  test('the student grading rubric downloads as a PDF right above the modules (Brian, Nov 25)', () => {
+  test('the student grading rubric downloads as an editable Word file right above the modules (Brian, Nov 25)', () => {
     const blocks = howToTeach().blocks;
     const index = blocks.findIndex((b) => b.type === 'download');
     expect(blocks[index + 1]!.type).toBe('steps');
@@ -477,11 +477,12 @@ describe('5-Paragraph Essay How to Teach It (Brian, Nov 17)', () => {
     expect(rubric).toEqual({
       type: 'download',
       label: 'Grading rubric',
-      href: '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.pdf',
-      fileName: 'Yawp! 5-Paragraph Essay Student Rubric.pdf',
+      href: '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.docx',
+      fileName: 'Yawp! 5-Paragraph Essay Student Rubric.docx',
     });
     const file = readFileSync(join(import.meta.dir, '../../../../public', rubric.href));
-    expect(file.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    // A .docx is a zip.
+    expect(file.subarray(0, 2).toString('latin1')).toBe('PK');
   });
 
   test('does not mention the Lesson Planner', () => {
