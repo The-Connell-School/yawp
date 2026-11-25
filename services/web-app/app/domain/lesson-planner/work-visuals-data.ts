@@ -63,8 +63,8 @@ export const WORK_VISUAL_KITS: WorkVisualKit[] = [
     visuals: [
       { subject: 'Gabriel García Márquez', shows: 'a portrait of García Márquez', use: 'author', unchecked: true },
       { subject: 'Santa Cruz de Mompox', shows: 'the market of Mompox, a colonial river town on the Magdalena, a photograph', use: 'setting' },
-      { subject: 'Magdalena River', shows: 'the Magdalena River, which the town in the novel lies beside', use: 'setting', unchecked: true },
-      { subject: 'Cartagena, Colombia', shows: 'the walled city of Cartagena on the Caribbean coast', use: 'period', unchecked: true },
+      { subject: 'Cartagena, Colombia', shows: 'the walled city of Cartagena on the Caribbean coast', use: 'setting', unchecked: true },
+      { subject: 'Barranquilla', shows: 'the port city where García Márquez worked as a reporter', use: 'period', unchecked: true },
       { subject: 'Caribbean region of Colombia', shows: 'the Caribbean coast of Colombia, where the novel is set', use: 'setting', unchecked: true },
       { subject: 'Aracataca', shows: 'the town where García Márquez was born', use: 'setting', unchecked: true },
     ],
