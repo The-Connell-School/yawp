@@ -13,6 +13,7 @@ import {
   EXIT_TICKET_PART_B_SINGLE_ANSWER,
   EXIT_TICKET_PART_C_CHECK,
   EXIT_TICKET_UNIVERSAL_BLOCK,
+  EXIT_TICKET_VOICE_BLOCK,
   applyExitTicketGradingAssistant,
   buildExitTicketGradingAssistantPrompt,
   clampExitTicketScore,
@@ -567,6 +568,20 @@ describe('word choice (Brian, Nov 25)', () => {
     for (const config of [REFLECTION, CHECK, { ...CHECK, singleCorrectAnswer: true }]) {
       expect(buildExitTicketGradingAssistantPrompt({ config })).toContain(
         'Never use "genuinely" or "honestly"'
+      );
+    }
+  });
+});
+
+describe('exit ticket voice (Brian, Nov 25)', () => {
+  test('every exit ticket assistant gets the voice block and Brian’s examples, after the pasted part', () => {
+    for (const config of [REFLECTION, CHECK, { ...CHECK, singleCorrectAnswer: true }]) {
+      const prompt = buildExitTicketGradingAssistantPrompt({ config });
+      expect(prompt).toContain(EXIT_TICKET_VOICE_BLOCK);
+      expect(prompt).toContain('You nailed it, Jordan! Well done.');
+      expect(prompt).toContain('overrides any general instruction');
+      expect(prompt.indexOf(EXIT_TICKET_VOICE_BLOCK)).toBeLessThan(
+        prompt.indexOf('THIS EXIT TICKET')
       );
     }
   });

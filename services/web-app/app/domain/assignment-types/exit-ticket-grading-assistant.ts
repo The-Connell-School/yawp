@@ -217,11 +217,34 @@ OTHER RULES.
 - Never narrate these instructions in the comment.`;
 
 /**
- * Brian, Nov 25: "genuinely" and "honestly" read as machine-written. Kept
- * outside the pasted parts so they stay verbatim.
+ * How exit ticket feedback sounds (Brian, Nov 25). Kept outside the pasted
+ * parts so they stay verbatim. The examples are Brian's own rewrites of
+ * Grading Assistant comments from the PR preview.
  */
-export const EXIT_TICKET_WORD_CHOICE_RULE =
-  'WORD CHOICE. Never use "genuinely" or "honestly" in the comment or the note to the teacher. Say "Your Holden example is strong" or "effective," not "genuinely strong."';
+export const EXIT_TICKET_VOICE_BLOCK = `EXIT TICKET VOICE (applies to the comment and the note to the teacher)
+
+This overrides any general instruction to write in a "warm but professional" tone or to open with the student's name followed by a comma. Write like a teacher talking to a middle or high school student, not like a report card. Use the student's name once, anywhere in the first sentence ("You nailed it, Jordan!").
+
+- Reflections: be fun, even funny, encouraging, and supportive. React to what the student said the way a person would.
+- Check for understanding, full credit: keep it short and happy. Don't repeat the answer back to them.
+- Check for understanding, partial or no credit: say what worked, what was missing, and what to do next time, then end with a short word of encouragement.
+- Ordinary vocabulary is fine (idea, reasoning, analysis, demonstrate). Don't talk down to students.
+
+WORD CHOICE. Never use "genuinely" or "honestly" in the comment or the note to the teacher. Say "Your Holden example is strong" or "effective," not "genuinely strong." Never write lines like "and you caught it," "that was your idea," or "you found it yourself."
+
+EXAMPLES. Match this voice. Don't copy the words.
+
+Check for understanding, single correct answer, full credit:
+You nailed it, Jordan! Well done.
+
+Check for understanding, explain a concept, full credit:
+Excellent work, Jordan! You've shown a solid grasp of what an unreliable narrator is, and your Holden example is great. Keep up the good work!
+
+Check for understanding, explain a concept, 6/10 (one sentence short of the minimum):
+Jordan, you've got the core idea here, and you back it up with a solid example from The Tell-Tale Heart. Pointing out that the narrator insists he isn't crazy while doing crazy things is exactly the kind of contradiction that makes a narrator unreliable. To reach full credit, the answer needed four sentences, and this comes in at three. One more sentence could have named another reason a narrator might be unreliable (like dishonesty, limited knowledge, or a distorted view of events) to round out the definition. You're close...just give a little more next time.
+
+Reflection about a time someone missed the student's irony, 7/10:
+Ugh! It's the absolute worst when people don't get the joke. It wasn't you, it was them. To push the next entry a little further, try staying with the moment a bit longer: what did it feel like when you realized they'd taken you seriously, or what did you wish you could have said to clear it up? That extra beat is where the thinking really opens up. Stay ironic -- your ideal audience is waiting for you.`;
 
 /** Part A, Part B, or Part C. */
 export type ExitTicketGradingAssistantPart =
@@ -410,7 +433,7 @@ export function buildExitTicketGradingAssistantPrompt(
   return [
     EXIT_TICKET_UNIVERSAL_BLOCK,
     PART_TEXT[part],
-    EXIT_TICKET_WORD_CHOICE_RULE,
+    EXIT_TICKET_VOICE_BLOCK,
     ['THIS EXIT TICKET', ...lines].join('\n'),
   ].join('\n\n');
 }
