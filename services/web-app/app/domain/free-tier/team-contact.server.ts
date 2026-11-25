@@ -7,6 +7,7 @@ import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 import type { EmailSendResult } from './email.server';
+import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 import {
   manualReviewHoldReasonLabel,
   type ManualReviewHoldReason,
@@ -18,10 +19,20 @@ export const TEAM_CONTACT_MANUAL_REVIEW_KIND = 'team_contact_manual_review';
 export const TEAM_CONTACT_IDEMPOTENCY_MS = 10 * 60 * 1000;
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS = 30 * 60 * 1000;
 
-export function internalFreeTierReviewQueueUrl(): string | null {
+/**
+ * Yawp Internal's decision queue is /free-trial/waitlist (its default "Needs
+ * decision" filter lists MANUAL_REVIEW). The old /free-tier/approvals path
+ * never existed there, so the link landed on Internal's "Page not found".
+ * `env` is explicit because Internal otherwise falls back to the operator's
+ * remembered environment (often demo); `q` opens the held teacher directly.
+ */
+export function internalFreeTierReviewQueueUrl(teacherEmail?: string): string | null {
   const origin = process.env.INTERNAL_PLATFORM_ORIGIN?.trim().replace(/\/$/, '');
   if (!origin) return null;
-  return `${origin}/free-tier/approvals?status=MANUAL_REVIEW`;
+  const runtime = resolveFreeTierRuntimeEnvironment();
+  const params = new URLSearchParams({ env: runtime === 'demo' ? 'demo' : 'production' });
+  if (teacherEmail?.trim()) params.set('q', teacherEmail.trim());
+  return `${origin}/free-trial/waitlist?${params.toString()}`;
 }
 
 type ApplicationContactFields = {
@@ -189,7 +200,7 @@ export async function sendManualReviewTeamContact(args: {
   adminEmail: string;
   holdReason: ManualReviewHoldReason;
 }): Promise<EmailSendResult> {
-  const reviewQueueUrl = internalFreeTierReviewQueueUrl();
+  const reviewQueueUrl = internalFreeTierReviewQueueUrl(args.teacherEmail);
   const text = [
     'A free-tier administrator approval request was held for manual review.',
     '',
