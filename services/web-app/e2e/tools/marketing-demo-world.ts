@@ -244,7 +244,7 @@ export async function buildDemoWorld(
         essayAssignmentId: existing.assignmentId,
         essayClassAssignmentId: existing.id,
         submissions: Object.fromEntries(
-          subs.map((s) => [s.document.membership.user.name!, s.id])
+          subs.map((s) => [s.document.membership?.user.name ?? '', s.id])
         ),
       };
     }
