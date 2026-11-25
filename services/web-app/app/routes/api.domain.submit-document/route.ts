@@ -127,7 +127,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const text = document.text ?? '';
   const now = new Date();
   const boundAssignmentTitle = assignmentDocumentTitleFromAssignment(
-    document.classAssignment?.assignment.title ?? document.assignment?.title
+    document.classAssignment?.assignment?.title ??
+      document.assignment?.title
   );
   const submittedTitle = boundAssignmentTitle
     ? boundAssignmentTitle
