@@ -5,6 +5,12 @@ import {
 } from '~/domain/grading/teacher-notes';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { summarizeGradingRubric } from '~/domain/assignment-types/grading-rubric-summary';
+import {
+  isExitTicketAssignmentType,
+  parseStoredExitTicketConfig,
+} from '~/domain/assignment-types/exit-ticket';
+import { exitTicketGradingPlainSummary } from '~/domain/assignment-types/exit-ticket-grading-assistant';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import { TeacherNotes } from './teacher-grading/teacher-notes';
 import { invariant } from '@epic-web/invariant';
 import {
@@ -215,13 +221,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           assignmentTypeId: true,
           assignmentType: {
-            select: { systemKey: true },
+            select: { systemKey: true, kind: true },
           },
           assignment: {
             select: {
               id: true,
               submitForGrade: true,
               pointValue: true,
+              exitTicketConfigJson: true,
               gradingAssistantStrictnessLevel: true,
               grammarGradingEnabled: true,
             },
@@ -556,12 +563,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAdmin,
   });
 
-  const gradingRubricSummary =
+  const baseRubricSummary =
     gradingConfig != null
       ? summarizeGradingRubric(gradingConfig, {
           libraryRubricTitle: gradingConfig.rubricName ?? null,
         })
       : null;
+  // Exit tickets graded by the Grading Assistant describe what it grades for
+  // in plain words, from the ticket the teacher made (Brian, Nov 25).
+  const exitTicketPlainRubric =
+    baseRubricSummary &&
+    isExitTicketAssignmentType(submission.document.assignmentType) &&
+    (await isExitTicketGradingV2RolloutEnabled())
+      ? exitTicketGradingPlainSummary(
+          parseStoredExitTicketConfig(
+            submission.document.assignment?.exitTicketConfigJson
+          ),
+          submission.document.assignment?.pointValue
+        )
+      : null;
+  const gradingRubricSummary =
+    baseRubricSummary && exitTicketPlainRubric
+      ? { ...baseRubricSummary, plain: exitTicketPlainRubric }
+      : baseRubricSummary;
 
   const submissionPayload = {
     ...publicSubmission,

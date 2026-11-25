@@ -6,6 +6,26 @@ export function GradingRubricSummaryCard({
 }: {
   summary: GradingRubricSummary;
 }) {
+  if (summary.plain) {
+    return (
+      <div
+        data-testid="grading-rubric-summary"
+        className="space-y-3 rounded-lg border bg-muted/30 px-4 py-3"
+      >
+        <p className="text-sm" data-testid="grading-rubric-plain-intro">
+          {summary.plain.intro}
+        </p>
+        <dl className="space-y-2 text-sm">
+          {summary.plain.rows.map((row) => (
+            <div key={row.label}>
+              <dt className="font-medium">{row.label}</dt>
+              <dd className="text-foreground/80">{row.text}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    );
+  }
   return (
     <div
       data-testid="grading-rubric-summary"

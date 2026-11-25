@@ -17,6 +17,7 @@ import {
   buildExitTicketGradingAssistantPrompt,
   clampExitTicketScore,
   exitTicketGradingAssistantPart,
+  exitTicketGradingPlainSummary,
   exitTicketPersistedGrade,
   resolveExitTicketPointTotal,
 } from './exit-ticket-grading-assistant';
@@ -469,5 +470,58 @@ describe('correct answer field contract', () => {
       correctAnswer: 'A theme makes a claim.',
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('exitTicketGradingPlainSummary (Brian, Nov 25)', () => {
+  const text = (summary: { intro: string; rows: { label: string; text: string }[] }) =>
+    [summary.intro, ...summary.rows.flatMap((row) => [row.label, row.text])].join('\n');
+
+  test('a reflection explains completion in plain words, with no bands or codes', () => {
+    const summary = exitTicketGradingPlainSummary(REFLECTION, 5);
+    const all = text(summary);
+    expect(all).toContain('Full credit (5/5)');
+    expect(all).toContain('No credit (0)');
+    expect(all).not.toContain('Partial credit');
+    expect(all).not.toMatch(/Names it only|Rubric points|assignment-type:/);
+  });
+
+  test('a reflection with a minimum explains credit by length', () => {
+    const all = text(
+      exitTicketGradingPlainSummary(
+        { ...REFLECTION, grading: { basis: 'completion', minSentences: 3 } },
+        5
+      )
+    );
+    expect(all).toContain('shorter than at least 3 sentences');
+  });
+
+  test('a single answer names the teacher’s answer and the half-credit hedge', () => {
+    const all = text(
+      exitTicketGradingPlainSummary(
+        {
+          ...CHECK,
+          singleCorrectAnswer: true,
+          correctAnswer: 'Unreliable narrator',
+          grading: { basis: 'bands' },
+        },
+        10
+      )
+    );
+    expect(all).toContain('“Unreliable narrator.”');
+    expect(all).toContain('Half credit (5/10)');
+    expect(all).not.toContain('One point off');
+  });
+
+  test('more than one right answer quotes the notes, or says there are none', () => {
+    expect(exitTicketGradingPlainSummary(CHECK, 5).intro).toContain(
+      'judged against your notes'
+    );
+    expect(
+      exitTicketGradingPlainSummary(
+        { ...CHECK, correctAnswer: undefined, singleCorrectAnswer: false },
+        5
+      ).intro
+    ).toContain('You left no notes');
   });
 });

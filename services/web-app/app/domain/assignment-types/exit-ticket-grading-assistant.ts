@@ -27,6 +27,7 @@
 // The preset the teacher clicked is not passed: the prompt says what was asked.
 
 import type { RubricCategory } from './assignment-type-rubric.shared';
+import type { GradingRubricPlainSummary } from './grading-rubric-summary';
 import {
   EXIT_TICKET_ASSIGNMENT_TYPE_KIND,
   EXIT_TICKET_DEFAULT_POINT_VALUE,
@@ -530,5 +531,119 @@ export function applyExitTicketGradingAssistant<
       gradingInstructions: instructions,
       gradingInstructionsOverride: null,
     },
+  };
+}
+
+function plainMinimum(config: ExitTicketConfig | null | undefined): string | null {
+  const sentences = config?.grading?.minSentences;
+  const words = config?.grading?.minWords;
+  const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+  const parts = [
+    sentences ? count(sentences, 'sentence') : null,
+    words ? count(words, 'word') : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length ? `at least ${parts.join(' and ')}` : null;
+}
+
+/**
+ * What the Grading Assistant grades for, in plain words, for the teacher's
+ * "View rubric" (Brian, Nov 25). Built from the ticket the teacher made, so
+ * it names their answer, notes, minimum, and points.
+ */
+export function exitTicketGradingPlainSummary(
+  config: ExitTicketConfig | null | undefined,
+  pointValue: number | null | undefined
+): GradingRubricPlainSummary {
+  const part = exitTicketGradingAssistantPart(config);
+  const total = resolveExitTicketPointTotal(pointValue, { v2Grading: true });
+  const minimum = plainMinimum(config);
+  const half = Math.ceil(total / 2);
+  const never = {
+    label: 'Never counted',
+    text: 'Spelling, grammar, and polish.',
+  };
+
+  if (part === 'reflection') {
+    return {
+      intro:
+        'A reflection. The Grading Assistant looks for an honest answer to the prompt. There is no right or wrong answer.',
+      rows: [
+        {
+          label: `Full credit (${total}/${total})`,
+          text: minimum
+            ? `Any honest engagement with the prompt or the lesson that is ${minimum} long. A question about the lesson counts.`
+            : 'Any honest engagement with the prompt or the lesson. One real sentence counts, and so does a question about the lesson.',
+        },
+        ...(minimum
+          ? [
+              {
+                label: 'Partial credit',
+                text: `Honest, but shorter than ${minimum}. Credit is in proportion to how much was written, rounded up.`,
+              },
+            ]
+          : []),
+        {
+          label: 'No credit (0)',
+          text: 'Blank, a placeholder like “idk,” off topic, or only naming the topic (“Puritans”).',
+        },
+        {
+          label: 'Student questions',
+          text: 'Answered in the comment when the Grading Assistant can answer confidently, and always copied into your note.',
+        },
+        never,
+      ],
+    };
+  }
+
+  if (part === 'single-answer') {
+    return {
+      intro: `A check for understanding with one correct answer: “${exitTicketCorrectAnswer(config)}.”`,
+      rows: [
+        {
+          label: `Full credit (${total}/${total})`,
+          text: `Gives the correct answer${minimum ? ` and is ${minimum} long` : ''}. Capitalization doesn’t matter, and slight misspellings, plurals, and extra explanation are fine.`,
+        },
+        {
+          label: `Half credit (${half}/${total})`,
+          text: 'Hedges between the correct answer and others (“either X or Y”).',
+        },
+        ...(minimum
+          ? [
+              {
+                label: `One point off (${total - 1}/${total})`,
+                text: `Correct, but shorter than ${minimum}.`,
+              },
+            ]
+          : []),
+        {
+          label: 'No credit (0)',
+          text: 'A different answer, blank, or off topic. The right idea in other words also scores 0, and your note flags it so you can decide.',
+        },
+        never,
+      ],
+    };
+  }
+
+  const notes = exitTicketCorrectAnswer(config);
+  return {
+    intro:
+      notes === NOT_PROVIDED
+        ? 'A check for understanding with more than one right answer. You left no notes, so the Grading Assistant judges accuracy against what is generally accepted about the subject.'
+        : `A check for understanding with more than one right answer, judged against your notes: “${notes}”`,
+    rows: [
+      {
+        label: `Full credit (${total}/${total})`,
+        text: `Accurate, with reasoning that shows understanding, and anything the prompt asks for (an example, a quote)${minimum ? `, ${minimum} long` : ''}.`,
+      },
+      {
+        label: 'Partial credit',
+        text: `Real understanding with something missing, scaled to how much shows (1 to ${total - 1}).${minimum ? ` Correct but shorter than ${minimum} is one point off.` : ''}`,
+      },
+      {
+        label: 'No credit (0)',
+        text: 'Wrong, off topic, or blank.',
+      },
+      never,
+    ],
   };
 }

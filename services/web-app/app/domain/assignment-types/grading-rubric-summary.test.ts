@@ -34,4 +34,19 @@ describe('summarizeGradingRubric', () => {
       '21–30 · ALL IN',
     ]);
   });
+
+  test('never shows an internal rubric key as the source', () => {
+    const summary = summarizeGradingRubric(
+      {
+        source: 'assignment-type',
+        label: 'Exit Ticket',
+        scoringType: 'rubric_points',
+        minScore: 0,
+        maxScore: 100,
+        rubricCategories: [],
+      },
+      { libraryRubricTitle: 'assignment-type:cexitticket000000000000000' }
+    );
+    expect(summary.sourceText).not.toContain('assignment-type:');
+  });
 });
