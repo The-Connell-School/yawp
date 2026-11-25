@@ -6,7 +6,7 @@
 **Date:** 2026-11-25  
 **Product source:** Brian Connell free-tier bug report (2026-11-25)
 
-**SHIP** (pending exact-head CI after push)
+**SHIP** (exact-head CI **pass** @ `297ef7d1`, 23/23 checks, 2026-11-25)
 
 ---
 
