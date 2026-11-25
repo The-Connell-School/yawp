@@ -355,6 +355,24 @@ const pictureKeyOf = (subject: string) => subject.toLowerCase().replace(/[^a-z0-
  * author on its title slide, as before, and only when no other slide shows
  * them. Set here so it never depends on the planner remembering.
  */
+/**
+ * The author for the title slide, when its world was asked for and not found
+ * (Nov 25: the Chronicle deck's town was not found, and the title slide was
+ * left bare). Null when another slide already shows them.
+ */
+export function titleAuthorWant(deck: SlideDeck, { kit, author }: { kit?: PictureKit | null; author?: string | null }): { subject: string; shows: string; own: true } | null {
+  const kitAuthor = kit?.visuals.find((visual) => visual.use === 'author');
+  const who = kitAuthor?.subject ?? author ?? null;
+  if (!who) return null;
+  const shown = deck.slides.some(
+    (slide) =>
+      slide.layout !== 'title' &&
+      ((slide.wants && pictureKeyOf(slide.wants.subject) === pictureKeyOf(who)) ||
+        (slide.people ?? []).some((person) => pictureKeyOf(person.wants?.subject ?? person.name) === pictureKeyOf(who)))
+  );
+  return shown ? null : { subject: who, shows: kitAuthor?.shows ?? 'a portrait of the author', own: true };
+}
+
 export function withTitlePicture<T extends SlideDeck>(
   deck: T,
   { kit, author, world }: { kit?: PictureKit | null; author?: string | null; world?: string | null }
@@ -371,7 +389,10 @@ export function withTitlePicture<T extends SlideDeck>(
   const kitWorld = ['setting', 'period']
     .map((use) => kit?.visuals.find((visual) => visual.use === use && !asked.has(pictureKeyOf(visual.subject))))
     .find(Boolean);
-  const editorWorld = world && !asked.has(pictureKeyOf(world)) ? world : null;
+  // A world only for a lesson on a work: one that teaches a skill has no author,
+  // and its example sentences are not its world (Nov 25: a semicolons lesson
+  // got the Salinas Valley).
+  const editorWorld = world && (author || kit) && !asked.has(pictureKeyOf(world)) ? world : null;
   const kitAuthor = kit?.visuals.find((visual) => visual.use === 'author');
   const who = kitAuthor?.subject ?? author ?? null;
   let want: { subject: string; shows?: string; own?: true; print?: true } | null = null;

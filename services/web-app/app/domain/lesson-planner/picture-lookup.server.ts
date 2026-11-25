@@ -34,7 +34,7 @@ import {
   type LookAt,
   type LookVerdict,
 } from './picture-check.server';
-import { withNamedSubjects, withTitlePicture, type AskEditor, type PictureKit } from './picture-subjects.server';
+import { titleAuthorWant, withNamedSubjects, withTitlePicture, type AskEditor, type PictureKit } from './picture-subjects.server';
 import {
   pictureKey,
   pictureWords,
@@ -798,6 +798,34 @@ export async function withPosterTitle<T extends SlideDeck>(asked: SlideDeck, dec
 }
 
 /**
+ * The title slide's world not found: its author instead, on the ordinary
+ * title slide (Nov 25), rather than a bare title and a slot.
+ */
+async function withAuthorWhenNoWorld<T extends SlideDeck>(
+  asked: SlideDeck,
+  resolved: ResolvedPictures<T>,
+  owner: Owner,
+  deps: Parameters<typeof resolveDeckPictures>[2],
+  who: { kit?: PictureKit | null; author?: string | null }
+): Promise<{ deck: T; ids: string[]; authored?: true }> {
+  const at = resolved.deck.slides.findIndex((slide) => slide.layout === 'title');
+  const title = resolved.deck.slides[at];
+  if (at < 0 || !title || title.image || !asked.slides[at]?.wants?.print) return { deck: resolved.deck, ids: resolved.ids };
+  const want = titleAuthorWant(resolved.deck, who);
+  if (!want) return { deck: resolved.deck, ids: resolved.ids };
+  const again = await resolveDeckPictures({ ...resolved.deck, slides: [{ ...title, wants: want }] }, owner, deps).catch(() => null);
+  const image = again?.deck.slides[0]?.image;
+  if (!image) return { deck: resolved.deck, ids: resolved.ids };
+  const { wants: _wants, ...rest } = title;
+  return {
+    deck: { ...resolved.deck, slides: resolved.deck.slides.map((slide, i) => (i === at ? { ...rest, image } : slide)) },
+    ids: [...resolved.ids, ...(again?.ids ?? [])],
+    // The author's face is never printed: that was the obituary.
+    authored: true,
+  };
+}
+
+/**
  * The planner's reply with its deck's pictures found. A picture slide still
  * without its picture becomes its question. A reply with no deck, or a deck
  * that wants nothing, comes back as it was.
@@ -835,7 +863,8 @@ export async function withResolvedPictures(
     : { deck: outcome.deck, named: 0, author: null, world: null };
   const titled = withTitlePicture(edited.deck, { kit: deps.kit, author: edited.author, world: edited.world ?? null });
   const resolved = await resolveDeckPictures(titled, owner, deps);
-  let settled = withoutEmptyPictureSlides(await withPosterTitle(titled, resolved.deck, owner, deps.shelf));
+  const withAuthor = await withAuthorWhenNoWorld(titled, resolved, owner, deps, { kit: deps.kit, author: edited.author });
+  let settled = withoutEmptyPictureSlides(withAuthor.authored ? withAuthor.deck : await withPosterTitle(titled, withAuthor.deck, owner, deps.shelf));
   // The gallery painting is a mood, not the thing: Kevin on the Leopard deck,
   // and the 13-lesson review (Nov 22: Hokusai's Great Wave on Homer, Gatsby
   // and Hamlet; Turner's Temeraire on a World War I poem). It stays only
@@ -850,7 +879,7 @@ export async function withResolvedPictures(
   if (settled === outcome.deck) return nothing;
   return {
     reply: `${outcome.body.trim()}\n\n${fenceSlideDeck(settled)}`,
-    ids: resolved.ids,
+    ids: withAuthor.ids,
     counts: resolved.counts,
     empty: resolved.empty,
     named: edited.named,

@@ -13,6 +13,7 @@ import {
   withTitlePicture,
   readPictureEditorAuthor,
   readPictureEditorWorld,
+  titleAuthorWant,
   eventsWithoutSubjects,
   readPictureEditorEvents,
 } from './picture-subjects.server';
@@ -203,6 +204,19 @@ describe('the vetted kit and the title slide (visuals review, Nov 22)', () => {
     const noWorld = { ...KIT, visuals: KIT.visuals.filter((visual) => !['setting', 'period'].includes(visual.use)) };
     const out = withTitlePicture(deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }]), { kit: noWorld }) as { slides: Array<{ wants?: unknown }> };
     expect(out.slides[0]!.wants).toEqual({ subject: 'Wilfred Owen', shows: 'Owen in uniform, about 1916', own: true });
+  });
+
+  test('a skill lesson has no world, whatever the editor named (Nov 25: Salinas Valley on semicolons)', () => {
+    const out = withTitlePicture(deck([{ layout: 'title', title: 'Semicolons', speakerNotes: 'n' }]), { author: null, world: 'Salinas Valley' }) as { slides: Array<{ wants?: unknown }> };
+    expect(out.slides[0]!.wants).toBeUndefined();
+  });
+
+  test('the world not found: the author, unless another slide shows them', () => {
+    const slides = [{ layout: 'title', title: 'Chronicle of a Death Foretold', speakerNotes: 'n' }];
+    expect(titleAuthorWant(deck(slides), { author: 'Gabriel García Márquez' })).toEqual({ subject: 'Gabriel García Márquez', shows: 'a portrait of the author', own: true });
+    const shown = [...slides, { layout: 'notes', title: 'The author', facts: ['x'], speakerNotes: 'n', wants: { subject: 'Gabriel García Márquez' } }];
+    expect(titleAuthorWant(deck(shown), { author: 'Gabriel García Márquez' })).toBeNull();
+    expect(titleAuthorWant(deck(slides), {})).toBeNull();
   });
 
   test('no kit: the world the editor named, then the author', () => {
