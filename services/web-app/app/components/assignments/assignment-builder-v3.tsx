@@ -30,6 +30,7 @@ import {
   resolveNewAssignmentPointValue,
 } from '~/domain/assignments/new-assignment-defaults';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
+import { exitTicketBuilderHref } from '~/domain/assignment-types/exit-ticket-builder-href';
 import { useTeachingAccess } from '~/components/free-tier/teaching-access-context';
 import { TeachingApprovalRequiredAlert } from '~/components/free-tier/teaching-approval-required-alert';
 import { isTeachingApprovalRequiredActionData } from '~/domain/free-tier/teaching-approval-required';
@@ -107,6 +108,8 @@ export type AssignmentBuilderV3Props = {
   firstAssignmentIntro?: string;
   editing?: AssignmentBuilderV3EditInitial;
   priorAssignmentCount?: number;
+  /** Exit tickets open their own builder instead (exit-ticket-grading-v2). */
+  exitTicketBuilderEnabled?: boolean;
 };
 
 function strictnessHelper(level: GradingAssistantStrictnessLevel) {
@@ -181,6 +184,7 @@ export function AssignmentBuilderV3({
   firstAssignmentIntro,
   editing,
   priorAssignmentCount = 1,
+  exitTicketBuilderEnabled = false,
 }: AssignmentBuilderV3Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -277,6 +281,15 @@ export function AssignmentBuilderV3({
     [classes, classIds]
   );
   const isExitTicket = isExitTicketAssignmentType(selectedType);
+  // Picking Exit Ticket here opens the exit ticket builder on its own page
+  // (Brian, Nov 25), carrying the class the teacher started from.
+  const sendsToExitTicketBuilder =
+    exitTicketBuilderEnabled && isExitTicket && !isEdit;
+  useEffect(() => {
+    if (!sendsToExitTicketBuilder || !selectedType) return;
+    navigate(exitTicketBuilderHref(selectedType.id, classIds[0] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendsToExitTicketBuilder, selectedType?.id]);
   const showGroupProjectToggle = assignmentBuilderV3ShowGroupProjectToggle({
     collaborationSupported: Boolean(selectedType?.collaborationSupported),
     isEdit,

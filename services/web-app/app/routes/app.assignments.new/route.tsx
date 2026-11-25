@@ -32,6 +32,9 @@ import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.se
 import { resolveAssignmentPrompt } from '~/utils/assignment-exit-ticket.server';
 import { safeDomainErrorTextForClientResponse } from '~/utils/server-error-request-context.server';
 import { CLASS_STARTER_DEFAULT_POINT_VALUE } from '~/domain/assignments/new-assignment-defaults';
+import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
+import { exitTicketBuilderHref } from '~/domain/assignment-types/exit-ticket-builder-href';
+import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 
 export const FIRST_ASSIGNMENT_PAGE_TITLE = 'Create your first assignment';
 export const FIRST_ASSIGNMENT_INTRO =
@@ -59,6 +62,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const queryTitle = url.searchParams.get('title') ?? '';
 
   const v3 = await loadAssignmentBuilderV3Data(request);
+  // Exit tickets are built in their own builder, on the Exit Ticket page
+  // (Brian, Nov 25). A link that names one goes straight there.
+  const exitTicketBuilderEnabled = await isExitTicketGradingV2RolloutEnabled();
+  const queryType = v3.assignmentTypes.find(
+    (type) => type.id === queryAssignmentTypeId
+  );
+  if (
+    exitTicketBuilderEnabled &&
+    !isFirstAssignment &&
+    queryType &&
+    isExitTicketAssignmentType(queryType)
+  ) {
+    throw redirect(exitTicketBuilderHref(queryType.id, queryClassId || null));
+  }
   const usage = await readFreeAccountUsage(profile, true, userId);
 
   const classStarterType =
@@ -75,9 +92,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     defaultAssignmentTypeId =
       queryAssignmentTypeId || classStarterType?.id || '';
   } else if (!defaultAssignmentTypeId) {
+    // Not Exit Ticket by default: choosing it opens its own builder.
     defaultAssignmentTypeId =
       v3.assignmentTypes.find(
-        (type) => !type.quotaExhausted && !type.unavailableReason
+        (type) =>
+          !type.quotaExhausted &&
+          !type.unavailableReason &&
+          !(exitTicketBuilderEnabled && isExitTicketAssignmentType(type))
       )?.id ?? '';
   }
 
@@ -122,6 +143,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return {
     ...v3,
+    exitTicketBuilderEnabled,
     isFirstAssignment,
     selectableTypes,
     priorAssignmentCount,
@@ -328,6 +350,7 @@ export default function NewAssignmentPage() {
           firstAssignmentPageTitle={FIRST_ASSIGNMENT_PAGE_TITLE}
           firstAssignmentIntro={FIRST_ASSIGNMENT_INTRO}
           priorAssignmentCount={data.priorAssignmentCount}
+          exitTicketBuilderEnabled={data.exitTicketBuilderEnabled}
         />
       </div>
     </section>
