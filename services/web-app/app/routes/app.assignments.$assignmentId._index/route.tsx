@@ -465,8 +465,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const postAtRaw = formData.get('postAt')?.toString()?.trim() ?? '';
     const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
 
-    const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
+    const { parseRequiredAssignmentTitle } = await import(
+      '~/utils/assignment-title-validation'
+    );
+    const parsedTitle = parseRequiredAssignmentTitle(titleRaw);
+    if (!parsedTitle.ok) {
+      return dataResponse(
+        { success: false, message: parsedTitle.message },
+        { status: 400 }
+      );
+    }
+    const title = parsedTitle.title;
     const gradingAssistantStrictnessLevel =
       intent === 'create-assignment'
         ? strictnessRaw

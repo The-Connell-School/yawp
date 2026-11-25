@@ -166,12 +166,19 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
 
-  const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
+  const { parseRequiredAssignmentTitle } = await import(
+    '~/utils/assignment-title-validation'
+  );
+  const parsedTitle = parseRequiredAssignmentTitle(titleRaw);
 
   if (!assignmentTypeId || !classId || !prompt) {
     return dataResponse({ error: 'Missing required fields.' }, { status: 400 });
   }
+  if (!parsedTitle.ok) {
+    return dataResponse({ error: parsedTitle.message }, { status: 400 });
+  }
+  const title = parsedTitle.title;
 
   const klass = await prisma.class.findFirst({
     where: {
