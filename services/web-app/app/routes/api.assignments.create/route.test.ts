@@ -102,7 +102,8 @@ afterAll(() => {
 
 function requestFor(body: Record<string, string | string[]>) {
   const form = new FormData();
-  for (const [key, value] of Object.entries(body)) {
+  const payload = { title: 'Test Assignment', ...body };
+  for (const [key, value] of Object.entries(payload)) {
     if (Array.isArray(value)) {
       for (const item of value) form.append(key, item);
     } else {
@@ -249,6 +250,7 @@ describe('api.assignments.create', () => {
     form.append('classIds', 'class-1');
     form.append('classIds', 'class-2');
     form.set('prompt', 'Reference the attached assignment.');
+    form.set('title', 'Attached assignment');
     form.set(
       'promptAttachment',
       new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {

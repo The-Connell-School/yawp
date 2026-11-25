@@ -202,7 +202,8 @@ describe('buildScoreOptions', () => {
     expect(
       buildScoreOptions(0, 20, undefined, 1, [
         { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
-        { min: 1, max: 2, label: 'Struggling', description: 'Incomplete.' },
+        { min: 1, max: 1, label: 'Struggling', description: 'Incomplete.' },
+        { min: 2, max: 2, label: 'Emerging', description: 'Partial.' },
         { min: 3, max: 3, label: 'Developing', description: 'Generic.' },
         { min: 4, max: 4, label: 'Proficient', description: 'Clear.' },
         { min: 5, max: 5, label: 'Exemplary', description: 'Purposeful.' },

@@ -376,15 +376,27 @@ export function buildScoreOptions(
     ? scaleValues.filter((score) => allowedScores.includes(score))
     : scaleValues;
 
+  const bandLabelsOnFullGrid = bands?.length
+    ? values.map(
+        (score) => getCategoryScoreBand({ bands }, score)?.label ?? `__${score}__`
+      )
+    : [];
+  const hasRepeatingBandLabels =
+    bandLabelsOnFullGrid.length > 0 &&
+    new Set(bandLabelsOnFullGrid).size < bandLabelsOnFullGrid.length;
+  const scoreSpan = optionMax - optionMin;
+  const hasWideScoreBand = Boolean(
+    bands?.some((band) => band.max - band.min + 1 > 10)
+  );
+  // Collapse when exit-ticket-wide spans would repeat band labels, or smaller
+  // rubrics where multiple scores share one band (short response "All in").
+  const bandCount = bands?.length ?? 0;
   const bandOnlyPicker =
-    bands?.length &&
+    bandCount > 0 &&
     !allowedScores?.length &&
-    (!scoreLabels?.length ||
-      scoreLabels.every((label) =>
-        bands.some(
-          (band) => band.min <= label.value && label.value <= band.max
-        )
-      ));
+    !scoreLabels?.length &&
+    values.length > bandCount &&
+    (scoreSpan > 10 || hasWideScoreBand || hasRepeatingBandLabels);
 
   // Display-only rename for Daily Pages engagement tiers. Stored rubric labels
   // remain unchanged; only UI strings are mapped.

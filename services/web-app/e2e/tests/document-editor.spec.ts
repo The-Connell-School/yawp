@@ -274,14 +274,14 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
     await editor.click();
     const appendedText = ' Content that should survive a title edit.';
     await editor.pressSequentially(appendedText);
 
-    const titleInput = page.getByPlaceholder('Untitled document');
+    const titleInput = page.getByTestId('document-title-input');
     await expect(titleInput).toBeVisible({ timeout: 10000 });
     await titleInput.fill('Updated E2E Title');
     await titleInput.blur();
