@@ -43,11 +43,12 @@ export function AppNavNeedHelpMenu({
       <div className="border-b p-3">
         <p className="text-sm font-bold">Need help?</p>
         <p className="text-sm text-muted-foreground">
-          Email the Yawp! team at{' '}
+          Yell &ldquo;YAWP!&rdquo; out the nearest window three times, and
+          we&rsquo;ll come running. (Just kidding. Email{' '}
           <span className="font-medium text-foreground">
             {APP_NAV_SUPPORT_EMAIL}
           </span>
-          . We&rsquo;ll get back to you soon.
+          , and we&rsquo;ll be with you quickly.)
         </p>
       </div>
       <div className="p-1">
