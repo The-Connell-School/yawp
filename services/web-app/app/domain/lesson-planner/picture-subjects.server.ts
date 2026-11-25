@@ -55,13 +55,15 @@ Rules:
 - Timeline events, when listed: name the article about the historical event itself, so the timeline shows what happened. A famous event has a famous picture: "Birmingham campaign" for "Marches begin, April 1963", "Battle of the Somme" for "The Somme, 1916", "Wall Street Crash of 1929", "Montgomery bus boycott", "Nigerian independence" as its article is titled. Each event its own article, never the same one twice and never one a slide already has; when two events belong to one larger event, name the more specific article for one (an arrest, a speech, a treaty, a document) or null. The article for a war, a reform or a movement often opens with a map or a chart, which will not be shown: name instead the person who led it, the building, or a well-known painting or statue of the moment, by its own article ("Cleisthenes" for the first Athenian democracy, "Pericles" for the age of Athens, "The Death of Socrates" for Socrates' trial). An event in the author's life or the book's history (born, wrote, published) takes the person, the place or the first edition by its article, or null. An event inside the story itself, or one no article is about, gets null. A massacre, a genocide or a lynching gets null, as above.
 - Pictures of the work's world, when listed (several on one slide: the ruins today, the place as it was, an object of the time): name for each the article whose lead picture is that very thing ("Parthenon", "Theatre of Dionysus", "Acropolis of Athens", a museum piece by its own article), each different from the others and from every slide.
 - "shows": a few words on what the picture should show.
+- "world": the exact title of the Wikipedia article whose lead picture shows the world of the work this deck teaches, for its title slide, where it is drawn as a print: the real place it is set in or comes from, as a photograph would show it (a town, a building, a street, a landscape, a ruin): "Aracataca", "Theatre of Dionysus", "Glamis Castle", "Harlem", "Dust Bowl". Never a person, a map, a book cover, a painting or a film. Null when there is none, and for a lesson that teaches a skill.
 - "author": the exact title of the Wikipedia article about the author of the work this deck teaches (or the real person the lesson is about), or null when there is none. A lesson that teaches a skill (grammar, an argument, research, a kind of writing) with no work or person at its center has none: null.
 
 Answer with JSON only, no other text:
-{"author": "<article title>" or null, "slides": [{"slide": <number>, "subject": "<article title>" or null, "shows": "<what it shows>"}], "events": [{"event": "<slide>.<event>", "subject": "<article title>" or null, "shows": "<what it shows>"}]}`;
+{"author": "<article title>" or null, "world": "<article title>" or null, "slides": [{"slide": <number>, "subject": "<article title>" or null, "shows": "<what it shows>"}], "events": [{"event": "<slide>.<event>", "subject": "<article title>" or null, "shows": "<what it shows>"}]}`;
 
 const Answer = z.object({
   author: z.string().nullable().optional(),
+  world: z.string().nullable().optional(),
   slides: z.array(
     z.object({
       slide: z.coerce.number().int(),
@@ -85,6 +87,7 @@ export const PICTURE_EDITOR_SCHEMA = {
   type: 'object',
   properties: {
     author: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    world: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     slides: {
       type: 'array',
       items: {
@@ -112,7 +115,7 @@ export const PICTURE_EDITOR_SCHEMA = {
       },
     },
   },
-  required: ['author', 'slides', 'events'],
+  required: ['author', 'world', 'slides', 'events'],
   additionalProperties: false,
 } as const;
 
@@ -251,6 +254,12 @@ export function readPictureEditorAuthor(text: string): string | null {
   return author && author.length <= 80 && !/^(null|none|n\/a|unknown)$/i.test(author) ? author : null;
 }
 
+/** The work's world the editor named for the title slide; null when it named none. */
+export function readPictureEditorWorld(text: string): string | null {
+  const world = readLenientJson(text, Answer)?.world?.trim();
+  return world && world.length <= 80 && !/^(null|none|n\/a|unknown)$/i.test(world) ? world : null;
+}
+
 export type AskEditor = (system: string, prompt: string) => Promise<string>;
 
 /**
@@ -261,7 +270,7 @@ export async function withNamedSubjects<T extends SlideDeck>(
   deck: T,
   ask: AskEditor,
   kit?: PictureKit | null
-): Promise<{ deck: T; named: number; author: string | null }> {
+): Promise<{ deck: T; named: number; author: string | null; world?: string | null }> {
   const slides = slidesWithoutSubjects(deck);
   const events = eventsWithoutSubjects(deck);
   if (!slides.length && !events.length) return { deck, named: 0, author: null };
@@ -275,6 +284,7 @@ export async function withNamedSubjects<T extends SlideDeck>(
     return { deck, named: 0, author: null };
   }
   const author = readPictureEditorAuthor(answer);
+  const world = readPictureEditorWorld(answer);
   const asked = new Set(slides.map(({ number }) => number));
   const named = new Map<number, { subject: string; shows?: string }>();
   for (const entry of readPictureEditorAnswer(answer))
@@ -296,13 +306,14 @@ export async function withNamedSubjects<T extends SlideDeck>(
     taken.add(key);
     namedEvents.set(entry.event, entry);
   }
-  if (!named.size && !namedEvents.size) return { deck, named: 0, author };
+  if (!named.size && !namedEvents.size) return { deck, named: 0, author, world };
   const wantOf = (want: { subject: string; shows?: string }) => ({
     subject: want.subject,
     ...(want.shows ? { shows: want.shows } : {}),
   });
   return {
     author,
+    world,
     deck: {
       ...deck,
       slides: deck.slides.map((slide, i): Slide => {
@@ -334,30 +345,39 @@ export async function withNamedSubjects<T extends SlideDeck>(
 const pictureKeyOf = (subject: string) => subject.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /**
- * The title slide's picture (visuals review, Nov 22: 21 title slides, none
- * with a picture; a lesson on King's letter with no picture of King). When no
- * slide asks for the author, the title slide does: the one picture every
- * lesson on a text should have, set here so it never depends on the planner
- * remembering. When a slide already shows the author where the lesson talks
- * about them, the title slide takes the kit's first picture of the work's
- * world (a painting of the scene, the first edition, the place) instead.
+ * The title slide's picture. First (visuals review, Nov 22: 21 title slides,
+ * none with a picture) it was the author's face; then (Kevin, Nov 25: a
+ * candid snapshot of García Márquez "kinda stinks", an engraved portrait
+ * "looks like a weird obituary") it is the book's world, a real place drawn
+ * as a screen print beside the title, the way a poster for the book would be.
+ * The world comes from the work's vetted pictures (its setting or period),
+ * then the one the picture editor named. Only a lesson with neither has the
+ * author on its title slide, as before, and only when no other slide shows
+ * them. Set here so it never depends on the planner remembering.
  */
-export function withTitlePicture<T extends SlideDeck>(deck: T, { kit, author }: { kit?: PictureKit | null; author?: string | null }): T {
+export function withTitlePicture<T extends SlideDeck>(
+  deck: T,
+  { kit, author, world }: { kit?: PictureKit | null; author?: string | null; world?: string | null }
+): T {
   const at = deck.slides.findIndex((slide) => slide.layout === 'title');
   if (at < 0 || deck.slides[at]!.image || deck.slides[at]!.wants) return deck;
   const asked = new Set<string>();
   for (const slide of deck.slides) {
     if (slide.wants) asked.add(pictureKeyOf(slide.wants.subject));
     for (const person of slide.people ?? []) asked.add(pictureKeyOf(person.wants?.subject ?? person.name));
+    for (const scene of slide.scenes ?? []) if (scene.wants) asked.add(pictureKeyOf(scene.wants.subject));
+    for (const event of slide.events ?? []) if (event.wants) asked.add(pictureKeyOf(event.wants.subject));
   }
+  const kitWorld = ['setting', 'period']
+    .map((use) => kit?.visuals.find((visual) => visual.use === use && !asked.has(pictureKeyOf(visual.subject))))
+    .find(Boolean);
+  const editorWorld = world && !asked.has(pictureKeyOf(world)) ? world : null;
   const kitAuthor = kit?.visuals.find((visual) => visual.use === 'author');
   const who = kitAuthor?.subject ?? author ?? null;
-  let want: { subject: string; shows?: string; own?: true } | null = null;
-  if (who && !asked.has(pictureKeyOf(who))) want = { subject: who, shows: kitAuthor?.shows ?? 'a portrait of the author', own: true };
-  else {
-    const world = kit?.visuals.find((visual) => ['scene', 'edition', 'setting', 'period'].includes(visual.use) && !asked.has(pictureKeyOf(visual.subject)));
-    if (world) want = { subject: world.subject, shows: world.shows };
-  }
+  let want: { subject: string; shows?: string; own?: true; print?: true } | null = null;
+  if (kitWorld) want = { subject: kitWorld.subject, ...(kitWorld.shows ? { shows: kitWorld.shows } : {}), print: true };
+  else if (editorWorld) want = { subject: editorWorld, shows: 'the place the work is set in', print: true };
+  else if (who && !asked.has(pictureKeyOf(who))) want = { subject: who, shows: kitAuthor?.shows ?? 'a portrait of the author', own: true };
   if (!want) return deck;
   return { ...deck, slides: deck.slides.map((slide, i) => (i === at ? { ...slide, wants: want! } : slide)) };
 }

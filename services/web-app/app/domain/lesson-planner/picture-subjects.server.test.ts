@@ -12,6 +12,7 @@ import {
   withNamedSubjects,
   withTitlePicture,
   readPictureEditorAuthor,
+  readPictureEditorWorld,
   eventsWithoutSubjects,
   readPictureEditorEvents,
 } from './picture-subjects.server';
@@ -192,9 +193,24 @@ describe('the vetted kit and the title slide (visuals review, Nov 22)', () => {
     expect(prompt).toContain('- Lord Kitchener Wants You — the 1914 recruiting poster (period)');
   });
 
-  test('no slide asks for the author: the title slide does, as their own article only', () => {
-    const out = withTitlePicture(deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }, { layout: 'big_idea', title: 'The old Lie', body: 'x', speakerNotes: 'n' }]), { kit: KIT }) as { slides: Array<{ wants?: unknown }> };
+  test('the title slide asks for the work’s world, to be drawn as a print, not the author’s face (Kevin, Nov 25)', () => {
+    const out = withTitlePicture(deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }, { layout: 'big_idea', title: 'The old Lie', body: 'x', speakerNotes: 'n' }]), { kit: KIT }) as { slides: Array<{ wants?: { subject: string; print?: boolean } }> };
+    expect(out.slides[0]!.wants?.subject).toBe('Lord Kitchener Wants You');
+    expect(out.slides[0]!.wants?.print).toBe(true);
+  });
+
+  test('with no world anywhere, the author, as their own article, and not printed', () => {
+    const noWorld = { ...KIT, visuals: KIT.visuals.filter((visual) => !['setting', 'period'].includes(visual.use)) };
+    const out = withTitlePicture(deck([{ layout: 'title', title: 'Dulce', speakerNotes: 'n' }]), { kit: noWorld }) as { slides: Array<{ wants?: unknown }> };
     expect(out.slides[0]!.wants).toEqual({ subject: 'Wilfred Owen', shows: 'Owen in uniform, about 1916', own: true });
+  });
+
+  test('no kit: the world the editor named, then the author', () => {
+    const slides = [{ layout: 'title', title: 'Chronicle of a Death Foretold', speakerNotes: 'n' }];
+    const out = withTitlePicture(deck(slides), { author: 'Gabriel García Márquez', world: 'Aracataca' }) as { slides: Array<{ wants?: { subject: string; print?: boolean } }> };
+    expect(out.slides[0]!.wants).toMatchObject({ subject: 'Aracataca', print: true });
+    expect(readPictureEditorWorld('{"author": "Gabriel García Márquez", "world": "Aracataca", "slides": []}')).toBe('Aracataca');
+    expect(readPictureEditorWorld('{"author": null, "world": null, "slides": []}')).toBeNull();
   });
 
   test('a slide already shows the author where the lesson talks about him: the title takes a picture of the work’s world', () => {

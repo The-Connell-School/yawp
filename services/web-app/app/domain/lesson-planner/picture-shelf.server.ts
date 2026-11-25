@@ -6,6 +6,7 @@
  */
 import { prisma } from '~/utils/db.server';
 import type { PictureShelf } from './picture-lookup.server';
+import { screenPrint } from './poster-print.server';
 
 /**
  * Pictures kept before the second look existed (Nov 22, 14:10 UTC) were kept
@@ -70,6 +71,41 @@ export const pictureShelf: PictureShelf = {
         // A credit kept before Commons' hidden Wikidata line was dropped (Nov 22).
         credit: picture.credit?.replace(/\s*label QS:[\s\S]*$/i, '') ?? null,
         ...(changes?.altText ? { altText: changes.altText } : {}),
+        membershipId: owner.membershipId,
+        conversationId: owner.conversationId,
+        position: 0,
+        slideNumbers: [],
+      },
+      select: { id: true },
+    });
+  },
+  async print(id, owner) {
+    const row = await prisma.lessonPlanUploadPicture.findFirst({
+      where: { id, membershipId: owner.membershipId },
+    });
+    if (!row?.blob) return null;
+    const printed = screenPrint(new Uint8Array(row.blob), row.contentType);
+    if (!printed) return null;
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      uploadId: _uploadId,
+      membershipId: _membershipId,
+      conversationId: _conversationId,
+      ...picture
+    } = row;
+    return prisma.lessonPlanUploadPicture.create({
+      data: {
+        ...picture,
+        // Never on the shelf for its subject: the photo is, the print is this deck's.
+        subject: null,
+        altText: `${row.altText ?? 'The place the work is set in'}, drawn as a print`.slice(0, 500),
+        credit: row.credit ? `Print by Yawp! after ${row.credit}` : 'Print by Yawp!',
+        contentType: printed.contentType,
+        byteSize: printed.data.length,
+        width: printed.width,
+        height: printed.height,
+        blob: Buffer.from(printed.data),
         membershipId: owner.membershipId,
         conversationId: owner.conversationId,
         position: 0,

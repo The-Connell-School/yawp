@@ -164,6 +164,8 @@ const column = z.object({
 const pictureWant = z.object({
   subject: z.string().trim().min(1).max(120),
   shows: z.string().trim().min(1).max(160).optional(),
+  /** The title slide's world, to be drawn as a screen print (Kevin, Nov 25). */
+  print: z.boolean().optional(),
 });
 
 const slideSchema = z
@@ -250,6 +252,9 @@ const slideSchema = z
     image: z.string().regex(PICTURE_ID).optional(),
     // The picture this slide wants beside its words (Nov 22).
     wants: pictureWant.optional(),
+    // A title slide whose picture is the book's world as a screen print,
+    // laid out as a poster (Kevin, Nov 25).
+    poster: z.boolean().optional(),
     // A timeline slide's events (Nov 19), in order. With two rows, `track`
     // says which row an event sits in and `tracks` names the rows.
     events: z

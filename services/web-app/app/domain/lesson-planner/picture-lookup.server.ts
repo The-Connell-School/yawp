@@ -146,6 +146,8 @@ export type PictureShelf = {
     owner: Owner,
     changes?: { altText?: string }
   ): Promise<{ id: string }>;
+  /** That picture drawn as a screen print, as this lesson's own; null when it can't be. */
+  print?(id: string, owner: Owner): Promise<{ id: string } | null>;
   /** Off the shelf: the second look turned it down, so it is never offered for its subject again. */
   forget?(id: string): Promise<void>;
   create(
@@ -781,6 +783,21 @@ export async function resolveDeckPictures<T extends SlideDeck>(
 }
 
 /**
+ * The title slide's world as a screen print (Kevin, Nov 25): when the title
+ * asked for its world to be printed and a picture was found, the print takes
+ * its place and the slide is laid out as a poster. A photo that can't be
+ * printed (too small, not a JPEG) stays as it is, on the ordinary title.
+ */
+export async function withPosterTitle<T extends SlideDeck>(asked: SlideDeck, deck: T, owner: Owner, shelf: PictureShelf): Promise<T> {
+  const at = deck.slides.findIndex((slide) => slide.layout === 'title');
+  const title = deck.slides[at];
+  if (at < 0 || !title?.image || title.poster || !asked.slides[at]?.wants?.print || !shelf.print) return deck;
+  const printed = await shelf.print(title.image, owner).catch(() => null);
+  if (!printed) return deck;
+  return { ...deck, slides: deck.slides.map((slide, i) => (i === at ? { ...slide, image: printed.id, poster: true } : slide)) };
+}
+
+/**
  * The planner's reply with its deck's pictures found. A picture slide still
  * without its picture becomes its question. A reply with no deck, or a deck
  * that wants nothing, comes back as it was.
@@ -815,10 +832,10 @@ export async function withResolvedPictures(
   if (outcome.kind !== 'deck') return nothing;
   const edited = deps.name
     ? await withNamedSubjects(outcome.deck, deps.name, deps.kit)
-    : { deck: outcome.deck, named: 0, author: null };
-  const titled = withTitlePicture(edited.deck, { kit: deps.kit, author: edited.author });
+    : { deck: outcome.deck, named: 0, author: null, world: null };
+  const titled = withTitlePicture(edited.deck, { kit: deps.kit, author: edited.author, world: edited.world ?? null });
   const resolved = await resolveDeckPictures(titled, owner, deps);
-  let settled = withoutEmptyPictureSlides(resolved.deck);
+  let settled = withoutEmptyPictureSlides(await withPosterTitle(titled, resolved.deck, owner, deps.shelf));
   // The gallery painting is a mood, not the thing: Kevin on the Leopard deck,
   // and the 13-lesson review (Nov 22: Hokusai's Great Wave on Homer, Gatsby
   // and Hamlet; Turner's Temeraire on a World War I poem). It stays only

@@ -1170,6 +1170,34 @@ export function layoutKitV4Slide(deck: SlideDeck, index: number): KitV4SlideLayo
 
   switch (plan.template) {
     case 'title': {
+      // A poster (Kevin, Nov 25): the book's world as a screen print filling
+      // the right half, the title on the deck's color beside it. Never the
+      // author's face as a memorial card.
+      if (slide.poster && slide.image) {
+        const PANEL = 640;
+        const course = slide.course && !/yawp!?\s+writing\s+program/i.test(slide.course) ? slide.course : null;
+        // As large as its longest word allows on the panel, smaller as the title runs longer.
+        const longest = Math.max(...slide.title.split(/\s+/).map((word) => word.length));
+        const cap = slide.title.length <= 12 ? 88 : slide.title.length <= 30 ? 72 : 56;
+        const size = [88, 80, 72, 64, 56, 48, 40].find((candidate) => candidate <= cap && longest * candidate * 0.6 <= PANEL - MARGIN - 40) ?? 40;
+        elements.push({ kind: 'rect', role: 'panel', fill: color, x: 0, y: 0, w: PANEL, h: H });
+        if (deck.unit) {
+          elements.push({ kind: 'text', role: 'body', valign: 'top', x: MARGIN, y: 72, w: PANEL - MARGIN - 40, h: 30, paras: [para([from(sans(deck.unit.toUpperCase(), 17, KIT_V4.sand, true), { on: 'deck', field: 'unit' })])] });
+        }
+        elements.push(
+          column({ x: MARGIN, y: 130, w: PANEL - MARGIN - 40, h: 430 }, [
+            para([from(v41 ? display(slide.title, size, KIT_V4.white) : serif(slide.title, size, KIT_V4.white), on('title'))], 22, 1.05),
+            para([slide.subtitle ? from(serif(slide.subtitle, 30, KIT_V4.sand), on('subtitle')) : null], 0, 1.3),
+          ])
+        );
+        const who = [
+          slide.teacher ? from(sans(slide.teacher, 18, KIT_V4.cream), on('teacher')) : null,
+          course ? from(sans(course, 18, KIT_V4.cream), on('course')) : null,
+        ].filter((run): run is KitV4Run => Boolean(run));
+        if (who.length) elements.push(column({ x: MARGIN, y: 600, w: PANEL - MARGIN - 40, h: 70 }, who.map((run) => para([run], 4)), 'top'));
+        elements.push({ kind: 'picture', id: slide.image, x: PANEL, y: 0, w: W - PANEL, h: H });
+        return out();
+      }
       // The lesson's own picture hangs where the painting would, and wins over
       // it (Nov 22): a photograph of the book's world says more than a
       // painting chosen for its mood. Its credit is drawn with the picture.
