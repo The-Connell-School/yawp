@@ -317,6 +317,7 @@ describe('app.assignments.$assignmentId loader', () => {
     form.set('intent', 'update-assignment');
     form.set('assignmentId', 'assignment-1');
     form.set('assignmentTypeId', 'at-1');
+    form.set('title', 'Daily write');
     form.set('prompt', 'Write it.');
     form.set('submitForGrade', 'true');
     form.set('pointValue', '100');
