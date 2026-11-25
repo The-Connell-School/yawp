@@ -3,7 +3,8 @@
  * Antigone unit reply was a wall of text before its map).
  */
 import { describe, expect, test } from 'bun:test';
-import { withoutProcessTalk, withUnitMapFirst } from './reply-shape';
+import { withoutProcessTalk, withStartersOnDays, withUnitMapFirst } from './reply-shape';
+import { readUnitPlan } from './unit-plan';
 
 const MAP = '```yawp-unit\n{"title":"When the Law Is Wrong","days":[]}\n```';
 
@@ -53,5 +54,41 @@ describe('a unit’s map first', () => {
     const short = `Here is a twelve-day unit on Antigone.\n\n${MAP}\n\nWhich day first?`;
     expect(withUnitMapFirst(short)).toBe(short);
     expect(withUnitMapFirst('No map here.')).toBe('No map here.');
+  });
+});
+
+describe('the class starters on their days, not in a list under the map (Kevin, Nov 25)', () => {
+  const map = (days: unknown[]) => '```yawp-unit\n' + JSON.stringify({ title: 'Chronicle of a Death Foretold', days }) + '\n```';
+  const days = [1, 2, 3].map((day) => ({ day, title: `Day ${day}`, objective: 'o', students: 's' }));
+  const reply = [
+    'Here’s the 8-day map.',
+    map(days),
+    'The class starters across the unit:',
+    '- **Day 1** — “Is anything in your life already decided?”\n- Day 2: "When does a whole town share the blame?"\n- **Days 3** (FW-013) — *Who decides what honor demands?*',
+    '1. **Does this arc match what you want?**\n2. **How should the seminar end?**',
+  ].join('\n\n');
+
+  test('each prompt is on its day; the list and its lead-in are gone; the questions stay', () => {
+    const out = withStartersOnDays(reply);
+    const outcome = readUnitPlan(out);
+    expect(outcome.kind).toBe('unit');
+    const unit = outcome.kind === 'unit' ? outcome.unit : null;
+    expect(unit?.days.map((d) => d.starter)).toEqual([
+      'Is anything in your life already decided?',
+      'When does a whole town share the blame?',
+      'Who decides what honor demands?',
+    ]);
+    expect(out).not.toContain('The class starters across the unit');
+    expect(out).not.toContain('Day 2:');
+    expect(out).toContain('Does this arc match what you want?');
+    expect(out.startsWith('Here’s the 8-day map.')).toBe(true);
+  });
+
+  test('a day that already has its starter keeps it; a single mention is not a list', () => {
+    const own = withStartersOnDays(reply.replace(map(days), map([{ ...days[0], starter: 'Mine.' }, days[1], days[2]])));
+    const outcome = readUnitPlan(own);
+    expect(outcome.kind === 'unit' && outcome.unit.days[0]!.starter).toBe('Mine.');
+    const one = ['Map:', map(days), '- Day 1 — “Only one.”'].join('\n\n');
+    expect(withStartersOnDays(one)).toBe(one);
   });
 });

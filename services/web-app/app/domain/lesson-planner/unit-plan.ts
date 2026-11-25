@@ -74,6 +74,12 @@ const daySchema = z
     buildsTo: cell.optional(),
     /** How this day finds out whether it worked. */
     check: cell.optional(),
+    /**
+     * The class starter's own words, shown on the day's row (Kevin, Nov 25:
+     * the starters were a list under the map, a wall of text apart from the
+     * days they open).
+     */
+    starter: cell.optional(),
     minutes: z.number().int().min(5).max(240).optional(),
   })
   .strip();
@@ -116,6 +122,9 @@ const DAY_ALIASES: Record<string, keyof UnitPlanDay> = {
   assignedReading: 'reading',
   readingAssignment: 'reading',
   text: 'reading',
+  classStarter: 'starter',
+  warmUp: 'starter',
+  dailyPages: 'starter',
 };
 
 const UNIT_ALIASES: Record<string, string> = {
@@ -299,6 +308,7 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
   const lines = [`Build day ${day.day} of "${unit.title}" in full: ${day.title}.`, `Objective: ${day.objective}`];
   if (day.students) lines.push(`Students: ${day.students}`);
   if (day.reading) lines.push(`Reading: ${day.reading}`);
+  if (day.starter) lines.push(`Class starter: "${day.starter.replace(/^[“"']+|[”"']+$/g, '')}"`);
   if (day.minutes) lines.push(`I have ${day.minutes} minutes.`);
   lines.push(
     `Keep it inside the arc of the unit: this day comes after day ${day.day - 1} and has to set up what follows.`

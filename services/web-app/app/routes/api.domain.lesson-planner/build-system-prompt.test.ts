@@ -992,7 +992,8 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
   });
 
   test('keeps the day cell to one line and defers the full prompt to when the day is built', () => {
-    expect(lower).toContain('the day cell just names it');
+    // Kevin, Nov 25: the starter's words go on the day's row, not in a list under the map.
+    expect(lower).toContain("its words go in that day's `starter` field");
     expect(lower).toContain('the full prompt with its id appears in its own');
   });
 
@@ -1040,14 +1041,12 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     // The exact failure: "Days 1-4 use FW-001, FW-014, FW-011, FW-172" tells a
     // teacher nothing about what their students will actually be asked.
     expect(lower).toContain('never drop bare ids like');
-    expect(lower).toContain(
-      'an id with no words behind it is not a preview, it is a code the teacher has to go look up'
-    );
+    expect(lower).toContain('an id with no words behind it is a code the teacher has to look up');
   });
 
-  test('requires the cluster preview to bullet the real text, with the ids kept out of sight', () => {
-    expect(lower).toContain('bullet the cluster instead, one line per day');
-    expect(lower).toContain("day 1 — 'how do people gain power?'");
+  test('puts the starters on the days, never in a list in the reply, with the ids kept out of sight (Kevin, Nov 25)', () => {
+    expect(lower).toContain('the starters live on the days, in `starter`, never in a list in the reply');
+    expect(lower).toContain('**before you build:**');
     expect(lower).toContain('the ids stay in the blocks, out of sight');
   });
 

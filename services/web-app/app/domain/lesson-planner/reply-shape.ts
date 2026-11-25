@@ -128,3 +128,78 @@ export function withUnitMapFirst(reply: string): string {
   if (!moved.length) return reply;
   return joinParts([{ fenced: false, text: lead }, parts[at]!, ...moved, ...parts.slice(at + 1)]);
 }
+
+/**
+ * A line of the class-starter cluster the planner is told to show the teacher:
+ * "- **Day 1** — 'How do people gain power?'", "- Days 2 and 5: “…”",
+ * "- Day 3 (FW-013): *…*". The day numbers, then the prompt in quotation marks
+ * or italics.
+ */
+const STARTER_LINE =
+  /^\s*(?:[-*+]|\d+[.)])\s+\**(Days?\s+[\d\s,&–-]+(?:and\s+\d+)?)\**\s*(?:\([^)]*\))?\**\s*[—–:-]+\s*\**\s*(?:Class starter:?\s*)?[“"‘'*_]+(.+?)[”"’'*_]+\.?\s*(?:\([^)]*\))?\s*$/i;
+
+function dayNumbers(head: string): number[] {
+  const range = head.match(/(\d+)\s*[–-]\s*(\d+)/);
+  if (range) {
+    const [from, to] = [Number(range[1]), Number(range[2])];
+    return to >= from && to - from < 30 ? Array.from({ length: to - from + 1 }, (_, i) => from + i) : [];
+  }
+  return [...head.matchAll(/\d+/g)].map((m) => Number(m[0]));
+}
+
+/**
+ * The unit's class starters on the days they open (Kevin, Nov 25: the
+ * planner listed them under the map, "Day 1 — '…'" eight times over, a wall
+ * of text set apart from the days). Each prompt goes onto its day's row,
+ * where the board shows it, and the list and its lead-in leave the prose. A
+ * day the planner already gave a starter keeps its own.
+ */
+export function withStartersOnDays(reply: string): string {
+  const parts = partsOf(reply);
+  const at = parts.findIndex((part) => part.fenced && /^\s*```yawp-unit\b/.test(part.text));
+  if (at < 0) return reply;
+  const fence = parts[at]!.text;
+  const open = fence.indexOf('\n');
+  const close = fence.lastIndexOf('```');
+  let unit: { days?: Array<Record<string, unknown>> };
+  try {
+    unit = JSON.parse(fence.slice(open + 1, close));
+  } catch {
+    return reply;
+  }
+  if (!Array.isArray(unit.days)) return reply;
+
+  const found = new Map<number, string>();
+  const kept: Part[] = [];
+  for (const part of parts) {
+    if (part.fenced) {
+      kept.push(part);
+      continue;
+    }
+    const lines = part.text.split('\n');
+    const matches = lines.map((line) => line.match(STARTER_LINE));
+    if (matches.filter(Boolean).length < 2) {
+      kept.push(part);
+      continue;
+    }
+    matches.forEach((match) => {
+      if (!match) return;
+      for (const n of dayNumbers(match[1]!)) if (!found.has(n)) found.set(n, match[2]!.trim());
+    });
+    const rest = lines.filter((_, i) => !matches[i]);
+    // "Here are the class starters across the unit:" goes with its list.
+    const text = rest.length === 1 && /:\s*$/.test(rest[0]!) ? '' : rest.join('\n');
+    if (!text.trim() && kept.length && !kept[kept.length - 1]!.fenced && /:\s*$/.test(kept[kept.length - 1]!.text) && splitSentences(kept[kept.length - 1]!.text.trim()).length <= 2) {
+      kept.pop();
+    }
+    kept.push({ fenced: false, text });
+  }
+  if (!found.size) return reply;
+
+  for (const day of unit.days) {
+    const n = typeof day.day === 'number' ? day.day : null;
+    if (n !== null && found.has(n) && !day.starter && !day.classStarter) day.starter = found.get(n);
+  }
+  const block = { fenced: true, text: `${fence.slice(0, open)}\n${JSON.stringify(unit, null, 2)}\n\`\`\`` };
+  return joinParts(kept.map((part) => (part.text === fence && part.fenced ? block : part)));
+}

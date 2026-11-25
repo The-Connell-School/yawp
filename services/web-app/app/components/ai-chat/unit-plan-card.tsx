@@ -122,6 +122,15 @@ export function UnitPlanCard({
               </p>
               {/* The day at a glance (Kevin, Nov 23: "less words... a picture
                   that highlights the major activities"); its words a click away. */}
+              {day.starter ? (
+                <p
+                  data-testid="unit-day-starter"
+                  className="mt-1 flex items-start gap-1.5 text-xs italic text-muted-foreground"
+                >
+                  <Sunrise size={12} aria-hidden className="mt-0.5 shrink-0 not-italic text-primary" />
+                  <span className="line-clamp-2">“{day.starter.replace(/^[“"']+|[”"']+$/g, '')}”</span>
+                </p>
+              ) : null}
               <DayAtAGlance day={day} />
               <details className="group mt-1.5" open={onBuildDay ? undefined : true}>
                 <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
