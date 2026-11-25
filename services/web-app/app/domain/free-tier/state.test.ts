@@ -6,6 +6,8 @@ test('legal transitions', () => {
   expect(canTransition('INVITED', 'ACCOUNT_CREATED')).toBe(true);
   expect(canTransition('SENT', 'APPROVED')).toBe(true);
   expect(canTransition('MANUAL_REVIEW', 'REJECTED')).toBe(true);
+  // Operator verified a held administrator: the request goes out.
+  expect(canTransition('MANUAL_REVIEW', 'SENT')).toBe(true);
 });
 
 test('illegal transitions', () => {
