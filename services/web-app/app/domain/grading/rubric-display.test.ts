@@ -210,14 +210,18 @@ describe('buildScoreOptions', () => {
     ).toEqual(['0', '1', '2', '3', '4', '5']);
   });
 
-  test('uses band labels without adding numeric prefixes', () => {
-    expect(
-      buildScoreOptions(0, 5, undefined, 1, [
-        { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
-        { min: 1, max: 2, label: 'Hardly there', description: 'Token effort.' },
-        { min: 3, max: 5, label: 'All in', description: 'Engaged.' },
-      ]).map((option) => option.label)
-    ).toEqual(['Absent', 'Hardly there', 'Hardly there', 'All in', 'All in', 'All in']);
+  test('uses one picker row per score band without repeating labels', () => {
+    const options = buildScoreOptions(0, 5, undefined, 1, [
+      { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+      { min: 1, max: 2, label: 'Hardly there', description: 'Token effort.' },
+      { min: 3, max: 5, label: 'All in', description: 'Engaged.' },
+    ]);
+    expect(options.map((option) => option.label)).toEqual([
+      'Absent',
+      'Hardly there',
+      'All in',
+    ]);
+    expect(options.map((option) => option.value)).toEqual(['0', '2', '4']);
   });
 
   test('prefers configured score labels over a single full-range band (Strode ENG 101)', () => {

@@ -53,3 +53,10 @@ test('only the exact tour POST enters its own eligibility and intent checks', ()
     expect(isLockedPreviewRequestAllowed(method, '/api/guided-tours')).toBe(false);
   expect(isLockedPreviewRequestAllowed('POST', '/api/guided-tours/anything')).toBe(false);
 });
+
+test('paste alerts stay available while browsing before approval', () => {
+  expect(isLockedPreviewRequestAllowed('POST', '/api/paste-alert')).toBe(true);
+  for (const method of ['GET', 'HEAD', 'PUT', 'PATCH', 'DELETE']) {
+    expect(isLockedPreviewRequestAllowed(method, '/api/paste-alert')).toBe(false);
+  }
+});

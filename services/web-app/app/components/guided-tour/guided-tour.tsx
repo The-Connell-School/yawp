@@ -211,16 +211,7 @@ function toActiveStep(step: TourStep): ActiveStep {
 }
 
 /** Steps whose element is on this page right now; a centered card if none are. */
-function resolveSteps(tour: PageTour): ActiveStep[] {
-  for (const step of tour.steps) {
-    for (const target of stepTargets(step)) {
-      findTarget(target)?.scrollIntoView({
-        block: 'center',
-        inline: 'center',
-        behavior: 'auto',
-      });
-    }
-  }
+export function resolveSteps(tour: PageTour): ActiveStep[] {
   let shown = tour.steps.filter((step) => stepIsPresent(step));
   if (shown.length < 2 && tour.id === 'waiting-preview') {
     const inDom = tour.steps.filter(
@@ -355,24 +346,6 @@ function PageTourController({
 
   const start = useCallback(() => {
     if (!tour) return;
-    for (const step of tour.steps) {
-      for (const target of stepTargets(step)) {
-      const targets = document.querySelectorAll<HTMLElement>(
-        `[data-tour="${target}"]`
-      );
-      for (const el of targets) {
-        if (targetHasLayout(el)) {
-          el.scrollIntoView({
-            block: 'nearest',
-            inline: 'nearest',
-            // Instant scroll so step resolution runs after targets are in view
-            // (smooth scrolling left wide layouts with only one tour step).
-            behavior: 'auto',
-          });
-        }
-      }
-      }
-    }
     let attempts = 0;
     const tryResolve = () => {
       const steps = resolveSteps(tour);
@@ -659,7 +632,22 @@ function TourSpotlight({
       frame = window.requestAnimationFrame(measure);
     };
     measure();
-    return () => window.cancelAnimationFrame(frame);
+    const ro = new ResizeObserver(measure);
+    for (const target of highlightTargets) {
+      const el = findTarget(target);
+      if (el) ro.observe(el);
+    }
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener('resize', measure);
+    visualViewport?.addEventListener('scroll', measure);
+  window.addEventListener('scroll', measure, { passive: true, capture: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      ro.disconnect();
+      visualViewport?.removeEventListener('resize', measure);
+      visualViewport?.removeEventListener('scroll', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
+    };
   }, [highlightTargets.join('|')]);
 
   const anchor = rects[0] ?? null;

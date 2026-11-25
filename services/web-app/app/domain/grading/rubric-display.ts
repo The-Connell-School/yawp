@@ -376,6 +376,16 @@ export function buildScoreOptions(
     ? scaleValues.filter((score) => allowedScores.includes(score))
     : scaleValues;
 
+  const bandOnlyPicker =
+    bands?.length &&
+    !allowedScores?.length &&
+    (!scoreLabels?.length ||
+      scoreLabels.every((label) =>
+        bands.some(
+          (band) => band.min <= label.value && label.value <= band.max
+        )
+      ));
+
   // Display-only rename for Daily Pages engagement tiers. Stored rubric labels
   // remain unchanged; only UI strings are mapped.
   const mapDailyPagesBandTitle = (label: string | null) => {
@@ -392,6 +402,16 @@ export function buildScoreOptions(
         return label ?? '';
     }
   };
+
+  if (bandOnlyPicker) {
+    return bands!.map((band) => {
+      const representative = Math.round((band.min + band.max) / 2);
+      return {
+        value: representative.toString(),
+        label: mapDailyPagesBandTitle(band.label) || representative.toString(),
+      };
+    });
+  }
 
   return values.map((score) => {
     const configured = scoreLabels
