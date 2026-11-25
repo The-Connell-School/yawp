@@ -253,6 +253,64 @@ suite('approval queue and actions', () => {
     }
   });
 
+  test('operator approve on a held admin request sends it to the administrator first', async () => {
+    const saved = {
+      PRIMARY_APP_URL: process.env.PRIMARY_APP_URL,
+      FREE_TIER_LINK_HMAC_SECRET: process.env.FREE_TIER_LINK_HMAC_SECRET,
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+      EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+    };
+    process.env.PRIMARY_APP_URL = saved.PRIMARY_APP_URL || 'https://yawp.test';
+    process.env.FREE_TIER_LINK_HMAC_SECRET =
+      saved.FREE_TIER_LINK_HMAC_SECRET || 'integration-test-free-tier-link-secret-key';
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_FROM_EMAIL;
+    process.env.EMAIL_PROVIDER = 'resend';
+    try {
+      const a = await makeApp('held-admin', 'MANUAL_REVIEW');
+      const approval = await prisma.freeTierAdminApproval.create({
+        data: {
+          applicationId: a.id,
+          adminName: 'Patel',
+          adminEmail: 'patel@other.edu',
+          status: 'PENDING',
+          emailCopyVersionHash: 'test',
+        },
+      });
+      const res = await post(approveHttp, a.id, 'approve');
+      const body = await res.json();
+      expect({ status: res.status, body }).toMatchObject({
+        status: 200,
+        body: { status: 'SENT', previousStatus: 'MANUAL_REVIEW', adminApprovalSent: true },
+      });
+      expect((await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: a.id } })).status).toBe('SENT');
+      expect(
+        (await prisma.freeTierAdminApproval.findUniqueOrThrow({ where: { id: approval.id } })).status
+      ).toBe('PENDING');
+      // v2 queues the request in the outbox; v1 sends it and logs it.
+      const queued = await prisma.freeTierApprovalDelivery.count({
+        where: { approvalId: approval.id, kind: 'admin_approval' },
+      });
+      const emailed = await prisma.freeTierEmailLog.count({
+        where: { applicationId: a.id, kind: 'admin_approval', toEmail: 'patel@other.edu' },
+      });
+      expect(queued + emailed).toBe(1);
+      expect(
+        await prisma.freeTierEmailLog.count({ where: { applicationId: a.id, kind: 'congratulations' } })
+      ).toBe(0);
+      // SENT stays approvable: a second operator approve is the direct override.
+      const again = await post(approveHttp, a.id, 'approve');
+      expect(again.status).toBe(200);
+      expect((await prisma.freeTierApplication.findUniqueOrThrow({ where: { id: a.id } })).status).toBe('APPROVED');
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   test('approve does not spend another budget slot for an already-counted application', async () => {
     const previousEnv = process.env.FREE_TIER_BUDGET_ENVIRONMENT;
     const previousBudget = process.env.FREE_TIER_PREVIEW_BUDGET_USD;

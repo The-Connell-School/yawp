@@ -57,6 +57,9 @@ const tx = {
   },
   freeTierApprovalDecision: { create: async () => ({}) },
   freeTierAdminApproval: {
+    // The held-request check reads the newest pending request first.
+    findFirst: async () =>
+      approvals.find((row) => row.status === 'PENDING') ?? null,
     findMany: async () =>
       approvals
         .filter((row) => row.status === 'PENDING')
@@ -79,6 +82,8 @@ const tx = {
     },
   },
   freeTierApprovalDelivery: {
+    findFirst: async ({ where }: { where: { approvalId: string } }) =>
+      deliveries.find((row) => row.approvalId === where.approvalId) ?? null,
     updateMany: async ({
       where,
       data,

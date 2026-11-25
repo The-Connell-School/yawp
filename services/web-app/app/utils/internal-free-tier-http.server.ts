@@ -1,4 +1,5 @@
 import { lockApprovalApplication } from '~/domain/free-tier/approval-lock.server';
+import { sendHeldAdminApprovalOnOperatorApprove } from '~/domain/free-tier/held-admin-approval.server';
 import {
   recordFreeTierCapDenialAudit,
   recordTesterAudit,
@@ -901,7 +902,12 @@ export async function decideApplication(args: {
   reason?: string;
   audit?: TesterAuditActor;
 }) {
-  if (args.decision === 'APPROVED') await ensureFreeTierProductionApprovalHooks();
+  if (args.decision === 'APPROVED') {
+    await ensureFreeTierProductionApprovalHooks();
+    // A held administrator request goes to the administrator first (Brian, 11/25).
+    const held = await sendHeldAdminApprovalOnOperatorApprove(args);
+    if (held.handled) return { status: held.status, payload: held.payload, changed: false as const, app: null };
+  }
   const result = await transition({ ...args, from: args.decision === 'APPROVED' ? APPROVABLE_FROM : REJECTABLE_FROM, to: args.decision });
   if (result.changed && result.app) {
     const app = result.app;

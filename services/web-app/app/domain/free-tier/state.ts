@@ -15,7 +15,8 @@ const legalTransitions: Record<FreeTierStatus, FreeTierStatus[]> = {
   ACCOUNT_CREATED: ['ADMIN_SUBMITTED', 'EXPIRED'],
   ADMIN_SUBMITTED: ['SENT', 'MANUAL_REVIEW', 'EXPIRED'],
   SENT: ['MANUAL_REVIEW', 'APPROVED', 'EXPIRED'],
-  MANUAL_REVIEW: ['APPROVED', 'REJECTED', 'EXPIRED'],
+  // SENT: an operator verified the held administrator, so the request goes out.
+  MANUAL_REVIEW: ['SENT', 'APPROVED', 'REJECTED', 'EXPIRED'],
   APPROVED: [],
   REJECTED: [],
   EXPIRED: [],

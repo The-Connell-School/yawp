@@ -319,6 +319,28 @@ async function enroll(
     },
   });
 }
+/**
+ * An operator verified a held (MANUAL_REVIEW) administrator in Yawp! Internal.
+ * Queue the approval request the hold skipped, through the durable outbox, so
+ * the administrator decides (Brian, 11/25). Caller holds the application lock.
+ */
+export async function queueHeldAdminApprovalInTransaction(
+  tx: Tx,
+  app: FreeTierApplication,
+  approval: FreeTierAdminApproval,
+  now = new Date()
+) {
+  const emailContext = await resolveAdminApprovalEmailContext(approval, tx, {
+    organizationId: app.organizationId,
+  });
+  const message = await adminMessage(tx, app, approval, false, emailContext);
+  await tx.freeTierAdminApproval.update({
+    where: { id: approval.id },
+    data: { signedLinkId: message.approveLinkId },
+  });
+  await queue(tx, approval.id, 'admin_approval', 0, now, message);
+}
+
 export async function getApprovalWaitingDetails(app: AppIdentity) {
   if (!(await isApprovalV2Enabled(app))) return null;
   const approval = await prisma.freeTierAdminApproval.findFirst({
