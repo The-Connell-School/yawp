@@ -140,6 +140,7 @@ describe('work-visuals: the kits', () => {
       ['Antigone', 'sophocles'],
       ['Oedipus Rex', 'sophocles'],
       ['The Diary of a Young Girl', 'anne-frank'],
+      ['Chronicle of a Death Foretold', 'chronicle-death-foretold'],
     ];
     for (const [request, id] of requests) {
       expect({ request, kit: visualKitFor(`Teach a lesson on ${request} for 10th grade`)?.id }).toEqual({ request, kit: id });

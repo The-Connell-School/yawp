@@ -54,6 +54,22 @@ export type WorkVisualKit = {
 
 export const WORK_VISUAL_KITS: WorkVisualKit[] = [
   {
+    // Nov 25: Wikipedia's Aracataca leads with a railway and then a map, both
+    // turned down; Mompox, a river town of the same coast, leads with its market.
+    id: 'chronicle-death-foretold',
+    title: 'Chronicle of a Death Foretold',
+    author: 'Gabriel García Márquez',
+    match: ['chronicle of a death foretold', 'crónica de una muerte anunciada'],
+    visuals: [
+      { subject: 'Gabriel García Márquez', shows: 'a portrait of García Márquez', use: 'author', unchecked: true },
+      { subject: 'Santa Cruz de Mompox', shows: 'the market of Mompox, a colonial river town on the Magdalena, a photograph', use: 'setting' },
+      { subject: 'Magdalena River', shows: 'the Magdalena River, which the town in the novel lies beside', use: 'setting', unchecked: true },
+      { subject: 'Cartagena, Colombia', shows: 'the walled city of Cartagena on the Caribbean coast', use: 'period', unchecked: true },
+      { subject: 'Caribbean region of Colombia', shows: 'the Caribbean coast of Colombia, where the novel is set', use: 'setting', unchecked: true },
+      { subject: 'Aracataca', shows: 'the town where García Márquez was born', use: 'setting', unchecked: true },
+    ],
+  },
+  {
     id: 'macbeth',
     title: 'Macbeth',
     author: 'William Shakespeare',
