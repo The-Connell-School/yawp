@@ -1,6 +1,5 @@
 import { invariant } from '@epic-web/invariant';
 import { isExitTicketAssignmentType } from '~/domain/assignment-types/exit-ticket';
-import { isExitTicketGradingV2RolloutEnabled } from '~/domain/assignment-types/exit-ticket-grading-v2-gate.server';
 import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
@@ -586,14 +585,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     guidedTours,
     doc: {
       ...doc,
-      assignment: withExitTicketTutorOff(
-        doc.assignment,
-        isExitTicketAssignmentType({
-          kind: doc.assignment?.assignmentType?.kind,
-        })
-          ? await isExitTicketGradingV2RolloutEnabled()
-          : false
-      ),
+      // Exit tickets keep the tutor setting the teacher chose: the toggle is
+      // back (Brian, Nov 24), so nothing forces it off here any more.
+      assignment: doc.assignment,
       submissions: submissionsForResponse,
       membership: ownerMembership,
       assignmentModuleSessions: orderedModuleSessions,

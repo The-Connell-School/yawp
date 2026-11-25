@@ -6,44 +6,40 @@ import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
-import {
-  EXIT_TICKET_CORRECT_ANSWER_FIELD_COPY,
   EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH,
-  EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH,
   EXIT_TICKET_KIND_OPTIONS,
   EXIT_TICKET_MIN_SENTENCES_MAX,
   EXIT_TICKET_MIN_WORDS_MAX,
   EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH,
-  EXIT_TICKET_REVISED_FOCUS_OPTIONS,
-  EXIT_TICKET_REVISED_PROMPT_VERSION,
-  EXIT_TICKET_REVISED_QUESTION_PLACEHOLDER,
   EXIT_TICKET_REVISED_REFLECTION_OPTIONS,
+  EXIT_TICKET_SIMPLIFIED_CHECK_OPTIONS,
+  EXIT_TICKET_SIMPLIFIED_CHECK_PLACEHOLDERS,
+  EXIT_TICKET_SIMPLIFIED_COPY as COPY,
+  EXIT_TICKET_SIMPLIFIED_PROMPT_VERSION,
+  EXIT_TICKET_SIMPLIFIED_REFLECTION_PLACEHOLDER,
   exitTicketModeForKind,
+  exitTicketRevisedDraftMinimum,
+  exitTicketSimplifiedReflectionPrompt,
+  withExitTicketLengthLine,
   type ExitTicketKind,
   type ExitTicketRevisedDraft,
-  type ExitTicketRevisedFocus,
   type ExitTicketRevisedReflectionId,
+  type ExitTicketSimplifiedCheckOption,
 } from '~/domain/assignment-types/exit-ticket';
 import { WhyDisclosure } from './exit-ticket-builder';
 
-const GUIDE_STEPS = [
-  'Reflection or check?',
-  'What students will answer',
-  'Grading',
-];
+const GUIDE_STEPS = ['Reflection or check?', 'The prompt', 'Grading'];
 
 /**
  * Menus open in a portal beside the creation sheet, which sits above the
- * default popover layer. Without this the "What are you checking for?" menu
- * opened behind the sheet: open, but invisible and unusable.
+ * default popover layer. Kept for callers that still render a menu here.
  */
 export const ABOVE_CREATION_SHEET = 'z-[70]';
+
+const GRADING_LINE: Record<ExitTicketKind, string> = {
+  reflection: COPY.reflectionGradingLine,
+  check: COPY.checkGradingLine,
+};
 
 export type ExitTicketBuilderRevisedProps = {
   draft: ExitTicketRevisedDraft;
@@ -53,19 +49,17 @@ export type ExitTicketBuilderRevisedProps = {
   onGradedChange: (graded: boolean) => void;
   pointValue: string;
   onPointValueChange: (pointValue: string) => void;
-  /** The composed prompt, or empty while something required is missing. */
-  preview: string;
   disabled: boolean;
 };
 
 /**
- * The revised exit ticket builder (Brian, 2026-11-17). Reflection or check
- * first; a reflection is a stock question or the teacher's own, a check is
- * the teacher's whole question and its correct answer or key points. Grading
- * is points only, plus a minimum length on a check.
+ * The exit ticket builder (simplified, Brian 2026-11-24). Both kinds work the
+ * same way: pick a preset or write your own, and the Prompt box holds exactly
+ * what students see, including the length line. A check asks whether there
+ * is a single correct answer and takes the answer, or notes on a strong one.
  *
  * Controlled: the creation sheet owns the state, because the same state feeds
- * its submit gate and the composed prompt it posts.
+ * its submit gate and the prompt it posts.
  */
 export function ExitTicketBuilderRevised({
   draft,
@@ -74,16 +68,66 @@ export function ExitTicketBuilderRevised({
   onGradedChange,
   pointValue,
   onPointValueChange,
-  preview,
   disabled,
 }: ExitTicketBuilderRevisedProps) {
   // null is the whole form at once; a number is the step being walked.
   const [guideStep, setGuideStep] = useState<number | null>(null);
   const shows = (step: number) => guideStep === null || guideStep === step;
   const kind = draft.kind;
-  const focus = EXIT_TICKET_REVISED_FOCUS_OPTIONS.find(
+  const checkOption = EXIT_TICKET_SIMPLIFIED_CHECK_OPTIONS.find(
     (option) => option.value === draft.focus
   );
+  const single = draft.singleCorrectAnswer === 'yes';
+  const placeholders =
+    EXIT_TICKET_SIMPLIFIED_CHECK_PLACEHOLDERS[draft.focus][
+      single ? 'yes' : 'no'
+    ];
+  const reflectionPreset = draft.reflectionPromptId !== 'custom';
+
+  /** The prompt boxes with their length line brought up to date. */
+  const promptsFor = (
+    minimum: Pick<ExitTicketRevisedDraft, 'minWords' | 'minSentences'> | null
+  ): Pick<ExitTicketRevisedDraft, 'reflectionPromptText' | 'promptText'> => {
+    const numbers = minimum ? exitTicketRevisedDraftMinimum(minimum) : null;
+    return {
+      reflectionPromptText: withExitTicketLengthLine(
+        draft.reflectionPromptText,
+        numbers,
+        { aimWhenNoMinimum: reflectionPreset }
+      ),
+      promptText: draft.promptText.trim()
+        ? withExitTicketLengthLine(draft.promptText, numbers)
+        : draft.promptText,
+    };
+  };
+
+  const changeMinimum = (
+    patch: Partial<Pick<ExitTicketRevisedDraft, 'minWords' | 'minSentences'>>
+  ) => {
+    const next = {
+      minWords: draft.minWords,
+      minSentences: draft.minSentences,
+      ...patch,
+    };
+    onDraftChange({ ...patch, ...promptsFor(next) });
+  };
+
+  const changeGraded = (next: boolean) => {
+    onGradedChange(next);
+    // An ungraded ticket asks for no minimum, so the line comes off.
+    onDraftChange(promptsFor(next ? draft : null));
+  };
+
+  const chooseReflection = (id: ExitTicketRevisedReflectionId) => {
+    const minimum = graded ? exitTicketRevisedDraftMinimum(draft) : null;
+    const stock = exitTicketSimplifiedReflectionPrompt(id);
+    onDraftChange({
+      reflectionPromptId: id,
+      reflectionPromptText: stock
+        ? withExitTicketLengthLine(stock, minimum)
+        : withExitTicketLengthLine('', minimum),
+    });
+  };
 
   return (
     <div className="space-y-4 rounded-md border p-3">
@@ -141,21 +185,16 @@ export function ExitTicketBuilderRevised({
                 <span className="mt-0.5 block text-sm text-muted-foreground">
                   {option.helperText}
                 </span>
+                <span className="mt-0.5 block text-sm text-muted-foreground">
+                  {GRADING_LINE[option.value]}
+                </span>
               </Label>
             </div>
           ))}
         </RadioGroup>
         <WhyDisclosure>
-          <p>
-            A reflection asks how the lesson landed — what stuck, what is still
-            unclear — and has no correct answer. It’s good for getting students
-            to think quickly at the end of class and for catching what you did
-            not think to ask.
-          </p>
-          <p>
-            A check for understanding asks for evidence of one specific thing.
-            It’s good for knowing whether students truly got the lesson.
-          </p>
+          <p>{COPY.reflectionWhy}</p>
+          <p>{COPY.checkWhy}</p>
         </WhyDisclosure>
       </div>
 
@@ -169,9 +208,7 @@ export function ExitTicketBuilderRevised({
               aria-labelledby="assignment-create-exit-ticket-reflection-label"
               value={draft.reflectionPromptId}
               onValueChange={(value) =>
-                onDraftChange({
-                  reflectionPromptId: value as ExitTicketRevisedReflectionId,
-                })
+                chooseReflection(value as ExitTicketRevisedReflectionId)
               }
               disabled={disabled}
               className="flex flex-wrap gap-2"
@@ -195,129 +232,121 @@ export function ExitTicketBuilderRevised({
                 </div>
               ))}
             </RadioGroup>
-            {draft.reflectionPromptId === 'custom' ? (
-              <Textarea
-                id="assignment-create-exit-ticket-reflection-text"
-                aria-label="Your question"
-                name="exitTicketReflectionPromptText"
-                value={draft.reflectionPromptText}
-                onChange={(event) =>
-                  onDraftChange({ reflectionPromptText: event.target.value })
-                }
-                rows={2}
-                maxLength={EXIT_TICKET_CUSTOM_PROMPT_MAX_LENGTH}
-                placeholder="e.g., What would you explain to a friend who missed today?"
-                disabled={disabled}
-              />
-            ) : null}
             <input
               type="hidden"
               name="exitTicketReflectionPrompt"
               value={draft.reflectionPromptId}
             />
+            <PromptBox
+              value={draft.reflectionPromptText}
+              onChange={(value) =>
+                onDraftChange({ reflectionPromptText: value })
+              }
+              placeholder={EXIT_TICKET_SIMPLIFIED_REFLECTION_PLACEHOLDER}
+              rows={reflectionPreset ? 6 : 3}
+              disabled={disabled}
+            />
           </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="assignment-create-exit-ticket-focus">
+              <Label id="assignment-create-exit-ticket-focus-label">
                 What are you checking for?
               </Label>
-              <Select
+              <RadioGroup
+                aria-labelledby="assignment-create-exit-ticket-focus-label"
                 value={draft.focus}
                 onValueChange={(value) =>
-                  onDraftChange({ focus: value as ExitTicketRevisedFocus })
+                  onDraftChange({
+                    focus: value as ExitTicketSimplifiedCheckOption,
+                  })
                 }
                 disabled={disabled}
+                className="flex flex-wrap gap-2"
               >
-                <SelectTrigger id="assignment-create-exit-ticket-focus">
-                  <SelectValue placeholder="Choose what to check for" />
-                </SelectTrigger>
-                <SelectContent className={ABOVE_CREATION_SHEET}>
-                  {EXIT_TICKET_REVISED_FOCUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                {EXIT_TICKET_SIMPLIFIED_CHECK_OPTIONS.map((option) => (
+                  <div
+                    key={option.value}
+                    className="flex items-center gap-2 rounded-full border px-3 py-1.5"
+                  >
+                    <RadioGroupItem
+                      id={`assignment-create-exit-ticket-focus-${option.value}`}
+                      value={option.value}
+                      className="size-4 shrink-0"
+                    />
+                    <Label
+                      htmlFor={`assignment-create-exit-ticket-focus-${option.value}`}
+                      className="cursor-pointer text-sm font-normal"
+                    >
                       {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {focus ? (
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              {checkOption?.helperText ? (
                 <p className="text-sm text-muted-foreground">
-                  {focus.helperText}
+                  {checkOption.helperText}
                 </p>
               ) : null}
               <input type="hidden" name="exitTicketFocus" value={draft.focus} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="assignment-create-exit-ticket-question">
-                Your question
-              </Label>
-              <Textarea
-                id="assignment-create-exit-ticket-question"
-                name="exitTicketPromptText"
-                value={draft.promptText}
-                onChange={(event) =>
-                  onDraftChange({ promptText: event.target.value })
-                }
-                rows={3}
-                maxLength={EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH}
-                placeholder={EXIT_TICKET_REVISED_QUESTION_PLACEHOLDER}
-                disabled={disabled}
-                required
-              />
-            </div>
+            <PromptBox
+              value={draft.promptText}
+              onChange={(value) => onDraftChange({ promptText: value })}
+              placeholder={placeholders.prompt}
+              rows={3}
+              disabled={disabled}
+              required
+            />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="assignment-create-exit-ticket-correct-answer">
-                {EXIT_TICKET_CORRECT_ANSWER_FIELD_COPY.label}
+            <div className="space-y-2">
+              <Label id="assignment-create-exit-ticket-single-label">
+                {COPY.singleAnswerQuestion}
               </Label>
-              <p
-                id="assignment-create-exit-ticket-correct-answer-help"
-                className="text-sm text-muted-foreground"
-              >
-                {EXIT_TICKET_CORRECT_ANSWER_FIELD_COPY.helperText}
-              </p>
-              <Textarea
-                id="assignment-create-exit-ticket-correct-answer"
-                aria-describedby="assignment-create-exit-ticket-correct-answer-help"
-                name="exitTicketCorrectAnswer"
-                value={draft.correctAnswer}
-                onChange={(event) =>
-                  onDraftChange({ correctAnswer: event.target.value })
+              <RadioGroup
+                aria-labelledby="assignment-create-exit-ticket-single-label"
+                value={draft.singleCorrectAnswer}
+                onValueChange={(value) =>
+                  onDraftChange({
+                    singleCorrectAnswer: value === 'no' ? 'no' : 'yes',
+                  })
                 }
-                rows={3}
-                maxLength={EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH}
-                placeholder={EXIT_TICKET_CORRECT_ANSWER_FIELD_COPY.placeholder}
                 disabled={disabled}
-                required
+                className="grid gap-2"
+              >
+                {(
+                  [
+                    ['yes', 'Yes', COPY.singleAnswerYes],
+                    ['no', 'No', COPY.singleAnswerNo],
+                  ] as const
+                ).map(([value, label, help]) => (
+                  <div key={value} className="flex items-start gap-2.5">
+                    <RadioGroupItem
+                      id={`assignment-create-exit-ticket-single-${value}`}
+                      value={value}
+                      className="mt-1"
+                    />
+                    <Label
+                      htmlFor={`assignment-create-exit-ticket-single-${value}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      <span className="font-medium">{label}</span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">
+                        {help}
+                      </span>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+              <input
+                type="hidden"
+                name="exitTicketSingleCorrectAnswer"
+                value={draft.singleCorrectAnswer}
               />
             </div>
           </div>
         )}
-
-        <div className="space-y-2">
-          <p
-            id="assignment-create-exit-ticket-preview-label"
-            className="text-sm font-medium"
-          >
-            What students will see
-          </p>
-          {preview ? (
-            <p
-              aria-labelledby="assignment-create-exit-ticket-preview-label"
-              data-testid="exit-ticket-preview"
-              className="whitespace-pre-line rounded-md bg-muted p-3 text-sm"
-            >
-              {preview}
-            </p>
-          ) : (
-            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              {kind === 'check'
-                ? 'Write your question and its correct answer or key points to see what students will get.'
-                : 'Write your question to see it here.'}
-            </p>
-          )}
-        </div>
       </div>
 
       <div className="space-y-3 border-t pt-3" hidden={!shows(2)}>
@@ -325,7 +354,7 @@ export function ExitTicketBuilderRevised({
           <Checkbox
             id="assignment-create-exit-ticket-graded"
             checked={graded}
-            onCheckedChange={(checked) => onGradedChange(checked === true)}
+            onCheckedChange={(checked) => changeGraded(checked === true)}
             disabled={disabled}
             className="size-4 shrink-0"
           />
@@ -376,63 +405,91 @@ export function ExitTicketBuilderRevised({
               </div>
             </div>
 
-            {kind === 'check' ? (
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">
-                  Minimum length{' '}
-                  <span className="font-normal text-muted-foreground">
-                    (optional)
-                  </span>
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <div className="w-20">
-                    <Input
-                      aria-label="Minimum words"
-                      name="exitTicketMinWords"
-                      type="number"
-                      min={1}
-                      max={EXIT_TICKET_MIN_WORDS_MAX}
-                      step={1}
-                      inputMode="numeric"
-                      value={draft.minWords}
-                      // Words or sentences: students are told one of them.
-                      onChange={(event) =>
-                        onDraftChange({
-                          minWords: event.target.value,
-                          ...(event.target.value ? { minSentences: '' } : {}),
-                        })
-                      }
-                      disabled={disabled}
-                      className="tabular-nums"
-                    />
-                  </div>
-                  <span>words, or</span>
-                  <div className="w-20">
-                    <Input
-                      aria-label="Minimum sentences"
-                      name="exitTicketMinSentences"
-                      type="number"
-                      min={1}
-                      max={EXIT_TICKET_MIN_SENTENCES_MAX}
-                      step={1}
-                      inputMode="numeric"
-                      value={draft.minSentences}
-                      onChange={(event) =>
-                        onDraftChange({
-                          minSentences: event.target.value,
-                          ...(event.target.value ? { minWords: '' } : {}),
-                        })
-                      }
-                      disabled={disabled}
-                      className="tabular-nums"
-                    />
-                  </div>
-                  <span>sentences</span>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">
+                Minimum length{' '}
+                <span className="font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <div className="w-20">
+                  <Input
+                    aria-label="Minimum sentences"
+                    name="exitTicketMinSentences"
+                    type="number"
+                    min={1}
+                    max={EXIT_TICKET_MIN_SENTENCES_MAX}
+                    step={1}
+                    inputMode="numeric"
+                    value={draft.minSentences}
+                    onChange={(event) =>
+                      changeMinimum({ minSentences: event.target.value })
+                    }
+                    disabled={disabled}
+                    className="tabular-nums"
+                  />
                 </div>
+                <span>sentences and/or</span>
+                <div className="w-20">
+                  <Input
+                    aria-label="Minimum words"
+                    name="exitTicketMinWords"
+                    type="number"
+                    min={1}
+                    max={EXIT_TICKET_MIN_WORDS_MAX}
+                    step={1}
+                    inputMode="numeric"
+                    value={draft.minWords}
+                    onChange={(event) =>
+                      changeMinimum({ minWords: event.target.value })
+                    }
+                    disabled={disabled}
+                    className="tabular-nums"
+                  />
+                </div>
+                <span>words</span>
               </div>
-            ) : null}
+              <p className="text-sm text-muted-foreground">
+                Shows up in the prompt automatically.
+              </p>
+            </div>
           </div>
         )}
+
+        {kind === 'check' ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="assignment-create-exit-ticket-correct-answer">
+              {single ? COPY.correctAnswerLabel : COPY.strongAnswerLabel}
+              {single ? null : (
+                <span className="font-normal text-muted-foreground">
+                  {' '}
+                  (optional)
+                </span>
+              )}
+            </Label>
+            <p
+              id="assignment-create-exit-ticket-correct-answer-help"
+              className="text-sm text-muted-foreground"
+            >
+              {single ? COPY.correctAnswerHelp : COPY.strongAnswerHelp}
+            </p>
+            <Textarea
+              id="assignment-create-exit-ticket-correct-answer"
+              aria-describedby="assignment-create-exit-ticket-correct-answer-help"
+              name="exitTicketCorrectAnswer"
+              value={draft.correctAnswer}
+              onChange={(event) =>
+                onDraftChange({ correctAnswer: event.target.value })
+              }
+              rows={single ? 2 : 3}
+              maxLength={EXIT_TICKET_CORRECT_ANSWER_MAX_LENGTH}
+              placeholder={placeholders.answer}
+              disabled={disabled}
+              required={single}
+            />
+          </div>
+        ) : null}
       </div>
 
       {guideStep !== null ? (
@@ -471,13 +528,52 @@ export function ExitTicketBuilderRevised({
       <input
         type="hidden"
         name="exitTicketPromptVersion"
-        value={EXIT_TICKET_REVISED_PROMPT_VERSION}
+        value={EXIT_TICKET_SIMPLIFIED_PROMPT_VERSION}
       />
       <input type="hidden" name="exitTicketKind" value={kind} />
       <input
         type="hidden"
         name="exitTicketMode"
         value={exitTicketModeForKind(kind)}
+      />
+    </div>
+  );
+}
+
+/** The one editable box that holds exactly what students see. */
+function PromptBox({
+  value,
+  onChange,
+  placeholder,
+  rows,
+  disabled,
+  required,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  rows: number;
+  disabled: boolean;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="assignment-create-exit-ticket-prompt">
+        {COPY.promptLabel}{' '}
+        <span className="font-normal text-muted-foreground">
+          {COPY.promptHint}
+        </span>
+      </Label>
+      <Textarea
+        id="assignment-create-exit-ticket-prompt"
+        name="exitTicketPromptText"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        maxLength={EXIT_TICKET_PROMPT_TEXT_MAX_LENGTH}
+        placeholder={placeholder}
+        disabled={disabled}
+        required={required ?? true}
       />
     </div>
   );

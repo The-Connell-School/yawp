@@ -1162,7 +1162,9 @@ export default function AppAssignmentTypesIdRoute() {
   );
   const landingPage = data.landingPageKey
     ? landingPageFor(data.landingPageKey, {
-        exitTicketNoTutor: data.exitTicketRevisedBuilderEnabled,
+        // The tutor toggle is back on exit tickets (Brian, Nov 24), so the
+        // page keeps its "Tutor off or on?" paragraph.
+        exitTicketNoTutor: false,
       })
     : null;
   const isApHistoryAssignmentType =
@@ -1462,7 +1464,7 @@ export default function AppAssignmentTypesIdRoute() {
         {/* Brian's landing page replaces every block from here to the
             library: the old directions and the Modules accordion. */}
         {!landingPage && data.showAboutExitTicket ? (
-          <AboutExitTicket noTutor={data.exitTicketRevisedBuilderEnabled} />
+          <AboutExitTicket />
         ) : null}
         {!landingPage && data.promptLibrary ? (
           <div data-tour="type-directions">

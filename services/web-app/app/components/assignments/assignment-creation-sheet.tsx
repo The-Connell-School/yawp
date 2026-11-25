@@ -37,7 +37,6 @@ import {
   exitTicketActivityKind,
   exitTicketV3DraftFromConfig,
   exitTicketV3DraftInput,
-  EXIT_TICKET_NO_TUTOR_LINE,
   EXIT_TICKET_REVISED_DEFAULT_POINT_VALUE,
   exitTicketRevisedDraftFromConfig,
   exitTicketRevisedDraftInput,
@@ -1900,7 +1899,6 @@ export function AssignmentCreationSheetContent({
               onGradedChange={setSubmitForGrade}
               pointValue={pointValue}
               onPointValueChange={setPointValue}
-              preview={revisedPrompt}
               disabled={isSaving}
             />
             {/* Recomposed server-side from the answers; posted for any
@@ -2271,10 +2269,10 @@ export function AssignmentCreationSheetContent({
         {/* The quick builder keeps a default exit ticket to one screen:
             everything a teacher rarely changes waits in here, still posting
             its value, until they open it. */}
-        {/* The revised builder has nothing to tuck away here: the tutor
-            line is all that is left, and it is there to be read. */}
+        {/* The simplified builder (Brian, Nov 24) keeps only the tutor
+            setting in here; lesson notes are gone. */}
         <MoreOptions
-          enabled={isQuickExitTicket && !isRevisedExitTicket}
+          enabled={isQuickExitTicket}
           open={moreOptionsOpen}
           onOpenChange={setMoreOptionsOpen}
         >
@@ -2297,70 +2295,58 @@ export function AssignmentCreationSheetContent({
             shown read-only rather than hidden. Nothing named tutorEnabled is
             submitted while editing, which is what tells the server to leave
             the stored value alone. */}
-          {isRevisedExitTicket ? (
-            // No tutor on an exit ticket (Brian, Nov 17): the toggle is gone
-            // and this says why. The server stores it off either way.
-            <div className="pt-6">
-              {isEditing ? null : (
-                <BooleanFormValue name="tutorEnabled" value={false} />
+          {/* The tutor toggle is back on exit tickets (Brian, Nov 24). */}
+          <div className="pt-6">
+            {isEditing ? null : (
+              <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
+            )}
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-tutor-enabled"
+                checked={tutorEnabled}
+                onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+                disabled={isSaving || isEditing}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-tutor-enabled"
+                className={
+                  isEditing
+                    ? 'font-normal leading-none text-muted-foreground'
+                    : 'cursor-pointer font-normal leading-none'
+                }
+              >
+                Tutor enabled
+              </Label>
+              {tutorEnabled ? null : (
+                <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Cold write
+                </span>
               )}
-              <p className="text-sm text-muted-foreground">
-                {EXIT_TICKET_NO_TUTOR_LINE}
-              </p>
             </div>
-          ) : (
-            <div className="pt-6">
-              {isEditing ? null : (
-                <BooleanFormValue name="tutorEnabled" value={tutorEnabled} />
-              )}
-              <div className="flex items-center gap-2.5">
-                <Checkbox
-                  id="assignment-create-tutor-enabled"
-                  checked={tutorEnabled}
-                  onCheckedChange={(checked) => setTutorEnabled(checked === true)}
-                  disabled={isSaving || isEditing}
-                  className="size-4 shrink-0"
-                />
-                <Label
-                  htmlFor="assignment-create-tutor-enabled"
-                  className={
-                    isEditing
-                      ? 'font-normal leading-none text-muted-foreground'
-                      : 'cursor-pointer font-normal leading-none'
-                  }
-                >
-                  Tutor enabled
-                </Label>
-                {tutorEnabled ? null : (
-                  <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                    Cold write
-                  </span>
-                )}
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              {isEditing
+                ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+                : isV3ExitTicket
+                  ? 'It starts off, because an exit ticket shows what students understand on their own. Turn it on for a class that tends to hand in six words. It will ask them to say more without giving away the answer or writing for them.'
+                  : isQuickExitTicket
+                    ? 'Off by default for exit tickets.'
+                    : isExitTicket
+                      ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
+                      : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
+            </p>
+            {isQuickExitTicket && !isV3ExitTicket && !isEditing ? (
+              <div className="mt-1 pl-[calc(1rem+0.625rem)]">
+                <WhyDisclosure>
+                  <p>
+                    An exit ticket checks what students understand on their own,
+                    and a tutor in the document would answer the question for
+                    them. Turn it on if you want them to have help.
+                  </p>
+                </WhyDisclosure>
               </div>
-              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-                {isEditing
-                  ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
-                  : isV3ExitTicket
-                    ? 'It starts off, because an exit ticket shows what students understand on their own. Turn it on for a class that tends to hand in six words. It will ask them to say more without giving away the answer or writing for them.'
-                    : isQuickExitTicket
-                      ? 'Off by default for exit tickets.'
-                      : isExitTicket
-                        ? 'Off by default for an exit ticket: it checks what students understand on their own, and a tutor in the document would answer the question for them. Turn it on if you want them to have help.'
-                        : "The tutor is on by default. Turning it off removes it from students' documents — the digital equivalent of an in-class essay. Assigning one now and then shows what a student can do unaided, and gives the Reporter a baseline to measure independent growth against."}
-              </p>
-              {isQuickExitTicket && !isV3ExitTicket && !isEditing ? (
-                <div className="mt-1 pl-[calc(1rem+0.625rem)]">
-                  <WhyDisclosure>
-                    <p>
-                      An exit ticket checks what students understand on their own,
-                      and a tutor in the document would answer the question for
-                      them. Turn it on if you want them to have help.
-                    </p>
-                  </WhyDisclosure>
-                </div>
-              ) : null}
-            </div>
-          )}
+            ) : null}
+          </div>
 
           {/* Grammar and syntax grading is no longer offered here: the rubric
             decides (Brian, 11/23). Assignments that already turned it off keep
