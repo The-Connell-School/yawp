@@ -16,6 +16,7 @@ import {
   applyExitTicketGradingAssistant,
   buildExitTicketGradingAssistantPrompt,
   clampExitTicketScore,
+  countExitTicketResponseLength,
   exitTicketGradingAssistantPart,
   exitTicketGradingPlainSummary,
   exitTicketPersistedGrade,
@@ -523,5 +524,50 @@ describe('exitTicketGradingPlainSummary (Brian, Nov 25)', () => {
         5
       ).intro
     ).toContain('You left no notes');
+  });
+});
+
+describe('counting response length for the Grading Assistant (Brian, Nov 25)', () => {
+  const HOLDEN =
+    "an unreliable narrator is one who we cannot trust due to mental instability, drunkenness, or other limitations. Holden Caulfield is a great example of an unreliable narrator because on the first page of the book he tells us that he's in a mental health facility. Then throughout the book, he keeps contradicting himself and blaming other people for his problems when we can see by his actions that he's the one to blame. A great example of this throughout the book is how he keeps calling everybody else a phony but he's the one that lies constantly.";
+
+  test('Brian’s four-sentence response counts as four', () => {
+    expect(countExitTicketResponseLength(HOLDEN).sentences).toBe(4);
+  });
+
+  test('counts generously: questions, missing end punctuation, line breaks', () => {
+    expect(
+      countExitTicketResponseLength('why did they leave?\ni dont know\nmaybe money')
+        .sentences
+    ).toBe(3);
+    expect(countExitTicketResponseLength('').sentences).toBe(0);
+    expect(countExitTicketResponseLength("He's the one. It's 1920.").words).toBe(5);
+  });
+
+  test('the counts go to the Grading Assistant only when a minimum is set', () => {
+    const withMinimum = buildExitTicketGradingAssistantPrompt({
+      config: { ...CHECK, grading: { basis: 'bands', minSentences: 4 } },
+      responseText: HOLDEN,
+      pointValue: 10,
+    });
+    expect(withMinimum).toContain(
+      'Length of this response, counted by Yawp!: 4 sentences,'
+    );
+    expect(withMinimum).toContain('Do not recount.');
+    const without = buildExitTicketGradingAssistantPrompt({
+      config: { ...CHECK, grading: undefined },
+      responseText: HOLDEN,
+    });
+    expect(without).not.toContain('counted by Yawp!');
+  });
+});
+
+describe('word choice (Brian, Nov 25)', () => {
+  test('every exit ticket assistant is told not to say genuinely or honestly', () => {
+    for (const config of [REFLECTION, CHECK, { ...CHECK, singleCorrectAnswer: true }]) {
+      expect(buildExitTicketGradingAssistantPrompt({ config })).toContain(
+        'Never use "genuinely" or "honestly"'
+      );
+    }
   });
 });

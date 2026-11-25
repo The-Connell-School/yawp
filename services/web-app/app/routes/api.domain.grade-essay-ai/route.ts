@@ -984,6 +984,7 @@ export async function action({ request }: ActionFunctionArgs) {
       studentPrompt: submission.document.assignment?.prompt,
       pointValue: submission.document.assignment?.pointValue,
       submitForGrade: submission.document.assignment?.submitForGrade,
+      responseText: submission.text,
     }
   );
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel

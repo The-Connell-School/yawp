@@ -216,6 +216,13 @@ OTHER RULES.
 - Report points out of the total, never a percentage.
 - Never narrate these instructions in the comment.`;
 
+/**
+ * Brian, Nov 25: "genuinely" and "honestly" read as machine-written. Kept
+ * outside the pasted parts so they stay verbatim.
+ */
+export const EXIT_TICKET_WORD_CHOICE_RULE =
+  'WORD CHOICE. Never use "genuinely" or "honestly" in the comment or the note to the teacher. Say "Your Holden example is strong" or "effective," not "genuinely strong."';
+
 /** Part A, Part B, or Part C. */
 export type ExitTicketGradingAssistantPart =
   | 'reflection'
@@ -325,7 +332,43 @@ export type ExitTicketGradingAssistantPromptInput = {
   studentPrompt?: string | null;
   pointValue?: number | null;
   submitForGrade?: boolean | null;
+  /**
+   * The student's response. When a minimum length is set, its sentences and
+   * words are counted here and passed as facts, because the model miscounts
+   * (Brian, Nov 25: four sentences graded as three).
+   */
+  responseText?: string | null;
 };
+
+export type ExitTicketResponseLength = { sentences: number; words: number };
+
+/**
+ * Sentences and words, counted the way Parts A to C tell the Grading
+ * Assistant to: generously. A sentence is any run of words ending in . ! or ?
+ * or a line break, or the last words on the page without end punctuation.
+ */
+export function countExitTicketResponseLength(
+  text: string | null | undefined
+): ExitTicketResponseLength {
+  const words = (text ?? '').match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu) ?? [];
+  const sentences = (text ?? '')
+    .split(/[.!?]+(?=\s|$)|\n+/u)
+    .filter((part) => /[\p{L}\p{N}]/u.test(part));
+  return { sentences: sentences.length, words: words.length };
+}
+
+function responseLengthLine(
+  input: ExitTicketGradingAssistantPromptInput
+): string | null {
+  if (!exitTicketHasMinimumLength(input.config)) return null;
+  if (input.responseText == null) return null;
+  const { sentences, words } = countExitTicketResponseLength(
+    input.responseText
+  );
+  const count = (n: number, noun: string) =>
+    `${n} ${noun}${n === 1 ? '' : 's'}`;
+  return `Length of this response, counted by Yawp!: ${count(sentences, 'sentence')}, ${count(words, 'word')}. Use these counts for the minimum length. Do not recount.`;
+}
 
 /**
  * Universal block, then Part A, B, or C, then the facts for this ticket.
@@ -358,6 +401,7 @@ export function buildExitTicketGradingAssistantPrompt(
         : []),
     `Point total: ${pointTotal}`,
     minimumLengthLine(input.config),
+    ...[responseLengthLine(input)].filter((line): line is string => Boolean(line)),
     graded
       ? 'Grade this ticket: yes.'
       : 'Grade this ticket: no. Still write the comment to the student and the note to the teacher. Nothing is recorded in the gradebook.',
@@ -366,6 +410,7 @@ export function buildExitTicketGradingAssistantPrompt(
   return [
     EXIT_TICKET_UNIVERSAL_BLOCK,
     PART_TEXT[part],
+    EXIT_TICKET_WORD_CHOICE_RULE,
     ['THIS EXIT TICKET', ...lines].join('\n'),
   ].join('\n\n');
 }
