@@ -26,6 +26,10 @@ const PROCESS_TALK = [
   /\b(?:nothing|no lessons?|no decks?) in the (?:Teacher['’]s )?Lounge (?:covers|matches|fits)\b/i,
   /\bthe (?:Short Response|class starter|Daily Pages|writing lesson) library (?:has|had|doesn['’]t have|does not have)\b/i,
   /\bI (?:searched|looked through|checked) (?:the )?(?:Lounge|library|Teacher['’]s Lounge|class starters?|Short Responses?)\b/i,
+  // Nov 25: "The Lounge has no García Márquez–specific material, so the unit is built from scratch."
+  /\b(?:the )?(?:Teacher['’]s )?(?:Lounge|library) (?:has|had) (?:no|nothing)\b/i,
+  /\b(?:is|was) built from scratch\b/i,
+  /\bI['’]ve (?:written|drafted|created|made|built)\b[^.!?]*\b(?:myself|from scratch)\b/i,
 ];
 
 /** A sentence that is only "Good —", "Great!" or "Okay." on its own says nothing either. */
@@ -101,6 +105,9 @@ export function withoutProcessTalk(reply: string): string {
   return changed ? joinParts(kept) : reply;
 }
 
+const INTRO_TO_MAP = /^(?:here['’]?s|here is|below is|this is)\b[^.!?\n]{0,80}\b(?:map|unit|days?|plan|arc)\b[^.!?\n]{0,40}:$/i;
+const RULE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+
 /** The most sentences before a unit map; the rest of the prose goes after it. */
 const LEAD_SENTENCES = 2;
 
@@ -125,8 +132,11 @@ export function withUnitMapFirst(reply: string): string {
     ...(restOfFirst ? [{ fenced: false, text: restOfFirst }] : []),
     ...prose.filter((part) => part !== proseText[firstPlain]),
   ];
+  // A line that only introduces the map ("Here's the full eight-day map:") or a
+  // bare rule says nothing once it sits under the map (Nov 25): it goes.
+  const kept = moved.filter((part) => part.fenced || !(INTRO_TO_MAP.test(part.text.trim()) || RULE.test(part.text.trim())));
   if (!moved.length) return reply;
-  return joinParts([{ fenced: false, text: lead }, parts[at]!, ...moved, ...parts.slice(at + 1)]);
+  return joinParts([{ fenced: false, text: lead }, parts[at]!, ...kept, ...parts.slice(at + 1).filter((part) => part.fenced || !RULE.test(part.text.trim()))]);
 }
 
 /**

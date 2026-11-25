@@ -92,3 +92,22 @@ describe('the class starters on their days, not in a list under the map (Kevin, 
     expect(withStartersOnDays(one)).toBe(one);
   });
 });
+
+describe('the Chronicle unit reply, Nov 25', () => {
+  test('the Lounge narration goes, the map’s own lead-in stays on top, and the bare rule goes', () => {
+    const map = '```yawp-unit\n{"title":"Chronicle","days":[{"day":1,"title":"t","objective":"o","students":"s"}]}\n```';
+    const reply = [
+      'The Lounge has no García Márquez–specific material, so the unit is built from scratch. I’ve written all the class starters myself since the library had nothing for this text.',
+      'Here’s the full eight-day map:',
+      '---',
+      map,
+      '**Before you build:**\n\n1. Does this cover what you want?',
+    ].join('\n\n');
+    const out = withUnitMapFirst(withoutProcessTalk(reply));
+    expect(out).not.toContain('Lounge');
+    expect(out).not.toContain('myself');
+    expect(out).not.toContain('---');
+    expect(out.startsWith('Here’s the full eight-day map:\n\n```yawp-unit')).toBe(true);
+    expect(out.trimEnd().endsWith('1. Does this cover what you want?')).toBe(true);
+  });
+});
