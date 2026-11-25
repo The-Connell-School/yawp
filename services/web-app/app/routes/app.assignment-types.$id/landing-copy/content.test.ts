@@ -51,6 +51,8 @@ describe('resolveLandingPageKey', () => {
     [{ title: 'C-E-R', kind: 'claim_evidence_reasoning' }, 'cer-paragraph'],
     [{ title: 'C-E-R' }, 'cer-paragraph'],
     [{ title: ' The CER Paragraph ' }, 'cer-paragraph'],
+    // Brian's name for the type (Nov 24); the deploy seed now writes it.
+    [{ title: 'CER Paragraph' }, 'cer-paragraph'],
     [{ title: 'ACT Writing Section ' }, 'act-writing'],
     [{ title: 'Welcome to Yawp! ' }, 'welcome-to-yawp'],
   ] as const)('%o resolves to %s', (type, key) => {
@@ -542,6 +544,7 @@ describe('The CER Paragraph (Brian, Nov 24)', () => {
   test('the heading reads The CER Paragraph while the type is still titled C-E-R', () => {
     expect(landingPageHeading('cer-paragraph', 'C-E-R')).toBe('The CER Paragraph');
     expect(landingPageHeading('cer-paragraph', ' c-e-r ')).toBe('The CER Paragraph');
+    expect(landingPageHeading('cer-paragraph', 'CER Paragraph')).toBe('The CER Paragraph');
     expect(landingPageHeading('cer-paragraph', 'The CER Paragraph')).toBe(
       'The CER Paragraph'
     );

@@ -571,7 +571,7 @@ const TOURS: Record<TourId, PageTour> = {
   'type-claim-evidence-reasoning': {
     id: 'type-claim-evidence-reasoning',
     welcome: {
-      title: 'Welcome to C-E-R',
+      title: 'Welcome to CER Paragraph',
       body: 'Students practice Claim-Evidence-Reasoning: a clear claim, specific evidence, and reasoning that connects them.',
       icon: 'assignment-type',
     },
@@ -579,7 +579,7 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make an assignment',
-        body: 'Click New → Assignment to give your class a C-E-R prompt.',
+        body: 'Click New → Assignment to give your class a CER prompt.',
       },
       {
         target: 'type-directions',

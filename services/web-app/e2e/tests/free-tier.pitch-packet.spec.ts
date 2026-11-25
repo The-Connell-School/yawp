@@ -45,7 +45,7 @@ for (const width of [1280, 390]) test(`teacher packet, content, copy recovery an
     '5-Paragraph Essay',
     'Pre-writing',
     'Thesis Builder',
-    'C-E-R',
+    'CER Paragraph',
     'Evaluation checklist',
     'Submitted writing: 3',
     'all years',

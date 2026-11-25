@@ -70,6 +70,8 @@ test.skipIf(!url)('missing bundle is seeded once and repeated runs preserve unre
       ].includes(t.kind ?? '')
     )) {
       if (row.kind === 'claim_evidence_reasoning') {
+        // Brian's name for it (Nov 24). Deploys re-run this seed, so it must not write C-E-R back.
+        expect(row.title).toBe('CER Paragraph');
         expect(row.rubricId).toBeTruthy();
       } else {
         expect(row.rubricJson).toBeTruthy();

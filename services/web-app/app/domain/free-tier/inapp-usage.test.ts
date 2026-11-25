@@ -79,8 +79,8 @@ test('labels Exit Ticket usage', () => {
 
 test('freeClassroomBundlePitchList names all six bundle kinds for public copy', () => {
   expect(FREE_CLASSROOM_BUNDLE_TILE_LABELS).toHaveLength(6);
-  expect(FREE_CLASSROOM_BUNDLE_TILE_LABELS).toContain('C-E-R');
+  expect(FREE_CLASSROOM_BUNDLE_TILE_LABELS).toContain('CER Paragraph');
   expect(freeClassroomBundlePitchList()).toBe(
-    'Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, and C-E-R'
+    'Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, and CER Paragraph'
   );
 });

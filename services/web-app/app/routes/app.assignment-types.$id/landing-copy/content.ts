@@ -735,7 +735,8 @@ export const CER_PARAGRAPH_TITLE = 'The CER Paragraph';
 
 /**
  * The title at the top of a landing page. A type still titled Daily Pages
- * reads Short Response; a type still titled C-E-R reads The CER Paragraph.
+ * reads Short Response; a type titled C-E-R or CER Paragraph reads The CER
+ * Paragraph.
  * A title a school chose for it, and every other type's title, is shown as
  * it is.
  */
@@ -749,7 +750,9 @@ export function landingPageHeading(
   }
   if (
     key === 'cer-paragraph' &&
-    (normalized === 'c-e-r' || normalized === 'the cer paragraph')
+    (normalized === 'c-e-r' ||
+      normalized === 'cer paragraph' ||
+      normalized === 'the cer paragraph')
   ) {
     return CER_PARAGRAPH_TITLE;
   }
@@ -796,6 +799,7 @@ export function resolveLandingPageKey(type: {
     case 'the 5-paragraph essay':
       return 'five-paragraph-essay';
     case 'c-e-r':
+    case 'cer paragraph':
     case 'the cer paragraph':
       return 'cer-paragraph';
     case 'act writing section':
