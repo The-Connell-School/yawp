@@ -57,6 +57,7 @@ export function unitDayActivities(day: Pick<Day, 'reading' | 'students' | 'check
 /** The reading, short enough for one line of the map ("Antigone, Scene 1 — read aloud in class" → "Antigone, Scene 1"). */
 export function shortReading(reading: string | undefined | null): string | null {
   if (!reading || NO_READING.test(reading)) return null;
-  const head = reading.split(/\s+[—–]\s+|;\s+|\.\s+/)[0]!.trim();
+  // Not at "pp. 1–26" or "ch. 3" (Nov 25: "Chapter 1 (pp").
+  const head = reading.split(/\s+[—–]\s+|;\s+|(?<!\b(?:pp?|ch|chs|sc|vol|ll?|no|vv?))\.\s+/i)[0]!.trim();
   return head.length > 60 ? `${head.slice(0, 59)}…` : head;
 }

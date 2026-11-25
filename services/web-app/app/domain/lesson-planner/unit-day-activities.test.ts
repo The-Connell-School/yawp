@@ -49,3 +49,8 @@ describe('what a unit day’s students do, at a glance', () => {
     expect(shortReading(undefined)).toBeNull();
   });
 });
+
+test('a page range in parentheses is kept whole (Nov 25)', () => {
+  expect(shortReading('Chapter 1 (pp. 1–26), read for homework before class')).toBe('Chapter 1 (pp. 1–26), read for homework before class');
+  expect(shortReading('Act 1, sc. 3; ll. 1–40 aloud')).toBe('Act 1, sc. 3');
+});
