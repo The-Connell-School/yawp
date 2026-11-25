@@ -19,6 +19,7 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 import {
   clampExitTicketScore,
+  exitTicketHasMinimumLength,
   exitTicketGradingAssistantPart,
   exitTicketPersistedGrade,
   resolveExitTicketPointTotal,
@@ -1906,7 +1907,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           score: clampExitTicketScore(
             category.score,
             exitTicketPart,
-            exitTicketPointTotal
+            exitTicketPointTotal,
+            { hasMinimumLength: exitTicketHasMinimumLength(exitTicketConfig) }
           ),
         })),
       };
