@@ -26,6 +26,7 @@ import { Toaster } from './components/toaster.tsx';
 import { useNonce } from './contexts/nonce.ts';
 import { useInternalCopyMarker } from './hooks/useInternalCopyMarker.ts';
 import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
+import { hasExplicitNavPreference } from './domain/free-tier/free-tier-nav-auto-collapse.ts';
 import {
   type NavState,
   navStateCookie,
@@ -215,6 +216,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           path: url.pathname,
           userPrefs: {
             navState: 'expanded' as NavState,
+            navPreferenceExplicit: false,
             contrastPreference,
           },
         },
@@ -368,6 +370,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         path: new URL(request.url).pathname,
         userPrefs: {
           navState: (navCookie.state as NavState) ?? 'expanded',
+          navPreferenceExplicit: hasExplicitNavPreference(navCookie.state),
           contrastPreference,
         },
       },

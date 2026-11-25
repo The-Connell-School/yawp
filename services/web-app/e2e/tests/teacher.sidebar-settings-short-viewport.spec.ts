@@ -87,4 +87,90 @@ test.describe('App sidebar on short desktop viewports', () => {
       page.getByRole('button', { name: 'Logout', exact: true })
     ).toBeVisible();
   });
+
+  test('collapse arrow and labels row toggle, and reload keeps the preference', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/app');
+    const nav = page.locator('[data-tour="app-nav"]');
+    await expect(nav).not.toHaveClass(/items-center/);
+
+    const waitForNavPost = () =>
+      page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/preferences/nav') &&
+          res.request().method() === 'POST' &&
+          res.ok()
+      );
+
+    const collapsed = waitForNavPost();
+    await page.getByRole('button', { name: 'Collapse app navigation' }).click();
+    await collapsed;
+    await expect(nav).toHaveClass(/items-center/);
+    await page.reload();
+    await expect(nav).toHaveClass(/items-center/);
+
+    await page.locator('.app-nav-collapsed-logo-swap').hover();
+    const expand = page.getByRole('button', { name: 'Expand app navigation' });
+    await expect(expand).toBeVisible();
+    const expanded = waitForNavPost();
+    await expand.click();
+    await expanded;
+    await expect(nav).not.toHaveClass(/items-center/);
+
+    const hidden = waitForNavPost();
+    await page.getByRole('button', { name: 'Hide labels' }).click();
+    await hidden;
+    await expect(nav).toHaveClass(/items-center/);
+    await page.reload();
+    await expect(nav).toHaveClass(/items-center/);
+
+    const shown = waitForNavPost();
+    await page.getByRole('button', { name: 'Show labels' }).click();
+    await shown;
+    await expect(nav).not.toHaveClass(/items-center/);
+    await page.reload();
+    await expect(nav).not.toHaveClass(/items-center/);
+  });
+
+  test('Need help opens Gmail, mail app, and copy actions', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await page
+      .context()
+      .grantPermissions(['clipboard-read', 'clipboard-write']);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/app');
+
+    await expect(page.locator('a[href="mailto:support@yawp.school"]')).toHaveCount(
+      0
+    );
+    await page.getByRole('button', { name: 'Need help?' }).click();
+    const gmail = page.getByTestId('app-nav-need-help-gmail');
+    await expect(gmail).toBeVisible();
+    await expect(gmail).toHaveAttribute('href', /mail\.google\.com/);
+    await expect(gmail).toHaveAttribute('href', /support%40yawp\.school/);
+    await expect(gmail).toHaveAttribute('target', '_blank');
+    await expect(page.getByTestId('app-nav-need-help-mailto')).toHaveAttribute(
+      'href',
+      'mailto:support@yawp.school'
+    );
+    await expect(page.getByTestId('app-nav-need-help-mailto')).toHaveText(
+      'Open my email app'
+    );
+    await page.getByTestId('app-nav-need-help-copy').click();
+    await expect(page.getByTestId('app-nav-need-help-copy')).toHaveText(
+      'Copied!'
+    );
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('support@yawp.school');
+  });
 });

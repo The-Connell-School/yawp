@@ -8,12 +8,15 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  APP_NAV_NEED_HELP_GMAIL,
   APP_NAV_NEED_HELP_MAILTO,
   AppNavNeedHelp,
+  AppNavNeedHelpMenu,
+  copySupportEmail,
 } from './app-nav-need-help';
 
 let root: Root | null = null;
@@ -29,7 +32,7 @@ function renderTree(element: ReactElement) {
 }
 
 function footerLink(container: ParentNode) {
-  return container.querySelector<HTMLAnchorElement>(
+  return container.querySelector<HTMLElement>(
     '[data-testid="app-nav-need-help"]'
   );
 }
@@ -57,24 +60,100 @@ function AppShellFooter({
 }
 
 describe('AppNavNeedHelp', () => {
-  test('expanded footer link uses support mailto, label, and aria-label', () => {
+  test('expanded footer row shows the label and is a menu button, not a bare mailto', () => {
     const container = renderTree(<AppNavNeedHelp navExpanded />);
-    const link = footerLink(container);
-    expect(link).not.toBeNull();
-    expect(APP_NAV_NEED_HELP_MAILTO).toBe('mailto:support@yawp.school');
-    expect(link!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
-    expect(link!.getAttribute('aria-label')).toBe('Need help?');
-    expect(link!.textContent).toContain('Need help?');
+    const row = footerLink(container);
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('Need help?');
+    const trigger = row!.closest('button');
+    expect(trigger).not.toBeNull();
+    expect(trigger!.getAttribute('aria-label')).toBe('Need help?');
+    expect(trigger!.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
   });
 
-  test('collapsed footer keeps mailto with tooltip title and hides the label', () => {
+  test('support links point at support@yawp.school', () => {
+    expect(APP_NAV_NEED_HELP_MAILTO).toBe('mailto:support@yawp.school');
+    expect(APP_NAV_NEED_HELP_GMAIL).toContain('to=support%40yawp.school');
+  });
+
+  test('collapsed footer hides the label but keeps the accessible name', () => {
     const container = renderTree(<AppNavNeedHelp navExpanded={false} />);
-    const link = footerLink(container);
-    expect(link).not.toBeNull();
-    expect(link!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
-    expect(link!.getAttribute('aria-label')).toBe('Need help?');
-    expect(link!.getAttribute('title')).toBe('Need help?');
-    expect(link!.textContent).not.toContain('Need help?');
+    const row = footerLink(container);
+    expect(row).not.toBeNull();
+    expect(row!.textContent).not.toContain('Need help?');
+    expect(row!.closest('button')!.getAttribute('aria-label')).toBe('Need help?');
+  });
+
+  test('menu offers Gmail, the mail app, and copy', () => {
+    let copied = false;
+    const writeText = mock(async () => {});
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const container = renderTree(
+      <AppNavNeedHelpMenu
+        copied={copied}
+        onCopy={() => {
+          copied = true;
+          void navigator.clipboard.writeText('support@yawp.school');
+        }}
+      />
+    );
+    const menu = container.querySelector('[data-testid="app-nav-need-help-menu"]');
+    expect(menu).not.toBeNull();
+    expect(menu!.textContent).toContain('support@yawp.school');
+    expect(menu!.textContent).toContain('Need help?');
+    const gmail = container.querySelector<HTMLAnchorElement>(
+      '[data-testid="app-nav-need-help-gmail"]'
+    );
+    const mailto = container.querySelector<HTMLAnchorElement>(
+      '[data-testid="app-nav-need-help-mailto"]'
+    );
+    expect(gmail!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_GMAIL);
+    expect(gmail!.getAttribute('target')).toBe('_blank');
+    expect(mailto!.getAttribute('href')).toBe(APP_NAV_NEED_HELP_MAILTO);
+    expect(mailto!.textContent).toContain('Open my email app');
+    const copy = container.querySelector<HTMLButtonElement>(
+      '[data-testid="app-nav-need-help-copy"]'
+    );
+    expect(copy!.textContent).toContain('Copy email address');
+    act(() => {
+      copy!.click();
+    });
+    expect(writeText).toHaveBeenCalledWith('support@yawp.school');
+    expect(copied).toBe(true);
+  });
+
+  test('copy falls back to a prompt when the clipboard is unavailable', () => {
+    const prompt = mock(() => null);
+    window.prompt = prompt as typeof window.prompt;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw new Error('clipboard blocked');
+        },
+      },
+    });
+    return copySupportEmail().then((result) => {
+      expect(result).toBe('prompt');
+      expect(prompt).toHaveBeenCalledWith(
+        'Copy our support email:',
+        'support@yawp.school'
+      );
+    });
+  });
+
+  test('copied state replaces the copy label', () => {
+    const container = renderTree(
+      <AppNavNeedHelpMenu copied onCopy={() => {}} />
+    );
+    expect(
+      container.querySelector('[data-testid="app-nav-need-help-copy"]')!
+        .textContent
+    ).toContain('Copied!');
   });
 
   test('renders above Settings with or without the free-tier Usage row', () => {

@@ -95,7 +95,7 @@
   white-space: nowrap;
 }
 
-[data-app-shell] > nav > div.flex.shrink-0 > a[data-testid='app-nav-need-help'],
+[data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-need-help']),
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='free-tier-sidebar-usage']),
 [data-app-shell] > nav > div.flex.shrink-0 > button:has([data-testid='app-nav-settings']) {
   display: flex;
@@ -169,4 +169,15 @@
     width: 224px;
     min-width: 224px;
   }
+}
+
+/* Show labels / Hide labels row: its form is a footer child like the buttons above. */
+[data-app-shell] > nav > div.flex.shrink-0 > form {
+  display: flex;
+  width: 100%;
+  align-self: stretch;
+}
+
+[data-app-shell] > nav > div.flex.shrink-0 button[data-testid='app-nav-collapse-toggle'] {
+  cursor: pointer;
 }
