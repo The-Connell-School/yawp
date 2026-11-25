@@ -1,4 +1,8 @@
 import type { Prisma } from '@app/prisma';
+import {
+  assignmentDocumentTitleFromAssignment,
+  loadAssignmentTitleForDocumentBinding,
+} from '~/domain/documents/assignment-document-title.server';
 import { prisma } from '~/utils/db.server';
 
 export class DocumentCreationError extends Error {}
@@ -144,6 +148,7 @@ export async function createDocumentForAssignmentType(
     throw new DocumentCreationError('No modules for this AssignmentType.');
   }
 
+  let resolvedAssignmentId: string | null = null;
   if (input.assignmentId || input.classAssignmentId) {
     const assignment = input.classAssignmentId
       ? await prisma.classAssignment.findUnique({
@@ -194,7 +199,7 @@ export async function createDocumentForAssignmentType(
     // One document per assignment per student: if a document already exists
     // for this membership and assignment (prefer classAssignmentId when given),
     // reuse it instead of creating a new one. History is preserved — no deletes.
-    const resolvedAssignmentId = input.assignmentId ?? assignment?.assignmentId ?? null;
+    resolvedAssignmentId = input.assignmentId ?? assignment?.assignmentId ?? null;
     // Prefer exact class-assignment match if present.
     if (input.classAssignmentId) {
       return findOrCreateClassAssignmentDocument({
@@ -219,17 +224,27 @@ export async function createDocumentForAssignmentType(
         select: { id: true },
       });
       if (existingByAssignment) {
+        await backfillClassAssignmentDocumentTitleIfEmpty(prisma, existingByAssignment.id, {
+          assignmentId: input.assignmentId,
+          classAssignmentId: input.classAssignmentId ?? null,
+          resolvedAssignmentId,
+        });
         return { documentId: existingByAssignment.id };
       }
     }
   }
+
+  const boundTitle = await loadAssignmentTitleForDocumentBinding(prisma, {
+    assignmentId: input.assignmentId ?? resolvedAssignmentId ?? null,
+    classAssignmentId: input.classAssignmentId,
+  });
 
   const document = await prisma.document.create({
     data: {
       membershipId: input.membershipId,
       text: '',
       html: '',
-      title: '',
+      title: boundTitle,
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       ...(input.classAssignmentId
@@ -261,10 +276,13 @@ type FindOrCreateClassAssignmentDocumentInput = {
 };
 
 async function findExistingClassAssignmentDocument(
-  db: Pick<typeof prisma, 'document'>,
+  db: Pick<typeof prisma, 'document' | 'assignment' | 'classAssignment'>,
   input: Pick<
     FindOrCreateClassAssignmentDocumentInput,
-  'membershipId' | 'classAssignmentId' | 'resolvedAssignmentId'
+    | 'membershipId'
+    | 'classAssignmentId'
+    | 'resolvedAssignmentId'
+    | 'assignmentId'
   >
 ) {
   const existingByClassAssignment = await db.document.findFirst({
@@ -278,6 +296,11 @@ async function findExistingClassAssignmentDocument(
     select: { id: true },
   });
   if (existingByClassAssignment) {
+    await backfillClassAssignmentDocumentTitleIfEmpty(
+      db,
+      existingByClassAssignment.id,
+      input
+    );
     return { documentId: existingByClassAssignment.id };
   }
   if (input.resolvedAssignmentId) {
@@ -292,10 +315,40 @@ async function findExistingClassAssignmentDocument(
       select: { id: true },
     });
     if (existingByAssignment) {
+      await backfillClassAssignmentDocumentTitleIfEmpty(
+        db,
+        existingByAssignment.id,
+        input
+      );
       return { documentId: existingByAssignment.id };
     }
   }
   return null;
+}
+
+async function backfillClassAssignmentDocumentTitleIfEmpty(
+  db: Pick<typeof prisma, 'document' | 'assignment' | 'classAssignment'>,
+  documentId: string,
+  input: {
+    assignmentId?: string | null;
+    classAssignmentId?: string | null;
+    resolvedAssignmentId: string | null;
+  }
+) {
+  const row = await db.document.findFirst({
+    where: { id: documentId },
+    select: { title: true },
+  });
+  if (row?.title?.trim()) return;
+  const boundTitle = await loadAssignmentTitleForDocumentBinding(db, {
+    assignmentId: input.resolvedAssignmentId ?? input.assignmentId ?? null,
+    classAssignmentId: input.classAssignmentId,
+  });
+  if (!boundTitle) return;
+  await db.document.update({
+    where: { id: documentId },
+    data: { title: boundTitle },
+  });
 }
 
 async function findOrCreateClassAssignmentDocument(
@@ -307,12 +360,17 @@ async function findOrCreateClassAssignmentDocument(
     const existing = await findExistingClassAssignmentDocument(tx, input);
     if (existing) return existing;
 
+    const boundTitle = await loadAssignmentTitleForDocumentBinding(tx, {
+      assignmentId: input.resolvedAssignmentId ?? input.assignmentId ?? null,
+      classAssignmentId: input.classAssignmentId,
+    });
+
     const document = await tx.document.create({
       data: {
         membershipId: input.membershipId,
         text: '',
         html: '',
-        title: '',
+        title: boundTitle,
         assignmentTypeId: input.assignmentTypeId,
         ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
         classAssignmentId: input.classAssignmentId,

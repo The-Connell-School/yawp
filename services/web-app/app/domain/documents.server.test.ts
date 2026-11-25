@@ -22,6 +22,8 @@ const prisma = {
     const tx = {
       $executeRaw: mock(async () => undefined),
       document: prisma.document,
+      assignment: prisma.assignment,
+      classAssignment: prisma.classAssignment,
     };
     return fn(tx);
   }),
@@ -77,10 +79,45 @@ describe('createDocumentForAssignmentType', () => {
     prisma.document.create.mockResolvedValue({ id: 'document-1' });
   });
 
+  test('seeds document title from the teacher assignment title', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: {
+        assignmentTypeId: 'assignment-type-1',
+        title: 'Class Starter 11/25',
+      },
+    });
+    prisma.document.findFirst.mockResolvedValue(null);
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+
+    await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(prisma.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Class Starter 11/25',
+        }),
+      })
+    );
+  });
+
   test('links classAssignmentId when starting from a deployed assignment', async () => {
     prisma.classAssignment.findUnique.mockResolvedValue({
       assignmentId: 'assignment-1',
-      assignment: { assignmentTypeId: 'assignment-type-1' },
+      assignment: {
+        assignmentTypeId: 'assignment-type-1',
+        title: 'Exit Ticket',
+      },
     });
     prisma.document.findFirst.mockResolvedValue(null);
     prisma.assignmentModule.findMany.mockResolvedValue([

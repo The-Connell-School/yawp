@@ -3,6 +3,7 @@ import {
   buildAssignmentModuleSessionCreateData,
   DocumentCreationError,
 } from '../documents.server';
+import { assignmentDocumentTitleFromAssignment } from '../documents/assignment-document-title.server';
 
 export { buildTeacherAssignmentPreviewDocumentsWhere } from './teacher-assignment-preview-where';
 
@@ -49,7 +50,7 @@ export async function createTeacherAssignmentTestDocument(
     where: { id: input.teacherPreviewClassAssignmentId },
     select: {
       assignmentId: true,
-      assignment: { select: { assignmentTypeId: true } },
+      assignment: { select: { assignmentTypeId: true, title: true } },
     },
   });
   if (!classAssignment) {
@@ -87,7 +88,9 @@ export async function createTeacherAssignmentTestDocument(
       membershipId: input.membershipId,
       text: '',
       html: '',
-      title: '',
+      title: assignmentDocumentTitleFromAssignment(
+        classAssignment.assignment.title
+      ),
       artifactKind: 'TEACHER_ASSIGNMENT_PREVIEW',
       assignmentTypeId: input.assignmentTypeId,
       assignmentId: input.assignmentId,

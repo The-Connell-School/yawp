@@ -516,10 +516,17 @@ export function DocumentEditorV2Page() {
     isViewingAsTeacher,
     isOwnTeacherPreview,
   ]);
+  const boundAssignmentTitle =
+    editorAssignmentPrompt?.title?.trim() ||
+    data.doc.assignment?.title?.trim() ||
+    '';
+  const hasBoundAssignmentTitle = Boolean(
+    data.doc.classAssignment && boundAssignmentTitle
+  );
   const showDesktopMarginComments =
     !isMobile &&
     (desktopCommentsOpen ||
-      (isViewingAsTeacher && !isOwnTeacherPreview) ||
+      isViewingAsTeacher ||
       commentsState.pendingDraft != null);
   const studentName =
     data.doc.membership.user.name?.trim() || 'Unknown student';
@@ -707,9 +714,14 @@ export function DocumentEditorV2Page() {
                 data-testid="document-title-input"
                 size="sm"
                 className="h-auto border-0 bg-transparent p-0 text-[15px] font-semibold leading-5 text-[#0f172a] shadow-none focus-visible:ring-0"
-                defaultValue={data.doc.title}
-                placeholder="Untitled document"
-                readOnly={!isDocumentEditable}
+                defaultValue={data.doc.title || boundAssignmentTitle}
+                placeholder={
+                  hasBoundAssignmentTitle ? boundAssignmentTitle : 'Untitled document'
+                }
+                readOnly={
+                  !isDocumentEditable ||
+                  (hasBoundAssignmentTitle && !isViewingAsTeacher)
+                }
                 suppressHydrationWarning
                 onBlur={(e) => {
                   if (!isDocumentEditable) return;
@@ -873,20 +885,30 @@ export function DocumentEditorV2Page() {
                       editing and submit again later.
                     </p>
                   </div>
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="submission-title-popover"
-                      className="text-sm font-medium"
-                    >
-                      Submission title
-                    </label>
-                    <Input
-                      id="submission-title-popover"
-                      value={submissionTitle}
-                      onChange={(e) => setSubmissionTitle(e.target.value)}
-                      placeholder="Enter a title for this submission"
-                    />
-                  </div>
+                  {hasBoundAssignmentTitle ? (
+                    <p className="text-sm text-muted-foreground">
+                      This submission will be saved as{' '}
+                      <span className="font-medium text-foreground">
+                        {boundAssignmentTitle}
+                      </span>
+                      .
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="submission-title-popover"
+                        className="text-sm font-medium"
+                      >
+                        Submission title
+                      </label>
+                      <Input
+                        id="submission-title-popover"
+                        value={submissionTitle}
+                        onChange={(e) => setSubmissionTitle(e.target.value)}
+                        placeholder="Enter a title for this submission"
+                      />
+                    </div>
+                  )}
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="outline"
@@ -911,8 +933,10 @@ export function DocumentEditorV2Page() {
                         loading={isSubmitting}
                         data-testid="document-finalize-submit"
                         onClick={() => {
-                          const title =
-                            submissionTitle.trim() || getLiveDocumentTitle().trim();
+                          const title = hasBoundAssignmentTitle
+                            ? boundAssignmentTitle
+                            : submissionTitle.trim() ||
+                              getLiveDocumentTitle().trim();
                           void submit.submitNow(title);
                         }}
                       >
@@ -1118,40 +1142,86 @@ export function DocumentEditorV2Page() {
                     commentsState.setPendingDraft(draft);
                     if (!isMobile) setDesktopCommentsOpen(true);
                   }}
-                  marginComments={
+                    marginComments={
                     showDesktopMarginComments ? (
-                      <MarginCommentsRail
-                        documentId={data.doc.id}
-                        comments={marginRailComments as any}
-                        pendingDraft={commentsState.pendingDraft}
-                        readOnly={commentsReadOnly}
-                        onCommentRemoved={commentsState.removeComment}
-                        onResponseAdded={commentsState.addResponse}
-                        onArchiveChange={handleCommentArchive}
-                        onCommentCreated={(c) =>
-                          commentsState.addComment(c as any)
-                        }
-                        onDraftCommitted={() => {
-                          commentsState.clearPendingDraft();
-                        }}
-                        onDraftCancel={() => {
-                          const draftId = commentsState.pendingDraft?.id;
-                          commentsState.clearPendingDraft();
-                          if (draftId) {
-                            editorBridgeRef.current?.removeCommentMark(draftId);
+                      isViewingAsTeacher ? (
+                        <TeacherPasteReport
+                          enabled
+                          documentId={data.doc.id}
+                          contentRoot={editorRoot}
+                          onSelectEvent={() => {
+                            if (isMobile) changeTab('editor');
+                          }}
+                        >
+                          <MarginCommentsRail
+                            documentId={data.doc.id}
+                            comments={marginRailComments as any}
+                            pendingDraft={commentsState.pendingDraft}
+                            readOnly={commentsReadOnly}
+                            onCommentRemoved={commentsState.removeComment}
+                            onResponseAdded={commentsState.addResponse}
+                            onArchiveChange={handleCommentArchive}
+                            onCommentCreated={(c) =>
+                              commentsState.addComment(c as any)
+                            }
+                            onDraftCommitted={() => {
+                              commentsState.clearPendingDraft();
+                            }}
+                            onDraftCancel={() => {
+                              const draftId = commentsState.pendingDraft?.id;
+                              commentsState.clearPendingDraft();
+                              if (draftId) {
+                                editorBridgeRef.current?.removeCommentMark(
+                                  draftId
+                                );
+                              }
+                            }}
+                            autoFocusReplyCommentId={
+                              v2Capture === 'comments-reply-resolved'
+                                ? PREVIEW_QA_ACTIVE_COMMENT_ID
+                                : commentsState.pendingFocusCommentId
+                            }
+                            initialResolvedExpandedCommentId={
+                              v2Capture === 'comments-reply-resolved'
+                                ? PREVIEW_QA_RESOLVED_COMMENT_ID
+                                : null
+                            }
+                          />
+                        </TeacherPasteReport>
+                      ) : (
+                        <MarginCommentsRail
+                          documentId={data.doc.id}
+                          comments={marginRailComments as any}
+                          pendingDraft={commentsState.pendingDraft}
+                          readOnly={commentsReadOnly}
+                          onCommentRemoved={commentsState.removeComment}
+                          onResponseAdded={commentsState.addResponse}
+                          onArchiveChange={handleCommentArchive}
+                          onCommentCreated={(c) =>
+                            commentsState.addComment(c as any)
                           }
-                        }}
-                        autoFocusReplyCommentId={
-                          v2Capture === 'comments-reply-resolved'
-                            ? PREVIEW_QA_ACTIVE_COMMENT_ID
-                            : commentsState.pendingFocusCommentId
-                        }
-                        initialResolvedExpandedCommentId={
-                          v2Capture === 'comments-reply-resolved'
-                            ? PREVIEW_QA_RESOLVED_COMMENT_ID
-                            : null
-                        }
-                      />
+                          onDraftCommitted={() => {
+                            commentsState.clearPendingDraft();
+                          }}
+                          onDraftCancel={() => {
+                            const draftId = commentsState.pendingDraft?.id;
+                            commentsState.clearPendingDraft();
+                            if (draftId) {
+                              editorBridgeRef.current?.removeCommentMark(draftId);
+                            }
+                          }}
+                          autoFocusReplyCommentId={
+                            v2Capture === 'comments-reply-resolved'
+                              ? PREVIEW_QA_ACTIVE_COMMENT_ID
+                              : commentsState.pendingFocusCommentId
+                          }
+                          initialResolvedExpandedCommentId={
+                            v2Capture === 'comments-reply-resolved'
+                              ? PREVIEW_QA_RESOLVED_COMMENT_ID
+                              : null
+                          }
+                        />
+                      )
                     ) : null
                   }
                 />
