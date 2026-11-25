@@ -25,11 +25,31 @@ const {
   sendBelowHsTeamContact,
   sendAdminLearnMoreTeamContact,
   sendManualReviewTeamContact,
+  internalFreeTierReviewQueueUrl,
   TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS,
   TEAM_CONTACT_ADMIN_LEARN_MORE_KIND,
   TEAM_CONTACT_BELOW_HS_KIND,
   TEAM_CONTACT_MANUAL_REVIEW_KIND,
 } = await import('./team-contact.server');
+
+describe('internalFreeTierReviewQueueUrl', () => {
+  test('links to Internal\'s real decision queue with an explicit environment and teacher search', () => {
+    const saved = { origin: process.env.INTERNAL_PLATFORM_ORIGIN, env: process.env.YAWP_ENVIRONMENT };
+    process.env.INTERNAL_PLATFORM_ORIGIN = 'https://internal.yawp.school/';
+    process.env.YAWP_ENVIRONMENT = 'production';
+    expect(internalFreeTierReviewQueueUrl('kd+test@example.com')).toBe(
+      'https://internal.yawp.school/free-trial/waitlist?env=production&q=kd%2Btest%40example.com'
+    );
+    expect(internalFreeTierReviewQueueUrl()).toBe('https://internal.yawp.school/free-trial/waitlist?env=production');
+    process.env.YAWP_ENVIRONMENT = 'demo';
+    expect(internalFreeTierReviewQueueUrl()).toBe('https://internal.yawp.school/free-trial/waitlist?env=demo');
+    expect(internalFreeTierReviewQueueUrl()).not.toContain('/free-tier/approvals');
+    delete process.env.INTERNAL_PLATFORM_ORIGIN;
+    expect(internalFreeTierReviewQueueUrl('a@b.co')).toBeNull();
+    if (saved.origin === undefined) delete process.env.INTERNAL_PLATFORM_ORIGIN; else process.env.INTERNAL_PLATFORM_ORIGIN = saved.origin;
+    if (saved.env === undefined) delete process.env.YAWP_ENVIRONMENT; else process.env.YAWP_ENVIRONMENT = saved.env;
+  });
+});
 
 describe('team-contact.server', () => {
   beforeEach(() => {
@@ -178,7 +198,7 @@ describe('team-contact.server', () => {
     );
     expect(sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.stringContaining('Internal review queue: https://internal.yawp.school/free-tier/approvals?status=MANUAL_REVIEW'),
+        text: expect.stringMatching(/Internal review queue: https:\/\/internal\.yawp\.school\/free-trial\/waitlist\?env=(production|demo)&q=/),
       })
     );
     sendEmail.mockClear();
