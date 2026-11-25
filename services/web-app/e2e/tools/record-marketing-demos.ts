@@ -40,6 +40,7 @@ import { createDeployedAssignment } from '../db-helpers';
 import { setFeatureFlag } from '../feature-flags';
 import { submitUnifiedLogin } from '../helpers/unified-login';
 import type { E2EContext } from '../seed-e2e';
+import { buildDemoWorld, discardTakeAssignments } from './marketing-demo-world';
 
 const OUT = resolve(process.cwd(), '../../docs/marketing/demo-videos');
 const PROD_FIDELITY = resolve(
@@ -51,11 +52,23 @@ const SCALE = 1.5; // 1920x1080 frames
 const BASE_URL = 'http://127.0.0.1:5173';
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
-const ONLY = process.env.MARKETING_DEMOS_ONLY?.split(',') ?? [
+const ALL = [
+  // The demo class's own pages first, before any take adds an assignment.
+  'class-summary',
+  'grading-workflow',
+  'margin-comments',
   'tutor',
   'grading-assistant',
   'reporter',
+  'student-feedback',
+  'pre-writing',
+  'thesis-builder',
+  'class-starter',
+  'prompt-library',
+  'exit-ticket',
+  'writing-practice',
 ];
+const ONLY = process.env.MARKETING_DEMOS_ONLY?.split(',') ?? ALL;
 const want = (key: string) => ONLY.includes(key);
 
 const INK = '#1A1F2E';
@@ -941,6 +954,152 @@ async function caretAfter(page: Page, needle: string) {
   await page.mouse.move(x! + 40, y! + 70, { steps: 8 });
 }
 
+// --------------------------------------------- the newer takes' content
+
+/** Maya's pre-write: messy on purpose, the way the Pre-writing step asks for. */
+const PREWRITE = [
+  'Gatsby is rich and throws giant parties but nobody actually knows him. Why do people come? For the champagne. He wants Daisy back, he wants the past back, five whole years. The green light across the bay. Is that great or just sad? Maybe great means big, like impressive, not good. Nick kind of admires him at the end even though he disapproves of everything else. Money can’t buy the past but Gatsby thinks it can.',
+];
+const PREWRITE_REPLY = [
+  'This is a great pre-write: messy in the best way! You keep circling back to one idea: money, the parties, and buying back the past. That might be your focus.',
+  'A couple of questions to push it further:\n1. Why do you think Gatsby believes money can bring back the past?\n2. Is Nick’s admiration at the end a sign that Gatsby is great, or a sign of something else?',
+].join('\n\n');
+
+/** Maya's notes for the Thesis Builder: an observation and her analysis of it. */
+const THESIS_NOTES = [
+  'Focus/Observation: Gatsby believes money can buy back the past.',
+  'Analysis: His parties attract crowds but not friends.',
+  'Analysis: He shows Daisy his house and his shirts as if they prove he deserves her.',
+  'Analysis: The green light shows his dream was always out of reach.',
+];
+const THESIS_REPLY = [
+  'These are strong pieces of analysis, and each one could become a body paragraph.',
+  'Now pull them into one sentence that takes a clear position. Start with your observation, then add what it means: what does Gatsby’s belief about money finally do to him?',
+].join('\n\n');
+
+/** Ms. Rivera's margin comments on Maya's released essay. */
+const MAYA_COMMENTS = [
+  {
+    excerpt: 'Gatsby is not great; he is a man who mistakes money for meaning',
+    content:
+      'This is a strong, arguable thesis. Make every paragraph prove it.',
+  },
+  {
+    excerpt:
+      'came and went like moths among the whisperings and the champagne and the stars.',
+    content:
+      'Beautiful quotation. Now tell me what the moths say about the guests.',
+  },
+  {
+    excerpt:
+      'the colossal significance of that light had now vanished forever.',
+    content:
+      'Great find. Why does the light lose its meaning once he has Daisy?',
+  },
+];
+
+/** Grades, comments and grammar notes on Maya's essay, released to her. */
+async function releaseMayasGrade(ctx: E2EContext, submissionId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: {
+        gradedByMembershipId: ctx.teacherMembershipId,
+        gradedAt: new Date(),
+        numericPercentage: 88,
+        letterGrade: 'B+',
+        score: '88% (B+)',
+        overallScore: 4,
+        overallComment: GRADING_COMMENTS.overall,
+        rubricScores: {
+          thesis_and_content: 5,
+          organization_and_structure: 4,
+          evidence_and_support: 3,
+          voice_and_style: 4,
+          grammar_and_mechanics: 2,
+        },
+        grammarIssues: { version: 1, issues: GRAMMAR_ISSUES },
+        releasedAt: new Date(),
+      },
+    });
+    for (const c of MAYA_COMMENTS) {
+      await prisma.submissionComment.create({
+        data: {
+          submissionId,
+          membershipId: ctx.teacherMembershipId,
+          content: c.content,
+          excerpt: c.excerpt,
+          occurrence: 1,
+        },
+      });
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** A take that summarizes the class starts from no summary. */
+async function resetInsights(classAssignmentId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.classAssignmentInsight.deleteMany({
+      where: { classAssignmentId },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** A take that comments on an essay starts from no comments. */
+async function clearComments(submissionId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.submissionComment.deleteMany({ where: { submissionId } });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** Drag across `needle` on the page the way a teacher selects a sentence. */
+async function dragSelect(page: Page, needle: string, root?: string) {
+  const [x0, y0, x1, y1] = await page.evaluate(
+    ([text, rootSelector]) => {
+      const roots = rootSelector
+        ? [...document.querySelectorAll(rootSelector)]
+        : [document.body];
+      const walker = document.createTreeWalker(
+        roots.at(-1) ?? document.body,
+        NodeFilter.SHOW_TEXT
+      );
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const at = n.textContent!.indexOf(text);
+        if (at < 0) continue;
+        const el = n.parentElement!;
+        if (el.closest('textarea,script,style,[id^="__rec"]')) continue;
+        const range = document.createRange();
+        range.setStart(n, at);
+        range.setEnd(n, at + text.length);
+        const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+        const a = rects[0]!;
+        const b = rects.at(-1)!;
+        return [
+          a.left + 1,
+          a.top + a.height / 2,
+          b.right - 1,
+          b.top + b.height / 2,
+        ];
+      }
+      throw new Error(`"${text}" is not on the page`);
+    },
+    [needle, root ?? ''] as const
+  );
+  await page.mouse.move(x0!, y0!, { steps: 16 });
+  await page.mouse.down();
+  await page.mouse.move(x1!, y1!, { steps: 18 });
+  await page.mouse.up();
+}
+
 const END = { heading: 'Yawp! Writing that stays human.', sub: 'yawp.school' };
 
 // ----------------------------------------------------------------- the three
@@ -949,6 +1108,8 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
   test.setTimeout(900_000);
   await dressTheSet(e2eContext);
   await useProductionThesisEssay(e2eContext);
+  const world = await buildDemoWorld(e2eContext, ESSAY);
+  await discardTakeAssignments(e2eContext, [world.essayAssignmentId]);
   const teacher = await signedIn(
     browser,
     e2eContext.teacherEmail,
@@ -1165,5 +1326,636 @@ test('record the marketing demos', async ({ browser, e2eContext }) => {
       await done();
     });
     cut('reporter', raw, frames, 1.4);
+  }
+
+  // ---------------------------------------------------- Class summary
+  if (want('class-summary')) {
+    await resetInsights(world.essayClassAssignmentId);
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(
+        page,
+        `/app/my-classes/${e2eContext.classId}/assignments/${world.essayAssignmentId}`
+      );
+      const summarize = page.getByRole('button', {
+        name: /Summarize class performance/,
+      });
+      await expect(summarize).toBeVisible();
+      await roll();
+      await card(
+        page,
+        'title',
+        'See how the whole class did, in one click.',
+        'Class performance summary',
+        2600
+      );
+      await say(
+        page,
+        'Every graded essay in the class, summarized for you.',
+        300
+      );
+      await point(page, summarize);
+      await expect(page.getByText(/Across \d+ submissions/)).toBeVisible({
+        timeout: 30_000,
+      });
+      await pause(page, 1600);
+      await say(
+        page,
+        'Strengths and gaps, skill by skill on your rubric.',
+        300
+      );
+      await page.mouse.move(VIEWPORT.width * 0.6, VIEWPORT.height * 0.5, {
+        steps: 8,
+      });
+      await wheel(page, 300, 16);
+      await pause(page, 1800);
+      // The weakest skill: which students it is.
+      const examples = page
+        .getByText(/out of 5 on evidence\/support/)
+        .locator(
+          'xpath=following::*[normalize-space()="Show student examples"][1]'
+        );
+      if (await examples.isVisible().catch(() => false)) {
+        await say(page, 'See exactly which students need help with what.', 300);
+        await point(page, examples);
+        await pause(page, 2600);
+      }
+      await say(
+        page,
+        'A next step for tomorrow’s lesson, and who’s ready for more.',
+        300
+      );
+      await page.mouse.move(VIEWPORT.width * 0.6, VIEWPORT.height * 0.5, {
+        steps: 8,
+      });
+      await wheel(page, 380, 16);
+      await pause(page, 3400);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('class-summary', raw, frames, 1.4);
+  }
+
+  // ------------------------------------------------- Grading workflow
+  if (want('grading-workflow')) {
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(
+        page,
+        `/app/my-classes/${e2eContext.classId}/assignments/${world.essayAssignmentId}`
+      );
+      const tab = (name: RegExp) => page.getByRole('button', { name });
+      await expect(tab(/^Needs Grading$/)).toBeVisible();
+      await tab(/^Needs Grading$/).scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.scrollBy(0, 220));
+      await roll();
+      await card(
+        page,
+        'title',
+        'A whole class of essays, one at a time.',
+        'Grading in Yawp!',
+        2600
+      );
+      await say(
+        page,
+        'Every essay is sorted for you: needs grading, graded, released.',
+        300
+      );
+      for (const name of [
+        /^Graded$/,
+        /^Released$/,
+        /^In Progress$/,
+        /^Needs Grading$/,
+      ]) {
+        await point(page, tab(name));
+        await pause(page, 900);
+      }
+      await say(page, 'Open one…', 300);
+      await point(
+        page,
+        page
+          .getByRole('row', { name: /Isabella Reyes/ })
+          .getByRole('link')
+          .first()
+      );
+      await page.waitForURL(/\/app\/submissions\//);
+      await page.waitForLoadState('networkidle');
+      await pause(page, 1400);
+      await say(page, '…then go straight to the next student’s.', 300);
+      const next = page
+        .getByRole('button', { name: /next/i })
+        .or(page.getByRole('link', { name: /next/i }))
+        .first();
+      for (let i = 0; i < 2; i += 1) {
+        await point(page, next);
+        await page.waitForLoadState('networkidle');
+        await pause(page, 1800);
+      }
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('grading-workflow', raw, frames, 1.4);
+  }
+
+  // -------------------------------------------------- Margin comments
+  if (want('margin-comments')) {
+    const submissionId = world.submissions['Marcus Webb']!;
+    await clearComments(submissionId);
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(page, `/app/submissions/${submissionId}`);
+      await expect(page.getByText('Tom and Daisy are the real')).toBeVisible();
+      await roll();
+      await card(
+        page,
+        'title',
+        'Comments right where the writing is.',
+        'Feedback in the margin',
+        2600
+      );
+      await say(page, 'Highlight any sentence…', 300);
+      await dragSelect(
+        page,
+        'Tom and Daisy are the real villans of the story.',
+        '[data-testid="essay-panel"], main'
+      );
+      await pause(page, 500);
+      await say(
+        page,
+        '…and leave a comment the student will see beside it.',
+        300
+      );
+      await point(
+        page,
+        page.getByRole('button', { name: 'Comment', exact: true })
+      );
+      const box = page
+        .getByRole('textbox')
+        .filter({
+          hasNot: page.locator('[data-testid="grading-overall-comment"]'),
+        })
+        .last();
+      await expect(box).toBeVisible();
+      await box.pressSequentially(
+        'Strong claim! Check the spelling of “villains,” then show us one careless thing Daisy does.',
+        { delay: 26 }
+      );
+      await pause(page, 400);
+      await point(
+        page,
+        page.getByRole('button', { name: 'Save', exact: true }).last()
+      );
+      await pause(page, 1400);
+      await say(
+        page,
+        'Point to the exact words, so they know what’s working and what to fix.',
+        300
+      );
+      await dragSelect(
+        page,
+        'smashed up things and creatures and then retreated back into their money'
+      );
+      await pause(page, 400);
+      await point(
+        page,
+        page.getByRole('button', { name: 'Comment', exact: true })
+      );
+      const second = page
+        .getByRole('textbox')
+        .filter({
+          hasNot: page.locator('[data-testid="grading-overall-comment"]'),
+        })
+        .last();
+      await expect(second).toBeVisible();
+      await second.pressSequentially(
+        'Great evidence. What does “retreated back into their money” say about them?',
+        { delay: 26 }
+      );
+      await pause(page, 300);
+      await point(
+        page,
+        page.getByRole('button', { name: 'Save', exact: true }).last()
+      );
+      await pause(page, 2200);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('margin-comments', raw, frames, 1.4);
+  }
+
+  // ------------------------------------------------- Student feedback
+  if (want('student-feedback')) {
+    const { submissionId } = await gatsbyEssay(e2eContext, ESSAY, true);
+    await releaseMayasGrade(e2eContext, submissionId!);
+    const frames = await take(browser, raw, student, async (page, roll) => {
+      await open(page, `/app/submissions/${submissionId}`);
+      await expect(page.getByText(/88/).first()).toBeVisible();
+      await roll();
+      await card(
+        page,
+        'title',
+        'Feedback students can actually use.',
+        'What students see',
+        2600
+      );
+      await say(page, 'Students see their grade and your feedback…', 2400);
+      await say(page, '…your comments, right beside their own words…', 300);
+      const comment = page.getByText(MAYA_COMMENTS[1]!.content).first();
+      await point(page, comment, false);
+      await pause(page, 2400);
+      await say(page, '…and every grammar note, with the rule behind it.', 300);
+      const mark = page
+        .locator('[data-grammar-issue-id]')
+        .filter({ hasText: 'Its as if' })
+        .first();
+      await point(page, mark, false);
+      await pause(page, 2600);
+      await say(page, 'Then they revise, with your feedback in hand.', 300);
+      await point(page, page.getByTestId('submission-revise-essay'));
+      await page.waitForLoadState('networkidle');
+      await pause(page, 1600);
+      // Maya fixes the it's the grammar note flagged, in her revision.
+      await dragSelect(
+        page,
+        'Its as if',
+        '.ProseMirror[contenteditable="true"]'
+      );
+      await pause(page, 300);
+      await page.keyboard.type('It’s as if', { delay: 60 });
+      await pause(page, 2000);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('student-feedback', raw, frames, 1.4);
+  }
+
+  // ----------------------------------------------------- Pre-writing
+  if (want('pre-writing')) {
+    const { documentId } = await gatsbyEssay(e2eContext, PREWRITE, false);
+    const frames = await take(browser, raw, student, async (page, roll) => {
+      const done = await scriptTutor(page, PREWRITE_REPLY);
+      await open(page, `/app/documents/${documentId}?cmsIdx=0`);
+      const header = page.getByTestId('tutor-module-header');
+      await expect(header).toContainText('Pre-writing');
+      const feedback = page.getByRole('button', { name: 'Give me feedback!' });
+      await expect(feedback).toBeVisible();
+      await roll();
+      captionCentre = '63%';
+      await card(
+        page,
+        'title',
+        'Every essay starts with thinking.',
+        'Pre-writing with the Yawp! Tutor',
+        2600
+      );
+      await say(
+        page,
+        'Students pre-write: messy, fast, and all their own.',
+        2400
+      );
+      await say(
+        page,
+        'The Tutor reads it and pushes their thinking further.',
+        300
+      );
+      await point(page, feedback);
+      await expect(page.getByText(PREWRITE_REPLY.slice(0, 40))).toBeVisible({
+        timeout: 15_000,
+      });
+      await pause(page, 3600);
+      await say(page, 'Until they find the focus for their essay.', 300);
+      await caretAfter(page, 'but Gatsby thinks it can.');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type(
+        'Focus: Gatsby thinks money can buy back the past, and that is what ruins him.',
+        { delay: 32 }
+      );
+      await pause(page, 1600);
+      await card(page, 'end', END.heading, END.sub, 2600);
+      await done();
+    });
+    captionCentre = '50%';
+    cut('pre-writing', raw, frames, 1.4);
+  }
+
+  // ---------------------------------------------------- Thesis Builder
+  if (want('thesis-builder')) {
+    const { documentId } = await gatsbyEssay(e2eContext, THESIS_NOTES, false);
+    const frames = await take(browser, raw, student, async (page, roll) => {
+      const done = await scriptTutor(page, THESIS_REPLY);
+      await open(page, `/app/documents/${documentId}?cmsIdx=1`);
+      const header = page.getByTestId('tutor-module-header');
+      await expect(header).toContainText('Thesis Statement');
+      const ready = page.getByRole('button', { name: 'Ready!' });
+      await expect(ready).toBeVisible();
+      await roll();
+      captionCentre = '63%';
+      await card(
+        page,
+        'title',
+        'From a focus to a real thesis.',
+        'The Yawp! Thesis Builder',
+        2600
+      );
+      await say(page, 'The Tutor teaches what makes a thesis great…', 1800);
+      await point(page, ready);
+      const feedback = page.getByRole('button', { name: 'Give me feedback!' });
+      await expect(feedback).toBeVisible();
+      await say(
+        page,
+        '…students build theirs from an observation and their analysis…',
+        2200
+      );
+      await say(
+        page,
+        '…and the Tutor tells them how to make it stronger.',
+        300
+      );
+      await point(page, feedback);
+      await expect(page.getByText(THESIS_REPLY.slice(0, 40))).toBeVisible({
+        timeout: 15_000,
+      });
+      await pause(page, 3400);
+      await say(page, 'The thesis is still theirs to write.', 300);
+      await caretAfter(page, 'was always out of reach.');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type(
+        'Thesis: Gatsby is not great; his belief that money can buy back the past is what destroys him.',
+        { delay: 30 }
+      );
+      await pause(page, 1500);
+      await card(page, 'end', END.heading, END.sub, 2600);
+      await done();
+    });
+    captionCentre = '50%';
+    cut('thesis-builder', raw, frames, 1.4);
+  }
+
+  // ----------------------------------------------------- Class Starter
+  if (want('class-starter')) {
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(
+        page,
+        `/app/assignment-types/${e2eContext.classStarterAssignmentTypeId}`
+      );
+      await roll();
+      await card(
+        page,
+        'title',
+        'Get every student writing in the first five minutes.',
+        'Class Starter',
+        2600
+      );
+      await say(
+        page,
+        'One open prompt to start class. Graded on effort, not polish.',
+        2600
+      );
+      await say(page, 'Pick one from a library of 200 prompts…', 300);
+      await point(
+        page,
+        page.getByRole('button', { name: /Prompt Library/i }).first()
+      );
+      await pause(page, 700);
+      await page.mouse.move(VIEWPORT.width * 0.45, VIEWPORT.height * 0.6, {
+        steps: 8,
+      });
+      await wheel(page, 380, 14);
+      await pause(page, 1600);
+      await wheel(page, -380, 10);
+      await say(page, '…or write your own, and send it to your class.', 300);
+      await point(page, page.getByRole('button', { name: /^New/ }));
+      await pause(page, 400);
+      await point(page, page.getByRole('menuitem', { name: 'Assignment' }));
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toBeVisible();
+      await pause(page, 500);
+      await point(page, page.getByRole('checkbox', { name: /English 10/ }));
+      const starterTitle = page.getByLabel('Title (optional)');
+      await point(page, starterTitle);
+      await starterTitle.pressSequentially('Breaking a promise', { delay: 35 });
+      const prompt = page.getByRole('textbox', { name: 'Prompt' });
+      await point(page, prompt);
+      await prompt.pressSequentially(
+        'Is it ever right to break a promise? Write about a time it mattered.',
+        { delay: 22 }
+      );
+      await pause(page, 500);
+      await point(
+        page,
+        page.getByRole('button', { name: /Create Assignment/i })
+      );
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toHaveCount(0, { timeout: 20_000 });
+      await pause(page, 1200);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('class-starter', raw, frames, 1.4);
+  }
+
+  // ----------------------------------------------- Essay prompt library
+  if (want('prompt-library')) {
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(
+        page,
+        `/app/assignment-types/${e2eContext.thesisEssayAssignmentTypeId}`
+      );
+      const library = page
+        .getByRole('button', { name: /Prompt Library/i })
+        .first();
+      await library.scrollIntoViewIfNeeded();
+      await roll();
+      await card(
+        page,
+        'title',
+        'An essay prompt for every class you teach.',
+        'The Thesis-Driven Essay prompt library',
+        2600
+      );
+      await say(page, 'Open the prompt library…', 300);
+      await point(page, library);
+      await pause(page, 900);
+      await say(
+        page,
+        '…search it, or filter by subject, text, and grade band…',
+        300
+      );
+      const search = page.getByPlaceholder(/Search prompts/i).first();
+      await point(page, search);
+      await search.pressSequentially('hope', { delay: 70 });
+      await pause(page, 2400);
+      await say(page, '…then pick one, and it’s ready to assign.', 300);
+      const first = page.getByText(/What Gives You Hope/).first();
+      await point(page, first);
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toBeVisible({ timeout: 10_000 });
+      await pause(page, 800);
+      await point(page, page.getByRole('checkbox', { name: /English 10/ }));
+      const title = page.getByRole('textbox', { name: 'Title' });
+      await point(page, title);
+      await title.pressSequentially('What Gives You Hope', { delay: 40 });
+      await say(
+        page,
+        'The full prompt, grading, and the Tutor come set up.',
+        300
+      );
+      const sheet = page.getByRole('dialog');
+      await page.mouse.move(VIEWPORT.width * 0.85, VIEWPORT.height * 0.6, {
+        steps: 8,
+      });
+      await sheet.evaluate((el) => {
+        const scroller = [...el.querySelectorAll('*')].find(
+          (n) =>
+            n.scrollHeight > n.clientHeight + 40 &&
+            getComputedStyle(n).overflowY !== 'visible'
+        );
+        (scroller ?? el).scrollBy({ top: 420, behavior: 'smooth' });
+      });
+      await pause(page, 2600);
+      await point(
+        page,
+        page.getByRole('button', { name: /Create Assignment/i })
+      );
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toHaveCount(0, { timeout: 20_000 });
+      await pause(page, 1200);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('prompt-library', raw, frames, 1.4);
+  }
+
+  // ------------------------------------------------------- Exit Ticket
+  if (want('exit-ticket')) {
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(
+        page,
+        `/app/assignment-types/${e2eContext.exitTicketAssignmentTypeId}`
+      );
+      await roll();
+      await card(
+        page,
+        'title',
+        'Find out if today’s lesson landed.',
+        'Exit Ticket',
+        2600
+      );
+      await point(page, page.getByRole('button', { name: /^New/ }));
+      await pause(page, 400);
+      await point(page, page.getByRole('menuitem', { name: 'Assignment' }));
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toBeVisible();
+      await say(page, 'Check one idea you taught today…', 300);
+      await point(
+        page,
+        page.getByRole('radio', { name: /^Check for understanding/ })
+      );
+      await pause(page, 500);
+      await point(page, page.getByLabel('What are you checking for?'));
+      await point(
+        page,
+        page.getByRole('option', { name: 'Explain a concept' })
+      );
+      const topic = page.getByLabel('What specifically?');
+      await point(page, topic);
+      await topic.pressSequentially(
+        'the difference between a claim and evidence',
+        { delay: 30 }
+      );
+      await pause(page, 300);
+      await point(page, page.getByRole('radio', { name: /^Yes/ }));
+      await say(
+        page,
+        '…and Yawp! writes the question your students will answer.',
+        1200
+      );
+      await page
+        .getByText('the difference between a claim and evidence')
+        .last()
+        .scrollIntoViewIfNeeded();
+      await pause(page, 2200);
+      await say(page, 'Send it in the last five minutes of class.', 300);
+      await point(page, page.getByRole('checkbox', { name: /English 10/ }));
+      const title = page.getByLabel('Title (optional)');
+      await point(page, title);
+      await title.pressSequentially('Claims and evidence', { delay: 35 });
+      await pause(page, 400);
+      await point(
+        page,
+        page.getByRole('button', { name: /Create Assignment/i })
+      );
+      await expect(
+        page.getByRole('heading', { name: 'New Assignment' })
+      ).toHaveCount(0, { timeout: 20_000 });
+      await pause(page, 1200);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('exit-ticket', raw, frames, 1.4);
+  }
+
+  // -------------------------------------------------- Writing Practice
+  if (want('writing-practice')) {
+    const frames = await take(browser, raw, teacher, async (page, roll) => {
+      await open(page, '/app/writing-lessons');
+      await roll();
+      await card(
+        page,
+        'title',
+        'Grammar practice that sticks.',
+        'Yawp! Writing Practice',
+        2600
+      );
+      await say(
+        page,
+        'Short lessons on grammar, sentence structure, and style.',
+        300
+      );
+      const group = page.getByText('Grammar & Mechanics').first();
+      if (
+        !(await page
+          .getByText('Fixing Comma Splices')
+          .first()
+          .isVisible()
+          .catch(() => false))
+      )
+        await point(page, group);
+      await pause(page, 1200);
+      await say(
+        page,
+        'Each one explains the rule and shows it in action.',
+        300
+      );
+      await point(page, page.getByText('Fixing Comma Splices').first());
+      await page.waitForURL(/writing-lessons\/fixing-comma-splices/);
+      await page.waitForLoadState('networkidle');
+      await pause(page, 1200);
+      await page.mouse.move(VIEWPORT.width * 0.45, VIEWPORT.height * 0.6, {
+        steps: 8,
+      });
+      await wheel(page, 420, 16);
+      await pause(page, 1600);
+      await say(
+        page,
+        'Then mix the skills your class needs into one set.',
+        300
+      );
+      await open(page, '/app/writing-lessons');
+      await point(
+        page,
+        page.getByRole('button', { name: 'Create assignment' })
+      );
+      const sheet = page.getByRole('dialog');
+      await expect(sheet).toBeVisible();
+      for (const skill of [
+        'Fixing Comma Splices',
+        'Commas: Introductory Phrases',
+        'Subject-Verb Agreement',
+      ]) {
+        const box = sheet.getByRole('checkbox', { name: skill });
+        if (await box.count()) await point(page, box);
+        await pause(page, 250);
+      }
+      await point(page, sheet.getByRole('checkbox', { name: /English 10/ }));
+      await pause(page, 1600);
+      await card(page, 'end', END.heading, END.sub, 2600);
+    });
+    cut('writing-practice', raw, frames, 1.4);
   }
 });
