@@ -44,7 +44,7 @@ export function AppNavNeedHelpMenu({
         <p className="text-sm font-bold">Need help?</p>
         <p className="text-sm text-muted-foreground">
           Yell &ldquo;YAWP!&rdquo; out the nearest window three times, and
-          we&rsquo;ll come running. (Just kidding. Email{' '}
+          we&rsquo;ll come running. (We kid. Email{' '}
           <span className="font-medium text-foreground">
             {APP_NAV_SUPPORT_EMAIL}
           </span>
