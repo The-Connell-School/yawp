@@ -192,6 +192,10 @@ describe('operator approve on a held administrator request', () => {
     ['no pending administrator request', () => (approval = null)],
     ['request already sent', () => (approval.firstSentAt = new Date())],
     ['request already queued', () => (delivery = { id: 'd-1' })],
+    [
+      'request escalated for manual follow-up',
+      () => (approval.needsManualFollowUp = true),
+    ],
     ['request already emailed', () => (emailLog = { id: 'l-1' })],
   ] as const) {
     test(`falls through to direct approve when ${name}`, async () => {

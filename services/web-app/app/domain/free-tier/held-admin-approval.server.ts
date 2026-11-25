@@ -179,15 +179,17 @@ export async function sendHeldAdminApprovalOnOperatorApprove(args: {
   return { handled: true, status: 200, payload };
 }
 
-/** The newest PENDING administrator request that was held: never sent and never queued. */
+/** The newest PENDING administrator request that was held: never sent, queued, or escalated. */
 export async function findHeldApproval(tx: Tx, applicationId: string) {
   const approval = await tx.freeTierAdminApproval.findFirst({
     where: { applicationId, status: 'PENDING' },
     orderBy: { createdAt: 'desc' },
   });
-  if (!approval || approval.firstSentAt) return null;
+  // Held at submit: never sent, never escalated, and nothing in the outbox.
+  if (!approval || approval.firstSentAt || approval.needsManualFollowUp)
+    return null;
   const delivered = await tx.freeTierApprovalDelivery.findFirst({
-    where: { approvalId: approval.id, kind: 'admin_approval' },
+    where: { approvalId: approval.id },
     select: { id: true },
   });
   if (delivered) return null;
