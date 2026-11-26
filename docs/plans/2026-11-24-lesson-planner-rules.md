@@ -14,6 +14,7 @@
 - **R14–R25:** Kevin's notes on the Antigone lesson and unit, Nov 23. See `2026-11-23-kevin-rules-r14-r25.md`.
 - **R26–R32:** Kevin on theme and thematic topic, Nov 24. See `2026-11-24-theme-and-thematic-topic-r26-r32.md`.
 - **R33:** Kevin on title-slide pictures, Nov 25.
+- **C1–C8, I1–I4:** Kevin on companion texts and on asking what a lesson is for, Nov 26. *Drafts: not yet built.*
 - **B1–B8:** Brian's review points.
 - **S1–S9:** the standards that came out of the 13-lesson review, Nov 22.
 - **Y1–Y3:** Yawp!'s own values.
@@ -147,7 +148,39 @@
 
 **Y3 Materials ready to print and use.** Student-facing language and room to write. *(instructions + code: the PDFs)*
 
-## 9. Practical
+## 9. Companion texts *(draft, Nov 26: not yet built)*
+
+A companion text is thematically connected to the main text: it puts the work in conversation with another treatment of the same thematic topic. A source that places the text in its time is background, and belongs in a context lesson.
+
+**C1 Chosen by thematic topic,** never just by period or setting.
+
+**C2 A different angle.** The companion treats the topic differently, so the comparison is worth making.
+
+**C3 Worth reading or watching on its own.** A strong text, not a summary or a textbook piece.
+
+**C4 Short enough for one period:** a poem, a story, an essay, a speech, or a video clip of a few minutes.
+
+**C5 Compare, then claim.** Students say what each text seems to say about the topic, with the line or moment that shows it, then write their own statement (R30–R32).
+
+**C6 Real and exact.** Never invented. A public-domain companion is printed and checked; a copyrighted one is named with where to find it, and the teacher adds their copy.
+
+**C7 A clip is watched with a purpose:** a working link, start and end times, a question before, a fallback if it is blocked, and the teacher previews it. A film of the book being taught is not a companion.
+
+**C8 A poem is read aloud twice** before it is analyzed (L2).
+
+## 10. Asking what the lesson is for *(draft, Nov 26: not yet built)*
+
+**I1 Ask what the lesson is for.** Before a unit or a companion lesson, find out the one thing students should leave with, unless the request already says it.
+
+**I2 Only questions that change the plan:** at most four, answered by tapping where possible, with "just build" always offered (S3, R19).
+
+**I3 Remember the class.** What belongs to the class (grade, readers, where the unit leads) is asked once and reused.
+
+**I4 Show the purpose.** Every plan states what it was built for, and the teacher can change it and rebuild.
+
+**I5 Lean toward writing.** When the teacher doesn't say, the lesson leans toward writing (Y1): students write more than they would in an even mix. *(Kevin, Nov 26)*
+
+## 11. Practical
 
 **R19 Not slow.** A lesson should arrive in under about 2½ minutes and a unit map in under about 2. *(measured)* About 80% of the wait is the planner writing. Streaming the lesson as it's written is the open option.
 
