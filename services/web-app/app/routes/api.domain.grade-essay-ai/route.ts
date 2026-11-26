@@ -19,6 +19,7 @@ import {
 } from '~/domain/assignment-types/exit-ticket';
 import {
   clampExitTicketScore,
+  exitTicketHasMinimumLength,
   exitTicketGradingAssistantPart,
   exitTicketPersistedGrade,
   resolveExitTicketPointTotal,
@@ -983,6 +984,7 @@ export async function action({ request }: ActionFunctionArgs) {
       studentPrompt: submission.document.assignment?.prompt,
       pointValue: submission.document.assignment?.pointValue,
       submitForGrade: submission.document.assignment?.submitForGrade,
+      responseText: submission.text,
     }
   );
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
@@ -1906,7 +1908,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           score: clampExitTicketScore(
             category.score,
             exitTicketPart,
-            exitTicketPointTotal
+            exitTicketPointTotal,
+            { hasMinimumLength: exitTicketHasMinimumLength(exitTicketConfig) }
           ),
         })),
       };

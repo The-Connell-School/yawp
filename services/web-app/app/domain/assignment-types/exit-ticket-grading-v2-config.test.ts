@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   EXIT_TICKET_PART_A_REFLECTION,
-  EXIT_TICKET_PART_B_CHECK,
+  EXIT_TICKET_PART_C_CHECK,
 } from './exit-ticket-grading-assistant';
 import { applyExitTicketGradingWhenV2Enabled } from './exit-ticket-grading-v2-config';
 
@@ -67,7 +67,7 @@ describe('applyExitTicketGradingWhenV2Enabled', () => {
     expect(result.rubricCategories[0]?.bands).toBeUndefined();
     if (result.instructions.mode !== 'unified') return;
     expect(result.instructions.gradingInstructions).toContain(
-      EXIT_TICKET_PART_B_CHECK
+      EXIT_TICKET_PART_C_CHECK
     );
     expect(result.instructions.gradingInstructions).not.toContain(
       'Names it only'

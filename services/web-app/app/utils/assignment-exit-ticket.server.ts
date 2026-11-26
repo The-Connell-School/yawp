@@ -48,6 +48,10 @@ export function parseAssignmentExitTicket(
           promptVersion: formData.get('exitTicketPromptVersion')?.toString(),
           promptText: formData.get('exitTicketPromptText')?.toString(),
           correctAnswer: formData.get('exitTicketCorrectAnswer')?.toString(),
+          // Simplified builder (promptVersion 3) only: "yes" or "no".
+          singleCorrectAnswer: formData
+            .get('exitTicketSingleCorrectAnswer')
+            ?.toString(),
         }
       : {}),
     ...(fromV3Builder

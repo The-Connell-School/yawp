@@ -18,9 +18,19 @@ export type GradingRubricSummaryInput = {
   >[];
 };
 
+/**
+ * A rubric written out in plain words for teachers, in place of the source,
+ * scale, and bands. Exit tickets use it (Brian, Nov 25).
+ */
+export type GradingRubricPlainSummary = {
+  intro: string;
+  rows: Array<{ label: string; text: string }>;
+};
+
 export type GradingRubricSummary = {
   sourceText: string;
   scaleText: string;
+  plain?: GradingRubricPlainSummary;
   categories: Array<{
     key: string;
     label: string;
@@ -61,8 +71,13 @@ export function summarizeGradingRubric(
   config: GradingRubricSummaryInput,
   { libraryRubricTitle }: { libraryRubricTitle: string | null }
 ): GradingRubricSummary {
-  const sourceText = libraryRubricTitle
-    ? `Library rubric: ${libraryRubricTitle}`
+  // An internal key ("assignment-type:c...") means nothing to a teacher.
+  const readableTitle =
+    libraryRubricTitle && !/^[\w-]+:\S+$/.test(libraryRubricTitle)
+      ? libraryRubricTitle
+      : null;
+  const sourceText = readableTitle
+    ? `Library rubric: ${readableTitle}`
     : config.source === 'assignment-type'
       ? "This type's own rubric"
       : `Built-in rubric: ${config.label}`;

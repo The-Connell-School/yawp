@@ -67,6 +67,11 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/domain/feature-flags/feature-flags.server', () => ({
   isFreeTierEnabled,
 }));
+const isExitTicketGradingV2RolloutEnabled = mock(async () => false);
+mock.module(
+  '~/domain/assignment-types/exit-ticket-grading-v2-gate.server',
+  () => ({ isExitTicketGradingV2RolloutEnabled })
+);
 mock.module('~/domain/free-tier/teaching-approval-required.server', () => ({
   guardTeachingFormAction,
 }));

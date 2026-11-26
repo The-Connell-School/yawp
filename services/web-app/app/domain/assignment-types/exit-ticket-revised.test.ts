@@ -10,6 +10,7 @@ import {
   EXIT_TICKET_REVISED_FOCUS_OPTIONS,
   EXIT_TICKET_REVISED_PROMPT_VERSION,
   EXIT_TICKET_REVISED_REFLECTION_OPTIONS,
+  EXIT_TICKET_SIMPLIFIED_LEARNED_PROMPT,
   composeExitTicketPrompt,
   exitTicketRevisedDraftFromConfig,
   parseExitTicketConfigInput,
@@ -334,16 +335,17 @@ describe('exitTicketRevisedDraftFromConfig', () => {
     expect(exitTicketRevisedDraftFromConfig(null)).toEqual({
       kind: 'reflection',
       reflectionPromptId: 'learned',
-      reflectionPromptText: '',
+      reflectionPromptText: EXIT_TICKET_SIMPLIFIED_LEARNED_PROMPT,
       focus: 'explain-concept',
       promptText: '',
+      singleCorrectAnswer: 'yes',
       correctAnswer: '',
       minWords: '',
       minSentences: '',
     });
   });
 
-  test('reopens a revised check as it was made', () => {
+  test('reopens a revised check as it was made, its minimum in the prompt box', () => {
     const config = parse({
       kind: 'check',
       focus: 'understand-text',
@@ -355,7 +357,8 @@ describe('exitTicketRevisedDraftFromConfig', () => {
     expect(exitTicketRevisedDraftFromConfig(config)).toMatchObject({
       kind: 'check',
       focus: 'understand-text',
-      promptText: QUESTION,
+      promptText: `${QUESTION} (Write at least 2 sentences.)`,
+      singleCorrectAnswer: 'yes',
       correctAnswer: KEY,
       minSentences: '2',
       minWords: '',
@@ -400,8 +403,9 @@ describe('exitTicketRevisedDraftFromConfig', () => {
       topic: 'semicolons',
       answerType: 'subjective',
     });
-    expect(exitTicketRevisedDraftFromConfig(stored).focus).toBe(
-      'explain-concept'
-    );
+    const draft = exitTicketRevisedDraftFromConfig(stored);
+    expect(draft.focus).toBe('explain-concept');
+    // A subjective check had no single right answer.
+    expect(draft.singleCorrectAnswer).toBe('no');
   });
 });

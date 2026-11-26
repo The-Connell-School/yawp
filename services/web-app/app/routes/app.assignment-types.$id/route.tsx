@@ -1,4 +1,5 @@
 import { loungeViewerOrNull } from '~/domain/lounge/access.server';
+import { NEW_ASSIGNMENT_PARAM } from '~/domain/assignment-types/exit-ticket-builder-href';
 import { getSharePromptForViewer } from '~/domain/lounge/lounge.server';
 import { LOUNGE_SHARE_PARAM } from '~/domain/lounge/shares';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1086,6 +1087,26 @@ export default function AppAssignmentTypesIdRoute() {
     );
   }, [incomingPrompt, setSearchParams, creationLocked]);
 
+  // `?new=1` opens the creation sheet once: how the new-assignment page and
+  // the dashboard's + hand an exit ticket to its builder (Brian, Nov 25).
+  const openNewAssignment = searchParams.get(NEW_ASSIGNMENT_PARAM) === '1';
+  useEffect(() => {
+    if (!openNewAssignment) return;
+    if (!creationLocked) {
+      setApHistoryEntry(null);
+      beginAssignmentCreation();
+    }
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(NEW_ASSIGNMENT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNewAssignment, setSearchParams, creationLocked]);
+
   // The Teacher's Lounge sends a teacher here to reuse another teacher's
   // shared assignment. Same door as the planner's: open the sheet on the
   // prompt once, then drop the param.
@@ -1162,7 +1183,9 @@ export default function AppAssignmentTypesIdRoute() {
   );
   const landingPage = data.landingPageKey
     ? landingPageFor(data.landingPageKey, {
-        exitTicketNoTutor: data.exitTicketRevisedBuilderEnabled,
+        // The tutor toggle is back on exit tickets (Brian, Nov 24), so the
+        // page keeps its "Tutor off or on?" paragraph.
+        exitTicketNoTutor: false,
       })
     : null;
   const isApHistoryAssignmentType =
@@ -1462,7 +1485,7 @@ export default function AppAssignmentTypesIdRoute() {
         {/* Brian's landing page replaces every block from here to the
             library: the old directions and the Modules accordion. */}
         {!landingPage && data.showAboutExitTicket ? (
-          <AboutExitTicket noTutor={data.exitTicketRevisedBuilderEnabled} />
+          <AboutExitTicket />
         ) : null}
         {!landingPage && data.promptLibrary ? (
           <div data-tour="type-directions">

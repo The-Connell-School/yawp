@@ -10,11 +10,16 @@ import {
 import { exitTicketActivityOption } from './exit-ticket-activities';
 import {
   EXIT_TICKET_PART_A_REFLECTION,
-  EXIT_TICKET_PART_B_CHECK,
+  EXIT_TICKET_PART_B_SINGLE_ANSWER,
+  EXIT_TICKET_PART_C_CHECK,
   EXIT_TICKET_UNIVERSAL_BLOCK,
+  EXIT_TICKET_VOICE_BLOCK,
   applyExitTicketGradingAssistant,
   buildExitTicketGradingAssistantPrompt,
   clampExitTicketScore,
+  countExitTicketResponseLength,
+  exitTicketGradingAssistantPart,
+  exitTicketGradingPlainSummary,
   exitTicketPersistedGrade,
   resolveExitTicketPointTotal,
 } from './exit-ticket-grading-assistant';
@@ -57,16 +62,31 @@ describe('exit ticket grading assistant prompt', () => {
     expect(prompt.indexOf(EXIT_TICKET_UNIVERSAL_BLOCK)).toBeLessThan(
       prompt.indexOf(EXIT_TICKET_PART_A_REFLECTION)
     );
-    expect(prompt).not.toContain(EXIT_TICKET_PART_B_CHECK);
+    expect(prompt).not.toContain(EXIT_TICKET_PART_B_SINGLE_ANSWER);
+    expect(prompt).not.toContain(EXIT_TICKET_PART_C_CHECK);
     expect(prompt).toContain('Exit ticket type: Reflection');
     expect(prompt).toContain('Tell me what you learned today.');
     expect(prompt).toContain('Point total: 5');
     expect(prompt).toContain('Grade this ticket: yes.');
-    expect(prompt).not.toContain('Correct answer or key points:');
-    expect(prompt).not.toContain('Minimum length:');
+    expect(prompt).not.toContain('Correct answer:');
+    expect(prompt).not.toContain('What a strong answer includes:');
+    expect(prompt).toContain('Minimum length: none.');
   });
 
-  test('a check for understanding pastes the universal block, then Part B, with the teacher’s key', () => {
+  test('a reflection with a minimum length passes it, both kinds', () => {
+    const prompt = buildExitTicketGradingAssistantPrompt({
+      config: {
+        ...REFLECTION,
+        grading: { basis: 'completion', minSentences: 3, minWords: 50 },
+      },
+      pointValue: 5,
+    });
+    expect(prompt).toContain(
+      'Minimum length: at least 3 sentences and at least 50 words.'
+    );
+  });
+
+  test('a check made before the yes/no question pastes Part C, with the teacher’s notes', () => {
     const prompt = buildExitTicketGradingAssistantPrompt({
       config: CHECK,
       studentPrompt:
@@ -76,17 +96,20 @@ describe('exit ticket grading assistant prompt', () => {
     });
 
     expect(prompt.startsWith(EXIT_TICKET_UNIVERSAL_BLOCK)).toBe(true);
-    expect(prompt).toContain(EXIT_TICKET_PART_B_CHECK);
-    expect(prompt).not.toContain('There is no partial credit.');
+    expect(prompt).toContain(EXIT_TICKET_PART_C_CHECK);
+    expect(prompt).not.toContain(EXIT_TICKET_PART_B_SINGLE_ANSWER);
     expect(prompt).toContain('Exit ticket type: Check for understanding');
-    expect(prompt).toContain('What the teacher is checking for: EXPLAIN A CONCEPT');
+    expect(prompt).toContain('Is there a single correct answer? No.');
+    expect(prompt).toContain('What a strong answer includes:');
+    // The preset the teacher clicked is not passed.
+    expect(prompt).not.toContain('What the teacher is checking for');
     expect(prompt).toContain('Quote one line that shows Holden');
     expect(prompt).toContain(CHECK.correctAnswer!);
     expect(prompt).toContain('Minimum length: at least 3 sentences.');
     expect(prompt).toContain('Point total: 5');
   });
 
-  test('understand a text is named for the assistant, and a word minimum is passed through', () => {
+  test('a word and sentence minimum are both passed through', () => {
     const prompt = buildExitTicketGradingAssistantPrompt({
       config: {
         ...CHECK,
@@ -98,10 +121,7 @@ describe('exit ticket grading assistant prompt', () => {
     });
 
     expect(prompt).toContain(
-      'What the teacher is checking for: UNDERSTAND A TEXT OR SOURCE'
-    );
-    expect(prompt).toContain(
-      'Minimum length: at least 40 words and at least 2 sentences.'
+      'Minimum length: at least 2 sentences and at least 40 words.'
     );
     expect(prompt).toContain('Point total: 12');
   });
@@ -181,10 +201,10 @@ describe('exit ticket grading assistant prompt', () => {
       },
     });
 
+    expect(prompt).toContain(EXIT_TICKET_PART_C_CHECK);
     expect(prompt).toContain(
-      'What the teacher is checking for: ASK A QUESTION (an older ticket)'
+      'What a strong answer includes:\nNone. The teacher left this empty.'
     );
-    expect(prompt).toContain('Correct answer or key points:\nNot provided.');
     expect(prompt).toContain('Point total: 5');
   });
 
@@ -197,6 +217,35 @@ describe('exit ticket grading assistant prompt', () => {
     expect(prompt).toContain(EXIT_TICKET_PART_A_REFLECTION);
     expect(prompt).toContain('Grade this ticket: no.');
     expect(prompt).toContain('Nothing is recorded in the gradebook.');
+  });
+
+  test('Yes to a single correct answer pastes Part B, with the correct answer', () => {
+    const config: ExitTicketConfig = {
+      ...CHECK,
+      promptVersion: 3,
+      singleCorrectAnswer: true,
+      correctAnswer: 'Unreliable narrator',
+      grading: { basis: 'bands' },
+    };
+    expect(exitTicketGradingAssistantPart(config)).toBe('single-answer');
+    const prompt = buildExitTicketGradingAssistantPrompt({
+      config,
+      studentPrompt: 'What is a narrator the reader can’t fully trust called?',
+      pointValue: 5,
+    });
+    expect(prompt.startsWith(EXIT_TICKET_UNIVERSAL_BLOCK)).toBe(true);
+    expect(prompt).toContain(EXIT_TICKET_PART_B_SINGLE_ANSWER);
+    expect(prompt).not.toContain(EXIT_TICKET_PART_C_CHECK);
+    expect(prompt).toContain('Is there a single correct answer? Yes.');
+    expect(prompt).toContain('Correct answer:\nUnreliable narrator');
+  });
+
+  test('No to a single correct answer pastes Part C', () => {
+    expect(
+      exitTicketGradingAssistantPart({ ...CHECK, singleCorrectAnswer: false })
+    ).toBe('check');
+    expect(exitTicketGradingAssistantPart(REFLECTION)).toBe('reflection');
+    expect(exitTicketGradingAssistantPart(null)).toBe('reflection');
   });
 
   test('the stored assignment prompt is the question, ahead of a recomposed one', () => {
@@ -223,7 +272,7 @@ describe('exit ticket score clamping', () => {
     expect(resolveExitTicketPointTotal(12, { v2Grading: true })).toBe(12);
   });
 
-  test('a reflection is only full credit or none', () => {
+  test('a reflection with no minimum length is only full credit or none', () => {
     expect(clampExitTicketScore(0, 'reflection', 5)).toBe(0);
     expect(clampExitTicketScore(5, 'reflection', 5)).toBe(5);
     expect(clampExitTicketScore(1, 'reflection', 5)).toBe(0);
@@ -233,6 +282,30 @@ describe('exit ticket score clamping', () => {
     expect(clampExitTicketScore(2.6, 'reflection', 5)).toBe(5);
     expect(clampExitTicketScore(-4, 'reflection', 5)).toBe(0);
     expect(clampExitTicketScore(Number.NaN, 'reflection', 5)).toBe(0);
+  });
+
+  test('a reflection with a minimum length keeps credit by length', () => {
+    for (const score of [0, 1, 2, 3, 4, 5]) {
+      expect(
+        clampExitTicketScore(score, 'reflection', 5, { hasMinimumLength: true })
+      ).toBe(score);
+    }
+    expect(
+      clampExitTicketScore(5, 'reflection', 12, { hasMinimumLength: true })
+    ).toBe(5);
+  });
+
+  test('a single answer is 0, half rounded up, or full; one below full only with a minimum', () => {
+    expect(clampExitTicketScore(0, 'single-answer', 5)).toBe(0);
+    expect(clampExitTicketScore(3, 'single-answer', 5)).toBe(3);
+    expect(clampExitTicketScore(5, 'single-answer', 5)).toBe(5);
+    expect(clampExitTicketScore(4, 'single-answer', 5)).toBe(5);
+    expect(clampExitTicketScore(1, 'single-answer', 5)).toBe(0);
+    expect(clampExitTicketScore(2, 'single-answer', 5)).toBe(3);
+    expect(
+      clampExitTicketScore(4, 'single-answer', 5, { hasMinimumLength: true })
+    ).toBe(4);
+    expect(clampExitTicketScore(5, 'single-answer', 10)).toBe(5);
   });
 
   test('a check keeps any whole number from 1 through one below the total', () => {
@@ -328,7 +401,7 @@ describe('applyExitTicketGradingAssistant', () => {
     expect(applied.instructions.mode).toBe('unified');
     if (applied.instructions.mode !== 'unified') return;
     expect(applied.instructions.gradingInstructions).toContain(
-      EXIT_TICKET_PART_B_CHECK
+      EXIT_TICKET_PART_C_CHECK
     );
     expect(applied.instructions.gradingInstructions).not.toContain(
       'Names it only'
@@ -399,5 +472,117 @@ describe('correct answer field contract', () => {
       correctAnswer: 'A theme makes a claim.',
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('exitTicketGradingPlainSummary (Brian, Nov 25)', () => {
+  const text = (summary: { intro: string; rows: { label: string; text: string }[] }) =>
+    [summary.intro, ...summary.rows.flatMap((row) => [row.label, row.text])].join('\n');
+
+  test('a reflection explains completion in plain words, with no bands or codes', () => {
+    const summary = exitTicketGradingPlainSummary(REFLECTION, 5);
+    const all = text(summary);
+    expect(all).toContain('Full credit (5/5)');
+    expect(all).toContain('No credit (0)');
+    expect(all).not.toContain('Partial credit');
+    expect(all).not.toMatch(/Names it only|Rubric points|assignment-type:/);
+  });
+
+  test('a reflection with a minimum explains credit by length', () => {
+    const all = text(
+      exitTicketGradingPlainSummary(
+        { ...REFLECTION, grading: { basis: 'completion', minSentences: 3 } },
+        5
+      )
+    );
+    expect(all).toContain('shorter than at least 3 sentences');
+  });
+
+  test('a single answer names the teacher’s answer and the half-credit hedge', () => {
+    const all = text(
+      exitTicketGradingPlainSummary(
+        {
+          ...CHECK,
+          singleCorrectAnswer: true,
+          correctAnswer: 'Unreliable narrator',
+          grading: { basis: 'bands' },
+        },
+        10
+      )
+    );
+    expect(all).toContain('“Unreliable narrator.”');
+    expect(all).toContain('Half credit (5/10)');
+    expect(all).not.toContain('One point off');
+  });
+
+  test('more than one right answer quotes the notes, or says there are none', () => {
+    expect(exitTicketGradingPlainSummary(CHECK, 5).intro).toContain(
+      'judged against your notes'
+    );
+    expect(
+      exitTicketGradingPlainSummary(
+        { ...CHECK, correctAnswer: undefined, singleCorrectAnswer: false },
+        5
+      ).intro
+    ).toContain('You left no notes');
+  });
+});
+
+describe('counting response length for the Grading Assistant (Brian, Nov 25)', () => {
+  const HOLDEN =
+    "an unreliable narrator is one who we cannot trust due to mental instability, drunkenness, or other limitations. Holden Caulfield is a great example of an unreliable narrator because on the first page of the book he tells us that he's in a mental health facility. Then throughout the book, he keeps contradicting himself and blaming other people for his problems when we can see by his actions that he's the one to blame. A great example of this throughout the book is how he keeps calling everybody else a phony but he's the one that lies constantly.";
+
+  test('Brian’s four-sentence response counts as four', () => {
+    expect(countExitTicketResponseLength(HOLDEN).sentences).toBe(4);
+  });
+
+  test('counts generously: questions, missing end punctuation, line breaks', () => {
+    expect(
+      countExitTicketResponseLength('why did they leave?\ni dont know\nmaybe money')
+        .sentences
+    ).toBe(3);
+    expect(countExitTicketResponseLength('').sentences).toBe(0);
+    expect(countExitTicketResponseLength("He's the one. It's 1920.").words).toBe(5);
+  });
+
+  test('the counts go to the Grading Assistant only when a minimum is set', () => {
+    const withMinimum = buildExitTicketGradingAssistantPrompt({
+      config: { ...CHECK, grading: { basis: 'bands', minSentences: 4 } },
+      responseText: HOLDEN,
+      pointValue: 10,
+    });
+    expect(withMinimum).toContain(
+      'Length of this response, counted by Yawp!: 4 sentences,'
+    );
+    expect(withMinimum).toContain('Do not recount.');
+    const without = buildExitTicketGradingAssistantPrompt({
+      config: { ...CHECK, grading: undefined },
+      responseText: HOLDEN,
+    });
+    expect(without).not.toContain('counted by Yawp!');
+  });
+});
+
+describe('word choice (Brian, Nov 25)', () => {
+  test('every exit ticket assistant is told not to say genuinely or honestly', () => {
+    for (const config of [REFLECTION, CHECK, { ...CHECK, singleCorrectAnswer: true }]) {
+      expect(buildExitTicketGradingAssistantPrompt({ config })).toContain(
+        'Never use "genuinely" or "honestly"'
+      );
+    }
+  });
+});
+
+describe('exit ticket voice (Brian, Nov 25)', () => {
+  test('every exit ticket assistant gets the voice block and Brian’s examples, after the pasted part', () => {
+    for (const config of [REFLECTION, CHECK, { ...CHECK, singleCorrectAnswer: true }]) {
+      const prompt = buildExitTicketGradingAssistantPrompt({ config });
+      expect(prompt).toContain(EXIT_TICKET_VOICE_BLOCK);
+      expect(prompt).toContain('You nailed it, Jordan! Well done.');
+      expect(prompt).toContain('overrides any general instruction');
+      expect(prompt.indexOf(EXIT_TICKET_VOICE_BLOCK)).toBeLessThan(
+        prompt.indexOf('THIS EXIT TICKET')
+      );
+    }
   });
 });
