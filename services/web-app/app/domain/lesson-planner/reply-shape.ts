@@ -21,6 +21,8 @@ const PROCESS_TALK = [
   /\bis in the public domain, so (?:I|all|every|the|its|it|we)\b/i,
   /\bis in the public domain\b[^.!?]*\bso\b/i,
   /\bI['’]m using\b.*\b(?:translation|edition|text)\b/i,
+  // Nov 26: "One companion text came back that fits this unit well: …"
+  /\b(?:came back|turned up|the search (?:returned|found)|the (?:library|tool) (?:returned|gave))\b/i,
   // Nov 26: "Good — both decks are solid and I can place them precisely."
   /\bI can (?:place|use|fit|slot|build) (?:them|it|these|both)\b/i,
   /\b(?:both|the|these) (?:decks?|lessons?|materials?) (?:is|are) (?:solid|strong|good|great)\b/i,

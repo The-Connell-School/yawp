@@ -116,7 +116,7 @@ function buildCompanionOfferSection(offer: boolean): string[] {
   if (!offer) return [];
   return [
     '',
-    'THIS TURN: the teacher has not chosen a companion text, and whether there is one is theirs to decide. Do not put a companion in this unit or lesson: not on a day, not in `reading`, not in `builtFor`, not in the plan. If one from search_companion_texts would genuinely serve, offer it as one of the questions after the map (or at the end of the lesson): its title, the day it would go on, the topic it shares, and whether to add it. Never more than one such question.',
+    'THIS TURN: the teacher has not chosen a companion text, and whether there is one is theirs to decide. Do not put a companion in this unit or lesson: not on a day, not in `reading`, not in `builtFor`, not in the plan. If one from search_companion_texts would genuinely serve, offer it as one of the questions after the map (or at the end of the lesson), and only there: its title, the day it would go on, the topic it shares, and whether to add it. Never more than one such question, and never a paragraph about it besides.',
   ];
 }
 
