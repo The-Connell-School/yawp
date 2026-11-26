@@ -14,7 +14,7 @@
 - **R14–R25:** Kevin's notes on the Antigone lesson and unit, Nov 23. See `2026-11-23-kevin-rules-r14-r25.md`.
 - **R26–R32:** Kevin on theme and thematic topic, Nov 24. See `2026-11-24-theme-and-thematic-topic-r26-r32.md`.
 - **R33:** Kevin on title-slide pictures, Nov 25.
-- **C1–C8, I1–I4:** Kevin on companion texts and on asking what a lesson is for, Nov 26. *Drafts: not yet built.*
+- **C1–C8, I1–I5:** Kevin on companion texts and on asking what a lesson is for, Nov 26.
 - **B1–B8:** Brian's review points.
 - **S1–S9:** the standards that came out of the 13-lesson review, Nov 22.
 - **Y1–Y3:** Yawp!'s own values.
@@ -148,7 +148,7 @@
 
 **Y3 Materials ready to print and use.** Student-facing language and room to write. *(instructions + code: the PDFs)*
 
-## 9. Companion texts *(draft, Nov 26: not yet built)*
+## 9. Companion texts *(Nov 26: built on the PR #997 preview)*
 
 A companion text is thematically connected to the main text: it puts the work in conversation with another treatment of the same thematic topic. A source that places the text in its time is background, and belongs in a context lesson.
 
@@ -168,7 +168,7 @@ A companion text is thematically connected to the main text: it puts the work in
 
 **C8 A poem is read aloud twice** before it is analyzed (L2).
 
-## 10. Asking what the lesson is for *(draft, Nov 26: not yet built)*
+## 10. Asking what the lesson is for *(Nov 26: built on the PR #997 preview)*
 
 **I1 Ask what the lesson is for.** Before a unit or a companion lesson, find out the one thing students should leave with, unless the request already says it.
 
@@ -178,7 +178,7 @@ A companion text is thematically connected to the main text: it puts the work in
 
 **I4 Show the purpose.** Every plan states what it was built for, and the teacher can change it and rebuild.
 
-**I5 Lean toward writing.** When the teacher doesn't say, the lesson leans toward writing (Y1): students write more than they would in an even mix. *(Kevin, Nov 26)*
+**I5 The default arc stands.** When the teacher skips the questions, the lesson follows the default arc (R12), which already has students writing (Y1). *(Kevin, Nov 26: "the lesson arc stuff is good by default")*
 
 ## 11. Practical
 
