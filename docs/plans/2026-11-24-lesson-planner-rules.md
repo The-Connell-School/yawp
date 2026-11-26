@@ -14,7 +14,7 @@
 - **R14–R25:** Kevin's notes on the Antigone lesson and unit, Nov 23. See `2026-11-23-kevin-rules-r14-r25.md`.
 - **R26–R32:** Kevin on theme and thematic topic, Nov 24. See `2026-11-24-theme-and-thematic-topic-r26-r32.md`.
 - **R33:** Kevin on title-slide pictures, Nov 25.
-- **C1–C8, I1–I5:** Kevin on companion texts and on asking what a lesson is for, Nov 26.
+- **C1–C9, I1–I5:** Kevin on companion texts and on asking what a lesson is for, Nov 26.
 - **B1–B8:** Brian's review points.
 - **S1–S9:** the standards that came out of the 13-lesson review, Nov 22.
 - **Y1–Y3:** Yawp!'s own values.
@@ -167,6 +167,8 @@ A companion text is thematically connected to the main text: it puts the work in
 **C7 A clip is watched with a purpose:** a working link, start and end times, a question before, a fallback if it is blocked, and the teacher previews it. A film of the book being taught is not a companion.
 
 **C8 A poem is read aloud twice** before it is analyzed (L2).
+
+**C9 The teacher decides.** Whether there is a companion, and which, is the teacher's choice on the card. When they haven't chosen one ("Just build", the question skipped, or a request that said what it was for), the work is built without one and at most one is offered as a question after it. *(code: Kevin, Nov 26)*
 
 ## 10. Asking what the lesson is for *(Nov 26: built on the PR #997 preview)*
 
