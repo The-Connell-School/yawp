@@ -111,6 +111,15 @@ function buildAskPurposeSection(ask: { unit: boolean; companion: boolean } | nul
   ];
 }
 
+/** No companion was chosen: build without one, and only offer one (Nov 26). */
+function buildCompanionOfferSection(offer: boolean): string[] {
+  if (!offer) return [];
+  return [
+    '',
+    'THIS TURN: the teacher has not chosen a companion text, and whether there is one is theirs to decide. Do not put a companion in this unit or lesson: not on a day, not in `reading`, not in `builtFor`, not in the plan. If one from search_companion_texts would genuinely serve, offer it as one of the questions after the map (or at the end of the lesson): its title, the day it would go on, the topic it shares, and whether to add it. Never more than one such question.',
+  ];
+}
+
 function buildLessonLengthSection(
   length: { minutes: number; classLabel: string | null } | null
 ): string[] {
@@ -770,7 +779,7 @@ export function buildLessonPlannerSystemPrompt({
           '- `balance` — bare: what students should do most (writing, discussion, close reading, or a mix you decide).',
           '- `leads` — bare, for a unit only, and only when the request does not say how it ends: an essay, a seminar, a project, a test, or nothing yet.',
           '- `companion: …` — call search_companion_texts first (the work and its thematic topics), then one line per option, two or three, only from what it returned, as `“Title” — Author, poem, year: the topic they share`. Yawp! adds "You choose" and "No companion text". Offer it for a unit and for a lesson that asks for a pairing.',
-          '- At most four of these in one card, answered by tapping. When the teacher\'s answer says "Just build it", build at once and say in one line what you assumed.',
+          '- At most four of these in one card, answered by tapping. When the teacher\'s answer says "Just build it", build at once and say in one line what you assumed. A companion text is always the teacher\'s choice: when they have not picked one, build without it and at most offer one as a question after the map.',
           '- What they chose is what the work is built for. A unit map says it in `builtFor`: one line, e.g. "Leave with: a claim about when the law should be defied · mostly writing · with “If We Must Die”". A lesson (never a unit: its map already says it) opens with one italic line: *Built for: …*. Each day built from a unit is built for the same thing; never ask again.',
           '',
         ]
@@ -1127,6 +1136,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   intakeV2 = false,
   lessonLength = null,
   askPurpose = null,
+  companionOffer = false,
   template = null,
   deckGallery = false,
   deckKitV4 = false,
@@ -1164,6 +1174,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   lessonLength?: { minutes: number; classLabel: string | null } | null;
   /** Ask what the work is for before building it (Nov 26). */
   askPurpose?: { unit: boolean; companion: boolean } | null;
+  /** No companion chosen: build without one, and only offer one (Nov 26). */
+  companionOffer?: boolean;
   /** The teacher's template this lesson is built from (run 3). */
   template?: LessonTemplate | null;
   /** The gallery deck (Lesson Deck Kit): its templates, rhythm and art. */
@@ -1185,6 +1197,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
   const tail = [
     ...buildAskPurposeSection(askPurpose),
+    ...buildCompanionOfferSection(companionOffer),
     ...buildLessonLengthSection(lessonLength),
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),

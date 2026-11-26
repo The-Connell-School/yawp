@@ -191,6 +191,7 @@ export function LessonIntakeCard({
         leads,
         companion,
         justBuild,
+        companionAsked: Boolean(companionAsk),
       }),
     ]
       .filter(Boolean)

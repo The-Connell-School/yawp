@@ -332,6 +332,7 @@ export function composeIntakeReply({
   leads = null,
   companion = null,
   justBuild = false,
+  companionAsked = false,
 }: {
   /** Checked classes, or the one typed by hand; minutes null when not asked. */
   classes: Array<{ title: string; minutes: number | null }>;
@@ -351,6 +352,8 @@ export function composeIntakeReply({
   companion?: string | null;
   /** "Just build": what is unanswered is the planner's to choose. */
   justBuild?: boolean;
+  /** The card asked about a companion text. */
+  companionAsked?: boolean;
 }): string {
   const parts: string[] = classes.map((klass) =>
     klass.minutes === null
@@ -379,6 +382,9 @@ export function composeIntakeReply({
   else if (companion === PLANNER_PICKS_COMPANION) parts.push('You choose a companion text.');
   else if (companion?.trim()) parts.push(`Pair it with ${companion.trim().replace(/[.!?]$/, '')}.`);
   if (justBuild) parts.push('Just build it: choose the rest yourself and say in one line what you assumed.');
+  // The teacher decides whether there is a companion (Kevin, Nov 26): asked
+  // and left unanswered, or skipped with "Just build", it is not added.
+  if ((justBuild || companionAsked) && !companion) parts.push('No companion text unless I choose one.');
   return parts.join(' ');
 }
 
@@ -414,4 +420,18 @@ export function purposeToAsk(request: string, { firstTurn }: { firstTurn: boolea
   const unit = plansSeveralDays(request);
   const companion = PAIRING.test(request);
   return unit || companion ? { unit, companion } : null;
+}
+
+/**
+ * A companion text is the teacher's choice, never the planner's (Kevin, Nov
+ * 26: the Gatsby unit built with "Just build" came with Ozymandias no one had
+ * chosen). When the teacher has not chosen one, the work is built without it,
+ * and one that would serve may only be offered, as a question after it: on a
+ * "Just build", and on a unit whose request said what it is for, so the card
+ * never asked.
+ */
+export function companionOnlyOffered(message: string, { firstTurn }: { firstTurn: boolean }): boolean {
+  if (/\bPair it with\b|\bYou choose a companion text\b|\bNo companion text\.(?! unless)/i.test(message)) return false;
+  if (/\bJust build it\b|\bNo companion text unless I choose one\b/i.test(message)) return true;
+  return firstTurn && plansSeveralDays(message) && !PAIRING.test(message);
 }

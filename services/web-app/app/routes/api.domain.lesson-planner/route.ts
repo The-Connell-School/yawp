@@ -1,4 +1,4 @@
-import { purposeToAsk } from '~/domain/lesson-planner/lesson-ask';
+import { companionOnlyOffered, purposeToAsk } from '~/domain/lesson-planner/lesson-ask';
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import { applyDeckChoice, fileUploadedDeck, keptDeckBlock, withKeptDeck } from '~/domain/lesson-planner/uploaded-deck.server';
 import { lessonPlannerMonthlyQuotaEnforced } from '~/domain/free-tier/monthly-quota-cap.server';
@@ -757,6 +757,8 @@ async function turnAction({ request }: ActionFunctionArgs) {
       teacherName: null,
       lessonLength,
       askPurpose,
+      // A companion is the teacher's choice (Nov 26): not chosen, only offered.
+      companionOffer: !askPurpose && !dayTarget && companionOnlyOffered(turn.message, { firstTurn: priorMessages.length === 0 }),
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],
       stackContents,

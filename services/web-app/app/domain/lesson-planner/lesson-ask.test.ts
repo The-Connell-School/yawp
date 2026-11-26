@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, asksWorthShowing, composeAskReply, composeIntakeReply, purposeToAsk, readLessonAsks, type LessonAsk } from './lesson-ask';
+import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, PLANNER_PICKS_COMPANION, asksWorthShowing, companionOnlyOffered, composeAskReply, composeIntakeReply, purposeToAsk, readLessonAsks, type LessonAsk } from './lesson-ask';
 
 function fenced(body: string): string {
   return `\`\`\`${ASK_FENCE}\n${body}\n\`\`\``;
@@ -435,5 +435,25 @@ describe('when to ask what the work is for (Nov 26: the Antigone unit was built 
     expect(purposeToAsk('Plan a 6-day unit on Antigone so that students can write a thesis about civil disobedience.', { firstTurn: true })).toBeNull();
     expect(purposeToAsk('Plan a unit on Gatsby. I want them to leave able to write a theme statement.', { firstTurn: true })).toBeNull();
     expect(purposeToAsk('Plan a 50-minute lesson on Macbeth Act 1, scene 3.', { firstTurn: true })).toBeNull();
+  });
+});
+
+describe('a companion text is the teacher’s choice (Kevin, Nov 26)', () => {
+  test('"Just build", or the question left unanswered, says so in the teacher’s words', () => {
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], justBuild: true })).toContain('No companion text unless I choose one.');
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], balance: 'writing', companionAsked: true })).toBe('Lean it toward writing. No companion text unless I choose one.');
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], companionAsked: true, companion: PLANNER_PICKS_COMPANION })).toBe('You choose a companion text.');
+  });
+
+  test('then the work is built without one, and one may only be offered', () => {
+    expect(companionOnlyOffered('Just build it: choose the rest yourself and say in one line what you assumed. No companion text unless I choose one.', { firstTurn: false })).toBe(true);
+    expect(companionOnlyOffered('Lean it toward writing. No companion text unless I choose one.', { firstTurn: false })).toBe(true);
+    // A unit whose request said what it is for: the card never asked.
+    expect(companionOnlyOffered('Plan a 6-day unit on Antigone so that students can write a thesis.', { firstTurn: true })).toBe(true);
+    // Chosen, handed to the planner, or declined: nothing to offer.
+    expect(companionOnlyOffered('Pair it with “Ozymandias” — Percy Bysshe Shelley, poem, 1818.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('You choose a companion text.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('It leads to an essay. No companion text.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('Plan a 50-minute lesson on Macbeth 1.3.', { firstTurn: true })).toBe(false);
   });
 });
