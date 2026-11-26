@@ -70,6 +70,7 @@ import { factCheckCall } from '~/domain/lesson-planner/fact-check-model.server';
 import { fetchWorkText, sourceTextFailure, warmSourceTexts, workForText } from '~/domain/lesson-planner/source-texts.server';
 import { aboutSettledQuotation, checkNoteWords, withCheckNote } from '~/domain/lesson-planner/check-note';
 import { withExcerptsFromSource } from '~/domain/lesson-planner/excerpt-source';
+import { withCompanionsChecked } from '~/domain/lesson-planner/companion-check.server';
 import { LESSON_REPAIR_SCHEMA, withLessonRepair, type Problem } from '~/domain/lesson-planner/lesson-repair.server';
 import { pictureShelf } from '~/domain/lesson-planner/picture-shelf.server';
 import { withResolvedPlaces } from '~/domain/lesson-planner/context-slides.server';
@@ -977,6 +978,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
           against.kind === 'pages'
             ? { ...checkQuotations(text, against.source, { work: against.work }), work: against.work }
             : await withQuotationCheck(text, { work: checkedWork });
+        // A companion poem's lines are checked against the poem itself first (Nov 26).
+        const companions = withCompanionsChecked(reply);
+        reply = companions.reply;
         const quoted = await checkQuotes(reply);
         reply = quoted.reply;
         const attribution = () => ({
@@ -987,7 +991,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
           ipHash: computeIpHash(request),
         });
         const askFacts = factCheckCall(attribution);
-        const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: quoted.verified }) : { reply, applied: [], flagged: [] };
+        const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: [...quoted.verified, ...companions.verified] }) : { reply, applied: [], flagged: [] };
         reply = facts.reply;
         // Fix it, don't flag it (plan item 1, Nov 22): what the checks found
         // and could not swap word for word goes to a repair pass, which fixes
@@ -1007,7 +1011,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
             }),
         ];
         const askRepair = problems.length ? factCheckCall(attribution, { schema: LESSON_REPAIR_SCHEMA, feature: 'lesson-planner-repair', timeoutMs: 35_000, maxTokens: 6_000 }) : undefined;
-        const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: quoted.verified }) : { reply, repaired: [], left: problems };
+        const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: [...quoted.verified, ...companions.verified] }) : { reply, repaired: [], left: problems };
         let requoted: Awaited<ReturnType<typeof withQuotationCheck>> | null = null;
         if (repair.repaired.length) {
           // A repair may quote: it is checked against the work like the rest.
@@ -1031,10 +1035,12 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // how to fix it (Kevin, Nov 23). A text that could not be had in time
         // checked nothing, and says so.
         const finalCheck = requoted ?? quoted;
+        // A companion's lines were found in the companion: not "not found" in the work.
+        const inCompanion = (quote: string) => companions.verified.some((line) => line.includes(quote.trim()) || quote.includes(line.trim()));
         reply = withQuotationsLabel(reply, checkedSource ? against : against.kind === 'registered' ? { kind: 'unavailable', work: against.work } : { kind: 'none' }, {
           verified: finalCheck.verified.length,
           corrected: quoted.corrections.length + (requoted?.corrections.length ?? 0),
-          unverified: finalCheck.unverified.length,
+          unverified: finalCheck.unverified.filter((miss) => !inCompanion(miss.quote)).length,
         });
         // Counts only, never the lesson: in the log, and to the client, which
         // shows nothing of it (it lets a test see the checks ran).
@@ -1049,6 +1055,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
           factsFlagged: facts.flagged.length,
           repaired: repair.repaired.length,
           excerptsFromSource: excerpts.rewritten,
+          companions: companions.used.map((companion) => companion.id).join(',') || 'none',
+          companionVerified: companions.verified.length,
+          companionCorrected: companions.corrected,
           leftForTeacher: repair.left.length + stillMisplaced.length,
           ms: Date.now() - checkedAt,
         };

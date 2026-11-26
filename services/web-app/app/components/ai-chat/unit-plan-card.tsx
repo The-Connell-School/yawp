@@ -20,6 +20,7 @@ import {
   Presentation,
   ScanSearch,
   Sunrise,
+  Target,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -101,6 +102,15 @@ export function UnitPlanCard({
         </div>
       </div>
 
+      {unit.builtFor ? (
+        // What the unit is for, said once at the top (I4, Nov 26).
+        <p data-testid="unit-built-for" className="flex items-start gap-2 border-b border-primary/20 bg-primary/[0.03] px-4 py-2 text-xs">
+          <Target size={13} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+          <span>
+            <span className="font-medium">Built for:</span> {unit.builtFor}
+          </span>
+        </p>
+      ) : null}
       <ol className="divide-y divide-primary/15">
         {unit.days.map((day) => (
           <li

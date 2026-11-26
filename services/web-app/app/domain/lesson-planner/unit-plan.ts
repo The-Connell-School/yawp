@@ -93,6 +93,12 @@ const unitPlanSchema = z
      * lessons that happen to be adjacent.
      */
     endsWith: cell.optional(),
+    /**
+     * What the unit is for, in one line (Kevin, Nov 26: "if they got one thing
+     * out of this what would it be"): the one thing, what students do most,
+     * the companion texts. Shown on the board and carried into every day.
+     */
+    builtFor: cell.optional(),
     days: z.array(daySchema).min(1).max(MAX_DAYS),
   })
   .strip();
@@ -129,6 +135,8 @@ const DAY_ALIASES: Record<string, keyof UnitPlanDay> = {
 
 const UNIT_ALIASES: Record<string, string> = {
   name: 'title',
+  purpose: 'builtFor',
+  goal: 'builtFor',
   finalAssignment: 'endsWith',
   summative: 'endsWith',
   endsIn: 'endsWith',
@@ -310,6 +318,8 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
   if (day.reading) lines.push(`Reading: ${day.reading}`);
   if (day.starter) lines.push(`Class starter: "${day.starter.replace(/^[“"']+|[”"']+$/g, '')}"`);
   if (day.minutes) lines.push(`I have ${day.minutes} minutes.`);
+  // What the unit is for travels with every day, so a day is never asked again (I3).
+  if (unit.builtFor) lines.push(`The unit is built for: ${unit.builtFor}`);
   lines.push(
     `Keep it inside the arc of the unit: this day comes after day ${day.day - 1} and has to set up what follows.`
   );

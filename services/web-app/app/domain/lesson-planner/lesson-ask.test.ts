@@ -1,17 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  ASK_FENCE,
-  asksWorthShowing,
-  composeAskReply,
-  LESSON_ACTIVITIES,
-  LESSON_MINUTES_MAX,
-  LESSON_MINUTES_MIN,
-  LESSON_MINUTES_STEP,
-  PLANNER_PICKS_ACTIVITIES,
-  readLessonAsks,
-  type LessonAsk,
-  composeIntakeReply,
-} from './lesson-ask';
+import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, asksWorthShowing, composeAskReply, composeIntakeReply, readLessonAsks, type LessonAsk } from './lesson-ask';
 
 function fenced(body: string): string {
   return `\`\`\`${ASK_FENCE}\n${body}\n\`\`\``;
@@ -381,6 +369,57 @@ describe('a unit asks about each class period (Kevin, Oct 25, note 1)', () => {
     const { composeIntakeReply } = await import('./lesson-ask');
     expect(composeIntakeReply({ classes: [{ title: 'English 10', minutes: 60 }], choice: null, activityIds: [], severalDays: true })).toContain(
       'For English 10, 60 minutes each class period.'
+    );
+  });
+});
+
+describe('what the lesson is for (Kevin, Nov 26)', () => {
+  const reply = [
+    'A few quick choices before I build the unit.',
+    '```yawp-ask',
+    'goal: Make and defend a claim about when the law should be defied',
+    'goal: Read a Greek tragedy aloud and follow who is speaking',
+    'balance',
+    'leads',
+    'companion: “If We Must Die” — Claude McKay, poem, 1919: justice',
+    'companion: “Invictus” — William Ernest Henley, poem, 1888: free will',
+    '```',
+  ].join('\n');
+
+  test('the planner’s candidates and the bare questions are read as their own steps', () => {
+    const { asks, body } = readLessonAsks(reply);
+    expect(body).toBe('A few quick choices before I build the unit.');
+    expect(asks).toEqual([
+      { kind: 'goal', options: ['Make and defend a claim about when the law should be defied', 'Read a Greek tragedy aloud and follow who is speaking'] },
+      { kind: 'balance' },
+      { kind: 'leads' },
+      { kind: 'companion', options: ['“If We Must Die” — Claude McKay, poem, 1919: justice', '“Invictus” — William Ernest Henley, poem, 1888: free will'] },
+    ]);
+  });
+
+  test('asked on the first reply when the subject is named, never under a written plan', () => {
+    const { asks } = readLessonAsks(reply);
+    expect(asksWorthShowing(asks, { topicSettled: false }).map((ask) => ask.kind)).toEqual(['goal', 'balance', 'leads', 'companion']);
+    expect(asksWorthShowing(asks, { topicSettled: true, planAlreadyWritten: true })).toEqual([]);
+  });
+
+  test('the answers in the teacher’s voice', () => {
+    expect(
+      composeIntakeReply({
+        classes: [{ title: 'English 10', minutes: 50 }],
+        choice: null,
+        activityIds: [],
+        severalDays: true,
+        goal: 'Make and defend a claim about when the law should be defied',
+        balance: 'writing',
+        leads: 'essay',
+        companion: '“If We Must Die” — Claude McKay, poem, 1919: justice',
+      })
+    ).toBe(
+      'For English 10, 50 minutes each class period. If they leave with one thing: Make and defend a claim about when the law should be defied. Lean it toward writing. It leads to an essay. Pair it with “If We Must Die” — Claude McKay, poem, 1919: justice.'
+    );
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], companion: NO_COMPANION, justBuild: true })).toBe(
+      'No companion text. Just build it: choose the rest yourself and say in one line what you assumed.'
     );
   });
 });

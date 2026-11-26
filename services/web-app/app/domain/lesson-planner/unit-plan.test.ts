@@ -286,3 +286,11 @@ describe('buildUnitContext', () => {
     expect(buildUnitContext(unit, 9)).toBeNull();
   });
 });
+
+test('a unit says what it is built for, and every day built from it carries it (Nov 26)', () => {
+  const outcome = readUnitPlan('```yawp-unit\n' + JSON.stringify({ title: 'Antigone', purpose: 'Leave with: a claim about when the law should be defied · mostly writing', days: [{ day: 1, title: 'Thebes', objective: 'o', students: 's' }] }) + '\n```');
+  expect(outcome.kind).toBe('unit');
+  if (outcome.kind !== 'unit') return;
+  expect(outcome.unit.builtFor).toBe('Leave with: a claim about when the law should be defied · mostly writing');
+  expect(buildDayRequest(outcome.unit, outcome.unit.days[0]!)).toContain('The unit is built for: Leave with: a claim about when the law should be defied');
+});

@@ -56,6 +56,7 @@ export const PLANNING_PROGRESS_LABELS: Record<string, string> = {
   get_class_grade_report: 'Reading how the class scored',
   find_students_needing_attention: 'Finding who needs the most help',
   search_daily_pages_prompts: 'Searching Class Starter prompts',
+  search_companion_texts: 'Finding companion texts',
   search_short_form_prompts: 'Searching Short Response prompts',
   list_writing_lessons: 'Looking through Quick Writing Lessons',
   get_writing_lesson: 'Reading a Quick Writing Lesson',

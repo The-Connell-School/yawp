@@ -100,7 +100,42 @@ export type LessonAsk =
    * Intake v2 (A3): how to fill the time, as one single choice whose options
    * are the planner's own, written for this lesson's content.
    */
-  | { kind: 'choose'; options: string[] };
+  | { kind: 'choose'; options: string[] }
+  /**
+   * What the lesson or unit is for (Kevin, Nov 26: "if they got one thing out
+   * of this what would it be"): the planner's own candidates for this text, as
+   * one choice, plus the teacher's own words.
+   */
+  | { kind: 'goal'; options: string[] }
+  /** What students should do most: write, discuss, read closely, or a mix. */
+  | { kind: 'balance' }
+  /** Where a unit leads: an essay, a seminar, a project, a test, or nothing yet. */
+  | { kind: 'leads' }
+  /** A companion text from Yawp!'s vetted list, or none, or the planner's choice. */
+  | { kind: 'companion'; options: string[] };
+
+/** What students should do most (when the teacher doesn't say, the default arc stands). */
+export const LESSON_BALANCES = [
+  { id: 'writing', label: 'Writing', says: 'Lean it toward writing.' },
+  { id: 'discussion', label: 'Discussion', says: 'Lean it toward discussion.' },
+  { id: 'reading', label: 'Close reading', says: 'Lean it toward close reading.' },
+  { id: 'mix', label: 'A mix: you decide', says: 'You decide the balance of reading, writing and discussion.' },
+] as const;
+
+/** Where a unit can lead. */
+export const UNIT_ENDINGS = [
+  { id: 'essay', label: 'An essay', says: 'It leads to an essay.' },
+  { id: 'seminar', label: 'A Socratic seminar', says: 'It leads to a Socratic seminar.' },
+  { id: 'project', label: 'A project or presentation', says: 'It leads to a project or presentation.' },
+  { id: 'test', label: 'A test', says: 'It leads to a test.' },
+  { id: 'open', label: 'Nothing yet', says: "It doesn't lead to anything set yet." },
+] as const;
+
+const PURPOSE_KINDS = new Set<LessonAsk['kind']>(['goal', 'balance', 'leads', 'companion']);
+
+/** The companion answers that are not a text. */
+export const NO_COMPANION = '__no-companion__';
+export const PLANNER_PICKS_COMPANION = '__planner-picks-companion__';
 
 /** Long enough for a real option, short enough to read on a radio row. */
 const MAX_CHOOSE_OPTION_CHARS = 140;
@@ -133,20 +168,19 @@ export function readLessonAsks(content: string): {
     for (const line of (match[1] ?? '').split('\n')) {
       const [rawKind, rawValue] = line.split(':');
       const kind = rawKind?.trim().toLowerCase();
-      if (kind === 'choose') {
+      if (kind === 'choose' || kind === 'goal' || kind === 'companion') {
         // Many lines, one question: every option joins the same ask.
         const option = line
           .slice(line.indexOf(':') + 1)
           .trim()
           .slice(0, MAX_CHOOSE_OPTION_CHARS);
         if (!option) continue;
-        let choose = asks.find(
-          (ask): ask is Extract<LessonAsk, { kind: 'choose' }> =>
-            ask.kind === 'choose'
-        );
+        type Listed = Extract<LessonAsk, { kind: 'choose' | 'goal' | 'companion' }>;
+        let choose: Listed | undefined = asks.find((ask): ask is Listed => ask.kind === kind);
         if (!choose) {
-          choose = { kind: 'choose', options: [] };
-          asks.push(choose);
+          const made: Listed = { kind, options: [] };
+          asks.push(made);
+          choose = made;
         }
         if (
           choose.options.length < MAX_CHOOSE_OPTIONS &&
@@ -173,6 +207,9 @@ export function readLessonAsks(content: string): {
         seen.add(kind);
       } else if (kind === 'activities') {
         asks.push({ kind: 'activities' });
+        seen.add(kind);
+      } else if (kind === 'balance' || kind === 'leads') {
+        asks.push({ kind });
         seen.add(kind);
       }
       // Anything else is a control we do not have. Skipping it quietly beats
@@ -221,10 +258,14 @@ export function asksWorthShowing(
   // How to fill the time is as tied to the moment as the clock is: it needs a
   // subject, and a written plan has already answered it. Which class it is for
   // can be asked on the opening turn, but never under a plan.
+  // What the work is for is asked only once its subject is named, so it may
+  // come on the first reply ("Plan an 8-day unit on…", Nov 26); a written plan
+  // has already answered it.
   return asks.filter(
     (ask) =>
       ask.kind !== 'minutes' &&
       ask.kind !== 'choose' &&
+      !(PURPOSE_KINDS.has(ask.kind) && planAlreadyWritten) &&
       !(ask.kind === 'classes' && planAlreadyWritten)
   );
 }
@@ -286,6 +327,11 @@ export function composeIntakeReply({
   activityIds,
   sameLesson = true,
   severalDays = false,
+  goal = null,
+  balance = null,
+  leads = null,
+  companion = null,
+  justBuild = false,
 }: {
   /** Checked classes, or the one typed by hand; minutes null when not asked. */
   classes: Array<{ title: string; minutes: number | null }>;
@@ -295,6 +341,16 @@ export function composeIntakeReply({
   sameLesson?: boolean;
   /** A unit: the minutes are each class period's (note 1). */
   severalDays?: boolean;
+  /** The one thing students should leave with (Nov 26). */
+  goal?: string | null;
+  /** An id from LESSON_BALANCES. */
+  balance?: string | null;
+  /** An id from UNIT_ENDINGS. */
+  leads?: string | null;
+  /** A companion's own words, NO_COMPANION or PLANNER_PICKS_COMPANION. */
+  companion?: string | null;
+  /** "Just build": what is unanswered is the planner's to choose. */
+  justBuild?: boolean;
 }): string {
   const parts: string[] = classes.map((klass) =>
     klass.minutes === null
@@ -313,6 +369,16 @@ export function composeIntakeReply({
   if (chosen) parts.push(isFinished(chosen) ? chosen : `${chosen}.`);
   const activities = composeAskReply({ minutes: null, activityIds });
   if (activities) parts.push(activities);
+  const one = goal?.trim();
+  if (one) parts.push(`If they leave with one thing: ${isFinished(one) ? one : `${one}.`}`);
+  const leaning = LESSON_BALANCES.find((option) => option.id === balance);
+  if (leaning) parts.push(leaning.says);
+  const ending = UNIT_ENDINGS.find((option) => option.id === leads);
+  if (ending) parts.push(ending.says);
+  if (companion === NO_COMPANION) parts.push('No companion text.');
+  else if (companion === PLANNER_PICKS_COMPANION) parts.push('You choose a companion text.');
+  else if (companion?.trim()) parts.push(`Pair it with ${companion.trim().replace(/[.!?]$/, '')}.`);
+  if (justBuild) parts.push('Just build it: choose the rest yourself and say in one line what you assumed.');
   return parts.join(' ');
 }
 

@@ -20,16 +20,25 @@
 import { useState } from 'react';
 import { Button } from '~/components/ui/button';
 import {
+  BookOpen,
   ChevronRight,
   Clock,
+  Flag,
+  Hammer,
   ListChecks,
+  Scale,
   Send,
   Shapes,
+  Target,
   Users,
 } from 'lucide-react';
 import {
   composeIntakeReply,
   LESSON_ACTIVITIES,
+  LESSON_BALANCES,
+  NO_COMPANION,
+  PLANNER_PICKS_COMPANION,
+  UNIT_ENDINGS,
   LESSON_MINUTES_MAX,
   LESSON_MINUTES_MIN,
   LESSON_MINUTES_STEP,
@@ -45,7 +54,7 @@ export type IntakeClass = {
   periodMinutes: number | null;
 };
 
-type Step = 'classes' | 'minutes' | 'choose' | 'activities';
+type Step = 'classes' | 'minutes' | 'goal' | 'balance' | 'choose' | 'leads' | 'companion' | 'activities';
 
 /** Where an untouched slider's thumb rests. Never sent: it is not a value. */
 const UNSET_THUMB = Math.round((LESSON_MINUTES_MIN + LESSON_MINUTES_MAX) / 2);
@@ -81,6 +90,12 @@ export function LessonIntakeCard({
       ask.kind === 'choose'
   );
   const asksActivities = asks.some((ask) => ask.kind === 'activities');
+  // What the lesson is for (Kevin, Nov 26): each optional, and "Just build" skips them all.
+  const goalAsk = asks.find((ask): ask is Extract<LessonAsk, { kind: 'goal' }> => ask.kind === 'goal');
+  const asksBalance = asks.some((ask) => ask.kind === 'balance');
+  const asksLeads = asks.some((ask) => ask.kind === 'leads');
+  const companionAsk = asks.find((ask): ask is Extract<LessonAsk, { kind: 'companion' }> => ask.kind === 'companion');
+  const asksPurpose = Boolean(goalAsk || asksBalance || asksLeads || companionAsk);
 
   const onlyClass =
     asksClasses && teacherClasses.length === 1 ? teacherClasses[0] : null;
@@ -98,11 +113,20 @@ export function LessonIntakeCard({
   const [sameLesson, setSameLesson] = useState(true);
   const [otherText, setOtherText] = useState('');
   const [activityIds, setActivityIds] = useState<string[]>([]);
+  const [goal, setGoal] = useState<string | null>(null);
+  const [goalText, setGoalText] = useState('');
+  const [balance, setBalance] = useState<string | null>(null);
+  const [leads, setLeads] = useState<string | null>(null);
+  const [companion, setCompanion] = useState<string | null>(null);
 
   const steps = [
     asksClasses ? 'classes' : null,
     asksMinutes ? 'minutes' : null,
+    goalAsk ? 'goal' : null,
+    asksBalance ? 'balance' : null,
     chooseAsk ? 'choose' : null,
+    asksLeads ? 'leads' : null,
+    companionAsk ? 'companion' : null,
     asksActivities ? 'activities' : null,
   ].filter(Boolean) as Step[];
   const [reached, setReached] = useState(0);
@@ -133,6 +157,11 @@ export function LessonIntakeCard({
       choice !== null &&
       (choice !== SOMETHING_ELSE || otherText.trim().length > 0),
     activities: true,
+    // What it is for may be left to the planner, except an empty "my own words".
+    goal: goal !== SOMETHING_ELSE || goalText.trim().length > 0,
+    balance: true,
+    leads: true,
+    companion: true,
   };
   const ready = steps.every((step) => answered[step]);
 
@@ -147,19 +176,27 @@ export function LessonIntakeCard({
   // A length with no class to hang it on reads as the length alone.
   const looseMinutes =
     !asksClasses && asksMinutes ? lengthFor(NO_CLASS) : null;
-  const message = [
-    looseMinutes !== null ? `${looseMinutes} minutes${severalDays ? ' each class period' : ''}.` : null,
-    composeIntakeReply({
-      severalDays,
-      classes: classLines,
-      choice: finalChoice,
-      activityIds,
-      sameLesson,
-    }),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
+  const finalGoal = goal === SOMETHING_ELSE ? goalText.trim() || null : goal;
+  const compose = (justBuild: boolean) =>
+    [
+      looseMinutes !== null ? `${looseMinutes} minutes${severalDays ? ' each class period' : ''}.` : null,
+      composeIntakeReply({
+        severalDays,
+        classes: classLines,
+        choice: finalChoice,
+        activityIds,
+        sameLesson,
+        goal: finalGoal,
+        balance,
+        leads,
+        companion,
+        justBuild,
+      }),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  const message = compose(false);
 
   function toggleActivity(id: string) {
     setActivityIds((prev) => {
@@ -169,7 +206,7 @@ export function LessonIntakeCard({
     });
   }
 
-  function send() {
+  function send(justBuild = false) {
     // Each length the teacher set is real now, so the next lesson for that
     // class starts there. Fire and forget: the lesson matters more.
     if (asksMinutes) {
@@ -187,8 +224,36 @@ export function LessonIntakeCard({
         }).catch(() => undefined);
       }
     }
-    onSend(message);
+    onSend(justBuild ? compose(true) : message);
   }
+
+  /** One row of single-choice chips, for the purpose steps. */
+  const chips = (name: string, options: Array<{ id: string; label: string }>, value: string | null, set: (id: string) => void) => (
+    <div role="radiogroup" className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const on = value === option.id;
+        return (
+          <label
+            key={option.id}
+            className={cn(
+              'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition focus-within:ring-2 focus-within:ring-primary',
+              on ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border hover:bg-foreground/[0.03]'
+            )}
+          >
+            <input type="radio" name={name} checked={on} disabled={disabled} onChange={() => set(option.id)} className="sr-only" />
+            {option.label}
+          </label>
+        );
+      })}
+    </div>
+  );
+  const stepHead = (Icon: typeof Target, text: string, optional = true) => (
+    <div className="mb-2.5 flex items-center gap-2">
+      <Icon size={15} className="shrink-0 text-primary" />
+      <span className="text-sm font-medium">{text}</span>
+      {optional ? <span className="ml-auto text-xs text-muted-foreground">Optional</span> : null}
+    </div>
+  );
 
   return (
     <div
@@ -362,6 +427,48 @@ export function LessonIntakeCard({
         </div>
       ) : null}
 
+      {showing('goal') && goalAsk ? (
+        <fieldset data-testid="intake-goal" className="border-b border-primary/15 px-4 py-3.5">
+          <legend className="sr-only">If they leave with one thing, what is it?</legend>
+          {stepHead(Target, 'If they leave with one thing, what is it?')}
+          <div className="flex flex-col gap-1.5">
+            {[...goalAsk.options, SOMETHING_ELSE].map((option) => {
+              const on = goal === option;
+              return (
+                <label
+                  key={option}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition focus-within:ring-2 focus-within:ring-primary',
+                    on ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border hover:bg-foreground/[0.03]'
+                  )}
+                >
+                  <input type="radio" name="intake-goal" checked={on} disabled={disabled} onChange={() => setGoal(option)} className="h-4 w-4 accent-primary" />
+                  {option === SOMETHING_ELSE ? 'In my own words' : option}
+                </label>
+              );
+            })}
+            {goal === SOMETHING_ELSE ? (
+              <input
+                aria-label="The one thing, in your words"
+                autoFocus
+                value={goalText}
+                disabled={disabled}
+                onChange={(event) => setGoalText(event.target.value)}
+                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              />
+            ) : null}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {showing('balance') ? (
+        <fieldset data-testid="intake-balance" className="border-b border-primary/15 px-4 py-3.5">
+          <legend className="sr-only">What should they do most?</legend>
+          {stepHead(Scale, 'What should they do most?')}
+          {chips('intake-balance', [...LESSON_BALANCES], balance, setBalance)}
+        </fieldset>
+      ) : null}
+
       {showing('choose') && chooseAsk ? (
         <fieldset className="border-b border-primary/15 px-4 py-3.5">
           <legend className="sr-only">How do you want to fill the time?</legend>
@@ -406,6 +513,38 @@ export function LessonIntakeCard({
                 className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm"
               />
             ) : null}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {showing('leads') ? (
+        <fieldset data-testid="intake-leads" className="border-b border-primary/15 px-4 py-3.5">
+          <legend className="sr-only">Where does it lead?</legend>
+          {stepHead(Flag, 'Where does it lead?')}
+          {chips('intake-leads', [...UNIT_ENDINGS], leads, setLeads)}
+        </fieldset>
+      ) : null}
+
+      {showing('companion') && companionAsk ? (
+        <fieldset data-testid="intake-companion" className="border-b border-primary/15 px-4 py-3.5">
+          <legend className="sr-only">A companion text?</legend>
+          {stepHead(BookOpen, 'A companion text?')}
+          <div className="flex flex-col gap-1.5">
+            {[...companionAsk.options, PLANNER_PICKS_COMPANION, NO_COMPANION].map((option) => {
+              const on = companion === option;
+              return (
+                <label
+                  key={option}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition focus-within:ring-2 focus-within:ring-primary',
+                    on ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border hover:bg-foreground/[0.03]'
+                  )}
+                >
+                  <input type="radio" name="intake-companion" checked={on} disabled={disabled} onChange={() => setCompanion(option)} className="h-4 w-4 accent-primary" />
+                  {option === PLANNER_PICKS_COMPANION ? 'You choose' : option === NO_COMPANION ? 'No companion text' : option}
+                </label>
+              );
+            })}
           </div>
         </fieldset>
       ) : null}
@@ -462,6 +601,20 @@ export function LessonIntakeCard({
         >
           {message || 'Answer each question to send.'}
         </p>
+        {asksPurpose ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline-primary"
+            className="shrink-0"
+            data-testid="lesson-ask-just-build"
+            disabled={disabled}
+            onClick={() => send(true)}
+          >
+            <Hammer size={13} />
+            Just build
+          </Button>
+        ) : null}
         {onLastStep ? (
           <Button
             type="button"
@@ -469,7 +622,7 @@ export function LessonIntakeCard({
             className="shrink-0"
             data-testid="lesson-ask-send"
             disabled={disabled || !ready || !message}
-            onClick={send}
+            onClick={() => send()}
           >
             <Send size={13} />
             Send
