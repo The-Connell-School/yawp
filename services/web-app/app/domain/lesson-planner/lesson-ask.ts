@@ -395,3 +395,23 @@ const SEVERAL_DAYS = new RegExp(
 export function plansSeveralDays(request: string | null | undefined): boolean {
   return Boolean(request && SEVERAL_DAYS.test(request));
 }
+
+/**
+ * Whether the request already says what the work is for (Kevin, Nov 26): a
+ * goal, a focus, what students should leave with. Then nothing is asked.
+ */
+const PURPOSE_SAID = /\b(?:goal|objective|so that|focus(?:ed|ing)? on|i want (?:them|students|my students|kids) to|students (?:should|will|need to)|leave (?:with|able)|by the end|the point is|emphasi[sz]e|centered on|built around|just build)\b/i;
+const PAIRING = /\b(?:pair(?:s|ed|ing)?|companion|alongside (?:a|another)|with a poem|paired text)\b/i;
+
+/**
+ * What this turn should ask before it builds (Nov 26: the planner, told to
+ * ask, wrote the Antigone map and its own "built for" instead). Only on a
+ * request that opens the work: a unit, or a lesson asking for a pairing,
+ * whose purpose is not already said.
+ */
+export function purposeToAsk(request: string, { firstTurn }: { firstTurn: boolean }): { unit: boolean; companion: boolean } | null {
+  if (!firstTurn || PURPOSE_SAID.test(request)) return null;
+  const unit = plansSeveralDays(request);
+  const companion = PAIRING.test(request);
+  return unit || companion ? { unit, companion } : null;
+}

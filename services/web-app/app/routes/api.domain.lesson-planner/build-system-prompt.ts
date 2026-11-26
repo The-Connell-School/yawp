@@ -102,6 +102,15 @@ function buildStackContentsSection(entries: StackContentsEntry[]): string[] {
  * message that scrolls out of history on a long lesson; this line keeps it in
  * front of the planner on every turn.
  */
+/** This turn asks what the work is for before it builds (Nov 26). */
+function buildAskPurposeSection(ask: { unit: boolean; companion: boolean } | null): string[] {
+  if (!ask) return [];
+  return [
+    '',
+    `THIS TURN: the teacher asked for ${ask.unit ? 'a unit' : 'a lesson with a companion text'} and has not said what it is for. Do not write the ${ask.unit ? 'unit map' : 'lesson'} yet. Call search_companion_texts (the work and its thematic topics), then reply with one short line and the \`yawp-ask\` card: \`goal:\` (two or three candidates for this text), \`balance\`${ask.unit ? ', `leads` (unless the request says how it ends)' : ''}, and \`companion:\` (two or three of what the search returned), plus \`classes\` and \`minutes\` only if they are not known. Nothing else: no map, no plan, no suggestions block. The teacher can tap "Just build" to skip.`,
+  ];
+}
+
 function buildLessonLengthSection(
   length: { minutes: number; classLabel: string | null } | null
 ): string[] {
@@ -1117,6 +1126,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   writingPracticeAvailable = false,
   intakeV2 = false,
   lessonLength = null,
+  askPurpose = null,
   template = null,
   deckGallery = false,
   deckKitV4 = false,
@@ -1152,6 +1162,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   intakeV2?: boolean;
   /** How long this lesson is, once the teacher has said (Brian's run 2, B1). */
   lessonLength?: { minutes: number; classLabel: string | null } | null;
+  /** Ask what the work is for before building it (Nov 26). */
+  askPurpose?: { unit: boolean; companion: boolean } | null;
   /** The teacher's template this lesson is built from (run 3). */
   template?: LessonTemplate | null;
   /** The gallery deck (Lesson Deck Kit): its templates, rhythm and art. */
@@ -1172,6 +1184,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
   const tail = [
+    ...buildAskPurposeSection(askPurpose),
     ...buildLessonLengthSection(lessonLength),
     ...buildInventorySection(lessonInventory),
     ...buildStackContentsSection(stackContents),

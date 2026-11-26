@@ -21,6 +21,8 @@ const PROCESS_TALK = [
   /\bis in the public domain, so (?:I|all|every|the|its|it|we)\b/i,
   /\bis in the public domain\b[^.!?]*\bso\b/i,
   /\bI['’]m using\b.*\b(?:translation|edition|text)\b/i,
+  // Nov 26: "I've used F. Storr's 1912 translation throughout (public domain), so…"
+  /\bI['’]ve used\b.*\b(?:translation|edition|text)\b/i,
   /^(?:Now|And now|Next),? (?:for|here['’]s|here is) the (?:deck|handout|slides|slide deck|materials?)\b/i,
   /^(?:Now )?(?:let me|I['’]ll now|I will now|now I['’]ll)\s+(?:build|write|draft|put|make|create|pull|search|look)\b/i,
   /\b(?:nothing|no lessons?|no decks?) in the (?:Teacher['’]s )?Lounge (?:covers|matches|fits)\b/i,

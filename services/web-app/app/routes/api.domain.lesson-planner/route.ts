@@ -1,3 +1,4 @@
+import { purposeToAsk } from '~/domain/lesson-planner/lesson-ask';
 import { monthlyFreeTierPolicy } from '~/domain/free-tier/monthly-policy.server';
 import { applyDeckChoice, fileUploadedDeck, keptDeckBlock, withKeptDeck } from '~/domain/lesson-planner/uploaded-deck.server';
 import { lessonPlannerMonthlyQuotaEnforced } from '~/domain/free-tier/monthly-quota-cap.server';
@@ -750,9 +751,12 @@ async function turnAction({ request }: ActionFunctionArgs) {
         )
       : [];
 
+    // A unit, or a paired lesson, asks what it is for before it is built (Nov 26).
+    const askPurpose = intakeV2 && !dayTarget ? purposeToAsk(turn.message, { firstTurn: priorMessages.length === 0 }) : null;
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
       lessonLength,
+      askPurpose,
       organizationName: access.membership.organization.name,
       lessonInventory: conversation?.materials ?? [],
       stackContents,

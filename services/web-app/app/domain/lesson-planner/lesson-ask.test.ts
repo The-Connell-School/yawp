@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, asksWorthShowing, composeAskReply, composeIntakeReply, readLessonAsks, type LessonAsk } from './lesson-ask';
+import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, asksWorthShowing, composeAskReply, composeIntakeReply, purposeToAsk, readLessonAsks, type LessonAsk } from './lesson-ask';
 
 function fenced(body: string): string {
   return `\`\`\`${ASK_FENCE}\n${body}\n\`\`\``;
@@ -421,5 +421,19 @@ describe('what the lesson is for (Kevin, Nov 26)', () => {
     expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], companion: NO_COMPANION, justBuild: true })).toBe(
       'No companion text. Just build it: choose the rest yourself and say in one line what you assumed.'
     );
+  });
+});
+
+describe('when to ask what the work is for (Nov 26: the Antigone unit was built without asking)', () => {
+  test('a unit, or a pairing, whose purpose is not said: asked, on its first turn only', () => {
+    expect(purposeToAsk("Plan a 6-day unit on Sophocles' Antigone for 10th grade, 50-minute periods.", { firstTurn: true })).toEqual({ unit: true, companion: false });
+    expect(purposeToAsk('Plan a 50-minute lesson pairing Macbeth Act 5, scene 5 with a poem on the same topic.', { firstTurn: true })).toEqual({ unit: false, companion: true });
+    expect(purposeToAsk("Plan a 6-day unit on Antigone.", { firstTurn: false })).toBeNull();
+  });
+
+  test('not when the request already says what it is for, and never for an ordinary lesson', () => {
+    expect(purposeToAsk('Plan a 6-day unit on Antigone so that students can write a thesis about civil disobedience.', { firstTurn: true })).toBeNull();
+    expect(purposeToAsk('Plan a unit on Gatsby. I want them to leave able to write a theme statement.', { firstTurn: true })).toBeNull();
+    expect(purposeToAsk('Plan a 50-minute lesson on Macbeth Act 1, scene 3.', { firstTurn: true })).toBeNull();
   });
 });
