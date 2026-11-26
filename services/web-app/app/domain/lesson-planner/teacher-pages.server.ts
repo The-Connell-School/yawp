@@ -188,3 +188,14 @@ function withLineAtEnd(reply: string, line: string): string {
 
 /** For tests. */
 export const quotedPassagesIn = quotedPassages;
+
+/**
+ * The companion poems a lesson quotes, checked against Yawp!'s copies of
+ * their first printings (Nov 26), said under "Check before class" like the
+ * work's own quotations. A reply with none is left alone.
+ */
+export function withCompanionsLabel(reply: string, companions: Array<{ title: string; year: number }>): string {
+  if (!companions.length) return reply;
+  const names = companions.map((companion) => `*${companion.title.replace(/[“”]/g, '')}* (${companion.year})`).join(' and ');
+  return withLineInCheckNote(reply, `${names}: printed and checked against Yawp!’s copy of the first printing.`);
+}

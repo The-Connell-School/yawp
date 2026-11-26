@@ -3,7 +3,7 @@
  * Antigone unit reply was a wall of text before its map).
  */
 import { describe, expect, test } from 'bun:test';
-import { withoutProcessTalk, withStartersOnDays, withUnitMapFirst } from './reply-shape';
+import { withoutProcessTalk, withoutRepeatedPurpose, withStartersOnDays, withUnitMapFirst } from './reply-shape';
 import { readUnitPlan } from './unit-plan';
 
 const MAP = '```yawp-unit\n{"title":"When the Law Is Wrong","days":[]}\n```';
@@ -109,5 +109,24 @@ describe('the Chronicle unit reply, Nov 25', () => {
     expect(out).not.toContain('---');
     expect(out.startsWith('Here’s the full eight-day map:\n\n```yawp-unit')).toBe(true);
     expect(out.trimEnd().endsWith('1. Does this cover what you want?')).toBe(true);
+  });
+});
+
+describe('the intake and unit replies, Nov 26', () => {
+  test('narration about the decks goes', () => {
+    expect(withoutProcessTalk('Good — both decks are solid and I can place them precisely. Here’s the unit map.')).toBe('Here’s the unit map.');
+  });
+
+  test('a unit says what it is built for once, on the board', () => {
+    const map = '```yawp-unit\n{"title":"Gatsby","builtFor":"Leave with: a thesis","days":[{"day":1,"title":"t","objective":"o","students":"s"}]}\n```';
+    const out = withoutRepeatedPurpose(['Here’s the map.', map, '*Built for: a thesis · mostly writing*', '**Before you build:**\n\n1. Does this work?'].join('\n\n'));
+    expect(out).not.toContain('*Built for:');
+    expect(out).toContain('"builtFor"');
+    expect(out).toContain('**Before you build:**');
+  });
+
+  test('a card’s lead-in never ends on an empty heading', () => {
+    const out = withoutRepeatedPurpose("Here's what I'd like to know before building the map. One short card:\n**Before you build:**\n\n```yawp-ask\nbalance\n```");
+    expect(out.startsWith("Here's what I'd like to know before building the map.\n\n```yawp-ask")).toBe(true);
   });
 });

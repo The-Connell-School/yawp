@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { checkQuotations } from './quotation-check.server';
 import type { RegisteredWork } from './source-texts-data';
-import { chooseCheckedAgainst, lessonQuotes, quotedPassagesIn, teacherPages, withQuotationsLabel, workNamedOnSlides } from './teacher-pages.server';
+import { chooseCheckedAgainst, lessonQuotes, quotedPassagesIn, teacherPages, withCompanionsLabel, withQuotationsLabel, workNamedOnSlides } from './teacher-pages.server';
 
 const PAGES = `Ships at a distance have every man's wish on board. For some they come in with the tide. For others they sail forever on the horizon, never out of sight, never landing until the Watcher turns his eyes away in resignation, his dreams mocked to death by Time. That is the life of men.
 
@@ -147,4 +147,12 @@ describe('what the quotations were checked against, on every lesson that quotes'
     const grammar = `# Semicolons\n\nCompare: "I wanted to go to the game; my brother wanted to stay home and sleep."\n\n${deckWith([{ layout: 'title', title: 'Semicolons', speakerNotes: 'n' }, { layout: 'big_idea', title: 'Two sentences', body: 'Join two complete sentences.', speakerNotes: 'n' }])}`;
     expect(withQuotationsLabel(grammar, { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 })).toBe(grammar);
   });
+});
+
+test('a companion poem the lesson quotes is said to be checked, beside the work’s own line (Nov 26)', () => {
+  const reply = `# Candle\n\n${EXCERPT_DECK}\n\n**Check before class:**\n- A date.\n\nWant changes?`;
+  const out = withQuotationsLabel(withCompanionsLabel(reply, [{ title: '“Out, Out—”', year: 1916 }]), { kind: 'none' }, { verified: 0, corrected: 0, unverified: 0 });
+  expect(out).toContain('- *Out, Out—* (1916): printed and checked against Yawp!’s copy of the first printing.');
+  expect(out).toContain('Quotations not checked');
+  expect(withCompanionsLabel(reply, [])).toBe(reply);
 });

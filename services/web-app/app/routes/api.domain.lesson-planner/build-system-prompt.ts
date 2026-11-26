@@ -107,7 +107,7 @@ function buildAskPurposeSection(ask: { unit: boolean; companion: boolean } | nul
   if (!ask) return [];
   return [
     '',
-    `THIS TURN: the teacher asked for ${ask.unit ? 'a unit' : 'a lesson with a companion text'} and has not said what it is for. Do not write the ${ask.unit ? 'unit map' : 'lesson'} yet. Call search_companion_texts (the work and its thematic topics), then reply with one short line and the \`yawp-ask\` card: \`goal:\` (two or three candidates for this text), \`balance\`${ask.unit ? ', `leads` (unless the request says how it ends)' : ''}, and \`companion:\` (two or three of what the search returned), plus \`classes\` and \`minutes\` only if they are not known. Nothing else: no map, no plan, no suggestions block. The teacher can tap "Just build" to skip.`,
+    `THIS TURN: the teacher asked for ${ask.unit ? 'a unit' : 'a lesson with a companion text'} and has not said what it is for. Do not write the ${ask.unit ? 'unit map' : 'lesson'} yet. Call search_companion_texts (the work and its thematic topics), then reply with one short line and the \`yawp-ask\` card: \`goal:\` (two or three candidates for this text), \`balance\`${ask.unit ? ', `leads` (unless the request says how it ends)' : ''}, and \`companion:\` (two or three of what the search returned), plus \`classes\` and \`minutes\` only if they are not known. Nothing else: no map, no plan, no suggestions block, no heading. One line above the card, e.g. "A few choices before I build the ${ask.unit ? 'map' : 'lesson'}:". The teacher can tap "Just build" to skip.`,
   ];
 }
 
@@ -771,7 +771,7 @@ export function buildLessonPlannerSystemPrompt({
           '- `leads` — bare, for a unit only, and only when the request does not say how it ends: an essay, a seminar, a project, a test, or nothing yet.',
           '- `companion: …` — call search_companion_texts first (the work and its thematic topics), then one line per option, two or three, only from what it returned, as `“Title” — Author, poem, year: the topic they share`. Yawp! adds "You choose" and "No companion text". Offer it for a unit and for a lesson that asks for a pairing.',
           '- At most four of these in one card, answered by tapping. When the teacher\'s answer says "Just build it", build at once and say in one line what you assumed.',
-          '- What they chose is what the work is built for. A unit map says it in `builtFor`: one line, e.g. "Leave with: a claim about when the law should be defied · mostly writing · with “If We Must Die”". A lesson opens with one italic line: *Built for: …*. Each day built from a unit is built for the same thing; never ask again.',
+          '- What they chose is what the work is built for. A unit map says it in `builtFor`: one line, e.g. "Leave with: a claim about when the law should be defied · mostly writing · with “If We Must Die”". A lesson (never a unit: its map already says it) opens with one italic line: *Built for: …*. Each day built from a unit is built for the same thing; never ask again.',
           '',
         ]
       : [
@@ -1088,7 +1088,7 @@ export function buildCompanionSection(): string[] {
     '- A result with `printable: true` comes with its whole text as first printed: print it whole, word for word from `text`, with its title, author and year, in a `yawp-material` handout and on an `excerpt` slide whose `work` is its title. Never retype it from memory and never "modernize" its spelling. Any other is named with `where`, with a labeled slot for the teacher\'s copy ("[Your copy of “The Lottery”]").',
     '- A video clip can be a companion (a speech heard, a spoken-word poem, a scene from a different film on the topic), but Yawp! holds none yet: when one would serve, leave a labeled slot that says exactly what to find (who, what, and which minutes, at most a few) and what students watch for, and tell the teacher to preview it. Never write a link or a video title you have not been given.',
     '- Teaching it: a poem is read aloud twice before anyone analyzes it. Students say what each text seems to say about the shared topic, each with the line that shows it ("so far", "seems to"), then where the two agree and differ, then write their own claim about the topic across both (R30–R31). The companion\'s `angle` is for you and the teacher\'s notes, never for a slide or a handout.',
-    '- Tell the teacher any `care` note before they choose it, and put a care note in the plan.',
+    '- Tell the teacher any `care` note before they choose it, and put a care note in the plan for the companion you use; never one for a companion you did not choose.',
     '- In a unit, a companion goes on the day where it serves, named in that day\'s `reading` and in the unit\'s `builtFor`.',
     '',
   ];

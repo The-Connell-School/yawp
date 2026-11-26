@@ -21,6 +21,9 @@ const PROCESS_TALK = [
   /\bis in the public domain, so (?:I|all|every|the|its|it|we)\b/i,
   /\bis in the public domain\b[^.!?]*\bso\b/i,
   /\bI['’]m using\b.*\b(?:translation|edition|text)\b/i,
+  // Nov 26: "Good — both decks are solid and I can place them precisely."
+  /\bI can (?:place|use|fit|slot|build) (?:them|it|these|both)\b/i,
+  /\b(?:both|the|these) (?:decks?|lessons?|materials?) (?:is|are) (?:solid|strong|good|great)\b/i,
   // Nov 26: "I've used F. Storr's 1912 translation throughout (public domain), so…"
   /\bI['’]ve used\b.*\b(?:translation|edition|text)\b/i,
   /^(?:Now|And now|Next),? (?:for|here['’]s|here is) the (?:deck|handout|slides|slide deck|materials?)\b/i,
@@ -214,4 +217,31 @@ export function withStartersOnDays(reply: string): string {
   }
   const block = { fenced: true, text: `${fence.slice(0, open)}\n${JSON.stringify(unit, null, 2)}\n\`\`\`` };
   return joinParts(kept.map((part) => (part.text === fence && part.fenced ? block : part)));
+}
+
+/**
+ * What a unit is built for is said once, on the board (Nov 26: the Gatsby
+ * reply said it on the board and again in italics under it), and a card's
+ * lead-in never ends on a heading with nothing under it ("One short card:
+ * **Before you build:**").
+ */
+export function withoutRepeatedPurpose(reply: string): string {
+  const parts = partsOf(reply);
+  const unit = parts.find((part) => part.fenced && /^\s*```yawp-unit\b/.test(part.text));
+  const asks = parts.some((part) => part.fenced && /^\s*```yawp-ask\b/.test(part.text));
+  const saysPurpose = Boolean(unit && /"builtFor"\s*:/.test(unit.text));
+  let changed = false;
+  const kept = parts
+    .map((part) => {
+      if (part.fenced) return part;
+      let text = part.text;
+      if (saysPurpose) {
+        const lines = text.split('\n').filter((line) => !/^\s*[*_]*\s*Built for:/i.test(line));
+        text = lines.join('\n');
+      }
+      if (asks) text = text.replace(/\s*\*\*Before you build:?\*\*\s*$/i, '').replace(/\s*One short card:?\s*$/i, '');
+      if (text !== part.text) changed = true;
+      return { ...part, text };
+    });
+  return changed ? joinParts(kept) : reply;
 }

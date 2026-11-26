@@ -54,11 +54,11 @@ import {
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
 import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
-import { chooseCheckedAgainst, teacherPages, withQuotationsLabel } from '~/domain/lesson-planner/teacher-pages.server';
+import { chooseCheckedAgainst, teacherPages, withCompanionsLabel, withQuotationsLabel } from '~/domain/lesson-planner/teacher-pages.server';
 import { getLessonPlannerReviewFlags } from '~/domain/feature-flags/feature-flags.server';
 import { withResolvedPictures } from '~/domain/lesson-planner/picture-lookup.server';
 import { withoutArtTalk } from '~/domain/lesson-planner/reply-art-talk';
-import { withoutProcessTalk, withStartersOnDays, withUnitMapFirst } from '~/domain/lesson-planner/reply-shape';
+import { withoutProcessTalk, withoutRepeatedPurpose, withStartersOnDays, withUnitMapFirst } from '~/domain/lesson-planner/reply-shape';
 import { visualKitFor } from '~/domain/lesson-planner/work-visuals';
 import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
@@ -1041,6 +1041,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
         const finalCheck = requoted ?? quoted;
         // A companion's lines were found in the companion: not "not found" in the work.
         const inCompanion = (quote: string) => companions.verified.some((line) => line.includes(quote.trim()) || quote.includes(line.trim()));
+        reply = withCompanionsLabel(reply, companions.used.map((companion) => ({ title: companion.title, year: companion.year })));
         reply = withQuotationsLabel(reply, checkedSource ? against : against.kind === 'registered' ? { kind: 'unavailable', work: against.work } : { kind: 'none' }, {
           verified: finalCheck.verified.length,
           corrected: quoted.corrections.length + (requoted?.corrections.length ?? 0),
@@ -1146,7 +1147,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
       reply = withoutArtTalk(reply);
       // No narration of the planner's own process, and a unit's map before
       // its reasons (Kevin, Nov 23: "a wall of text").
-      reply = withStartersOnDays(withUnitMapFirst(withoutProcessTalk(reply)));
+      reply = withoutRepeatedPurpose(withStartersOnDays(withUnitMapFirst(withoutProcessTalk(reply))));
 
       // A link the catalog never handed back goes nowhere, and a teacher finds that
       // out in front of a class. Strip the href and keep the words. Done before the
