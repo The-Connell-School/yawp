@@ -6,7 +6,7 @@ Research summary for Brian and Kevin · November 2026
 
 - **The strategy is to work the network.** Brian talks to the voices in this space, shows up where they are, and collects opinions, advice and connections. He isn't pitching. Every relationship is something to build on, and the goal is appearances we don't have to pay for.
 - **There are two kinds of network.** Part 1 is deep: center directors, newsletter writers and convenors whose readers are the deans, T&L directors and principals who choose tools. Part 2 is wide: ELA teachers, creators and podcasts that reach classroom teachers.
-- **Start with the three anchors.** Justin Cerenzia and Kim Marshall (both warm intros through Kevin), and Ian Kelleher and Glenn Whitman at St. Andrew's CTTL.
+- **Start with the three anchors, all warm intros through Kevin.** Justin Cerenzia, Kim Marshall, and Glenn Whitman at St. Andrew's CTTL (who can bring in Ian Kelleher).
 - **On the teacher side, start with writing specialists.** Their content lines up with YAWP!'s builders, and none showed ties to Brisk or MagicSchool. Big TikTok accounts are mostly comedy. Several big edtech trainers already work with competitors.
 - **Talk to the skeptics.** Ask for feedback, not promotion. If YAWP! holds up with them, that counts for a lot.
 - **A teacher partner opens doors.** These networks want examples led by practitioners. A teacher who uses YAWP! and will co-present or co-write unlocks the Marshall Memo, NCTE's leadership conference, SAIS and the regional cohorts.
@@ -104,7 +104,7 @@ People school leaders actually listen to. Their audiences are smaller (hundreds 
 | How Brian gets in touch | Warm intro from Kevin, who can confirm his current address first. Every 2026 source still has him at EA, and nothing links him to Alpha School. Fallback: LinkedIn. Subscribe to both Substacks first |
 | Ask or offer | His honest read on YAWP!, and how EA judged whether Flint changed how students revise. Later: a 20-minute slot in his monthly group, a session at the 2027 Summer Collaborative, a small free pilot with EA middle school ELA teachers, introductions to group members |
 
-### 2. Ian Kelleher and Glenn Whitman, CTTL at St. Andrew's Episcopal School
+### 2. Glenn Whitman and Ian Kelleher, CTTL at St. Andrew's Episcopal School
 
 | | |
 |---|---|
@@ -112,7 +112,7 @@ People school leaders actually listen to. Their audiences are smaller (hundreds 
 | What they run | A summer Academy (next: July 12–15, 2027), Neuroteach Global online courses, the *Think Differently and Deeply* publication and podcast, *The Bridge* newsletter, and public-district partnerships such as Frederick County Public Schools |
 | Network size | "Over 30,000 teachers from 550 schools" in 6 countries and 31 states (their number). *Think Differently and Deeply*: 10,000+ readers (their number) |
 | Why they fit | Kelleher's 2026 paper [*The Thinking Problem*](https://account.sais.org/events/sais-webinar-the-thinking-problem) says "the danger of AI in schools is not that students will cheat, it's that they won't have to think." An August 2026 CTTL post says to judge any AI tool by whether it supports or replaces student thinking. YAWP!'s builders can be held to that test |
-| How Brian gets in touch | Cold and research-first, unless Justin knows them (all three have spoken at Learning & the Brain). Kelleher on LinkedIn, or the CTTL's general inbox, info@thecttl.org. Kelleher is the better first contact on AI; Whitman controls Academy slots and publications |
+| How Brian gets in touch | Warm intro from Kevin, who knows Glenn. Ask Glenn to bring in Ian, who leads the CTTL's thinking on AI. Brian reads *The Thinking Problem* first |
 | Ask or offer | Kelleher's critique of YAWP! against *The Thinking Problem*. Brian attends the 2027 Academy as a participant. Later: a small classroom study, a piece for *The Bridge*, or a joint SAIS session. Expect caution, since they sell their own PD |
 
 ### 3. Kim Marshall, the Marshall Memo
@@ -146,7 +146,7 @@ Ask the anchor for these introductions before going cold.
 | # | Who | Network (size) | Why they fit | How Brian gets in touch | Ask or offer |
 |---|---|---|---|---|---|
 | 1 | Justin Cerenzia, Episcopal CTL | National T&L directors; unknown | Uses Flint; open to startups | Warm intro via Kevin | Honest read, then a slot in his group |
-| 2 | Ian Kelleher and Glenn Whitman, CTTL | 550 schools (their number) | *The Thinking Problem* is the right test | LinkedIn or CTTL inbox; ask Justin first | Critique against their framework |
+| 2 | Glenn Whitman and Ian Kelleher, CTTL | 550 schools (their number) | *The Thinking Problem* is the right test | Warm intro via Kevin (knows Glenn) | Critique against their framework |
 | 3 | Kim Marshall, Marshall Memo | 1,954 survey responses (his number) | Writing about AI feedback guardrails now | Warm intro via Kevin | His view on guardrails, then intros |
 | 4 | Sarah Hanawald, [Association for Academic Leaders](https://www.academicleaders.org/advisory-council) (One Schoolhouse) | Deans and T&L directors; unknown | Closest national match to Justin's group | academicleaders.org | Advice, then a members' webinar on AI and the writing process |
 | 5 | Danette Morton and Stephen Addcox, Westminster Schools (Atlanta) | Center for Teaching; unknown | Hosted SAIS's AI day Nov 9, 2026. Addcox teaches English and coordinates innovation | Westminster Center for Teaching page | Upper School English pilot; share results at SAIS |
@@ -246,9 +246,9 @@ Brian follows these people and reaches out when there's a natural reason: an int
 
 > Justin, thanks to Kevin for connecting us. I'm building YAWP!, a writing tool for middle and high school ELA teachers, and I've been reading The Beacon, especially "When Assessment Becomes a Conversation." I'm curious how your team decided whether Flint's feedback was actually changing how students revise. I'd love 20 minutes of your honest take on what we're building and where it falls short. No pitch, I'm just trying to get this right.
 
-**Ian Kelleher** (LinkedIn or the CTTL inbox)
+**Glenn Whitman** (reply after Kevin's intro)
 
-> Dr. Kelleher, I read *The Thinking Problem*, and your question about whether a tool supports students' thinking or replaces it is the one I keep coming back to. I'm building YAWP!, a writing tool for middle and high school ELA teachers. Our prewriting builders are meant to make students do the planning themselves (the claim, the evidence, the reasoning), and I'm not sure we've gotten it right everywhere. Would you look at it against your framework and tell me where it falls short? I can set you up with an account or walk you through it in 20 minutes.
+> Glenn, thanks to Kevin for connecting us. I read Ian's *The Thinking Problem*, and the question of whether a tool supports students' thinking or replaces it is the one I keep coming back to. I'm building YAWP!, a writing tool for middle and high school ELA teachers. Our prewriting builders are meant to make students do the planning themselves (the claim, the evidence, the reasoning), and I'm not sure we've gotten it right everywhere. Would you and Ian look at it against your framework and tell me where it falls short? I can set you both up with accounts or walk you through it in 20 minutes.
 
 **Kim Marshall** (reply after Kevin's intro)
 
@@ -405,7 +405,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 | When | Do | Brian's time | Cost |
 |---|---|---|---|
 | Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Have Muse confirm titles, handles and contact routes for both top 15 lists. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
-| Weeks 2–6 | Kevin introduces Brian to Justin and Kim Marshall. Note to Ian Kelleher. Comment on the NCTE AI framework (open through December). Personal notes to the Part 2 writing teachers (#1–7). Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
+| Weeks 2–6 | Kevin introduces Brian to Justin, Kim Marshall and Glenn Whitman. Comment on the NCTE AI framework (open through December). Personal notes to the Part 2 writing teachers (#1–7). Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
 | Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
 | Weeks 6–12 | Use first-wave connections to get guest spots with #9–12. Run the paid creator pilot only if free routes stall. Ask the anchors for introductions. Offer free PD sessions to the associations (SAIS, NCAIS, VAIS, Association for Academic Leaders). Plan a 2027 NCTE or CEL session with a teacher | ~3 hrs/week | $500–2,500+ |
 | Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code. Muse keeps the list current and drafts notes for Brian to edit | ~2 hrs/week | — |
@@ -415,7 +415,6 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 - Which of these people do Brian or Kevin already know?
 - Kevin knows Kim Marshall well. What should the first ask be: advice, introductions, or both?
 - What does Kevin know about Justin's monthly group? Who's in it, does it take guests, and is it tied to an association?
-- Does Justin know Whitman and Kelleher well enough to introduce us?
 - How do we talk about Flint with Justin, given Episcopal already uses it?
 - Is there a teacher using YAWP! who would co-present or co-write? Several routes depend on one.
 - Independent schools first, or districts? Part 1 leans independent.
