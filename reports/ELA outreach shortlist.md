@@ -11,7 +11,7 @@ Research summary for Brian and Kevin · November 2026
 - Talk to the AI skeptics, but ask for feedback, not promotion. If they think the product is sound, that counts for a lot.
 - Going viral is too big a mountain to climb right now. Get our own presence solid first, then borrow audiences through a small group of partner teachers.
 
-> **Check the numbers first.** We couldn't open TikTok, Instagram, YouTube, TpT, Apple Podcasts, Facebook or LinkedIn from the research tools. Most audience numbers come from search results or the creator's own claims, and some conflict. Check each one before anyone reaches out.
+> **Let Muse do the legwork.** Most audience numbers here come from search results and creators' own claims, and some conflict. Muse can check each handle and number, keep the list current, find new voices worth adding, and track who Brian has talked to. It can also draft first-touch notes for Brian to edit and send in his own voice. That keeps his hours for the conversations themselves.
 
 ## The idea: work the network
 
@@ -212,17 +212,17 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 
 | When | Do | Brian's time | Cost |
 |---|---|---|---|
-| Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
+| Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Have Muse check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
 | Weeks 2–6 | Personal notes to #1–7. Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
 | Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
 | Weeks 6–12 | Get media kits (#9–12). Run the paid creator pilot. Offer PD sessions to the school associations. Get on the NCTE 2027 list | ~3 hrs/week | $500–2,500+ |
-| Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code | ~2 hrs/week | — |
+| Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code. Muse keeps the list current and drafts notes for Brian to edit | ~2 hrs/week | — |
 
 ## Open questions for Brian
 
 - Which of these does Brian already know personally?
 - Is there budget for the paid pilot before the angel round?
 - Is Justin Sorenzia's group part of one of the independent-school associations above?
-- Who will check the numbers in weeks 1–2?
+- How much of the research and outreach drafting should Muse take on?
 
 *Full research with sources: `reports/ELA education voices for outreach.md`*
