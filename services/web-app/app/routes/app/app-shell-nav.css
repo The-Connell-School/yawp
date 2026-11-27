@@ -48,42 +48,55 @@
   padding: 0;
 }
 
+/* Left menu (Brian's Lesson Planner Redesign, "Left menu" artboard, Nov 27):
+   the current page is a white, fully rounded pill with a soft shadow and a
+   bold #1D1D1B label. Every other link is plain #3A3A36 text. No green. */
 [data-app-shell] > nav .grid.gap-1 {
-  gap: 2px;
+  gap: 4px;
 }
 
 [data-app-shell] > nav .app-sidebar-row {
-  min-height: 34px;
+  min-height: 42px;
   padding: 0;
-  border-radius: 6px;
-  gap: 10px;
-}
-
-[data-app-shell] > nav .app-sidebar-row:has(a[aria-current='page']) {
-  background: hsl(var(--primary) / 0.1);
+  border-radius: 999px;
+  gap: 12px;
+  background: transparent;
 }
 
 [data-app-shell] > nav .app-sidebar-link {
-  min-height: 34px;
+  min-height: 42px;
   box-sizing: border-box;
-  padding: 7px 12px;
-  border-radius: 6px;
-  gap: 10px;
-  font-size: 14px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  gap: 12px;
+  font-size: 15px;
   line-height: 20px;
   font-weight: 400;
   box-shadow: none;
   background: transparent !important;
-  color: hsl(50 2.4% 36%);
+  color: #3a3a36;
+  --tw-ring-color: #1d1d1b;
 }
 
 [data-app-shell] > nav .app-sidebar-link:hover {
-  color: #0f172a;
+  color: #1d1d1b;
 }
 
 [data-app-shell] > nav .app-sidebar-link[aria-current='page'] {
-  color: hsl(var(--primary)) !important;
-  font-weight: 600;
+  background: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(40, 30, 10, 0.12);
+  color: #1d1d1b !important;
+  font-weight: 800;
+}
+
+/* Collapsed menu: icon-only pills centered in the 56px rail. */
+[data-app-shell] > nav.items-center .app-sidebar-link {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
 }
 
 [data-app-shell] > nav .app-sidebar-link svg {
@@ -128,7 +141,7 @@
   font-size: 14px;
   line-height: 20px;
   border-radius: 0;
-  color: hsl(50 2.4% 36%);
+  color: #3a3a36;
 }
 
 /* Meter A (Claude Design, Nov 2): the expanded Usage row is an inset rounded
@@ -153,7 +166,7 @@
 [data-app-shell] > nav > div.flex.shrink-0 .app-nav-footer-action:hover,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-need-help']:hover,
 [data-app-shell] > nav > div.flex.shrink-0 [data-testid='app-nav-settings']:hover {
-  color: #0f172a;
+  color: #1d1d1b;
   background: transparent;
 }
 
