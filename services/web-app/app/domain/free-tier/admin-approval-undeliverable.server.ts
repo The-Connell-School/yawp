@@ -14,7 +14,7 @@ import {
 } from './admin-approval-undeliverable-copy';
 import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { freeTierPublicAppOrigin } from './free-tier-public-url.server';
-import { internalFreeTierReviewQueueUrl } from './team-contact.server';
+import { internalFreeTierReviewQueueUrl } from './internal-review-queue-url';
 
 export const TEACHER_UNDELIVERABLE_NOTICE_KIND =
   'admin_approval_undeliverable_teacher';

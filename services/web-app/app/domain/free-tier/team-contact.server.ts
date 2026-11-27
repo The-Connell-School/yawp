@@ -7,33 +7,19 @@ import { sanitizeFreeTierEmailLogPayload } from './email-log-payload.server';
 import { assertFreeTierRuntimeConfigured } from './free-tier-config.server';
 import { safeErrorTextForLog } from '~/utils/server-error-request-context.server';
 import type { EmailSendResult } from './email.server';
-import { resolveFreeTierRuntimeEnvironment } from './usage-budget.server';
 import {
   manualReviewHoldReasonLabel,
   type ManualReviewHoldReason,
 } from './admin-email-rules.server';
+import { internalFreeTierReviewQueueUrl } from './internal-review-queue-url';
+
+export { internalFreeTierReviewQueueUrl };
 
 export const TEAM_CONTACT_BELOW_HS_KIND = 'team_contact_below_hs';
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_KIND = 'team_contact_admin_learn_more';
 export const TEAM_CONTACT_MANUAL_REVIEW_KIND = 'team_contact_manual_review';
 export const TEAM_CONTACT_IDEMPOTENCY_MS = 10 * 60 * 1000;
 export const TEAM_CONTACT_ADMIN_LEARN_MORE_COOLDOWN_MS = 30 * 60 * 1000;
-
-/**
- * Yawp Internal's decision queue is /free-trial/waitlist (its default "Needs
- * decision" filter lists MANUAL_REVIEW). The old /free-tier/approvals path
- * never existed there, so the link landed on Internal's "Page not found".
- * `env` is explicit because Internal otherwise falls back to the operator's
- * remembered environment (often demo); `q` opens the held teacher directly.
- */
-export function internalFreeTierReviewQueueUrl(teacherEmail?: string): string | null {
-  const origin = process.env.INTERNAL_PLATFORM_ORIGIN?.trim().replace(/\/$/, '');
-  if (!origin) return null;
-  const runtime = resolveFreeTierRuntimeEnvironment();
-  const params = new URLSearchParams({ env: runtime === 'demo' ? 'demo' : 'production' });
-  if (teacherEmail?.trim()) params.set('q', teacherEmail.trim());
-  return `${origin}/free-trial/waitlist?${params.toString()}`;
-}
 
 type ApplicationContactFields = {
   id: string;
