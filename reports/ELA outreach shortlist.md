@@ -4,9 +4,9 @@ Research summary for Brian and Kevin · November 2026
 
 ## The short version
 
-- The strategy is to work the network. Brian talks to the voices in this space, shows up where they are, and collects opinions, advice and connections. He isn't pitching.
+- The strategy is to work the network. Brian talks to the voices in this space, shows up where they are, and collects opinions, advice and connections. He isn't pitching. Every relationship is something to build on, and the goal is appearances we don't have to pay for.
 - Start with teachers who are known for teaching writing: essays, thesis, argument, feedback. Their content lines up with YAWP!'s builders and Grading Assistant, and none of them showed ties to Brisk or MagicSchool.
-- Big TikTok English teachers have huge followings, but it's mostly comedy. Fine for one paid test later, not the place to start.
+- Big TikTok English teachers have huge followings, but it's mostly comedy. Maybe a fun collab later, not the place to start.
 - Several of the big edtech trainers already work with competitors. Matt Miller and Monica Burns have Brisk ties.
 - Talk to the AI skeptics, but ask for feedback, not promotion. If they think the product is sound, that counts for a lot.
 - Going viral is too big a mountain to climb right now. Get our own presence solid first, then borrow audiences through a small group of partner teachers.
@@ -16,6 +16,8 @@ Research summary for Brian and Kevin · November 2026
 ## The idea: work the network
 
 The people in this report are the network we want to be part of. The point isn't to sell to them. Brian gets to know them, shows up where they are, and learns from them. Sign-ups and sales come later, from the trust and the connections.
+
+Every relationship is something to build on. One conversation leads to an introduction, and an introduction leads to an invitation. The aim is guest spots, mentions and appearances that come through people we know, not ones we pay for.
 
 **What Brian is doing**
 
@@ -46,7 +48,7 @@ Brian is a builder who wants to get it right, not a vendor with a pitch. He's cu
 2. **Conversations** with Group A and the skeptics.
 3. **Appearances** wherever we're invited: podcasts, guest posts, PD sessions, conferences.
 4. **A teacher council** made up of the people who stick around.
-5. **Paid spots** only once we know which message works.
+5. **Paid spots** only as a last resort, if a door won't open any other way.
 
 ## First: firm up our own presence
 
@@ -56,6 +58,29 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 - **Facebook.** Set up a YAWP! Facebook page. Teachers spend time there, and we're planning to show up in Facebook teacher groups, so they need a page to land on.
 - **Website.** Review the website, and update it if needed, so we feel good about it as the place people land. Check that it's clear in a few seconds what YAWP! is and who it's for, that signing up for the free tier is easy, and that it matches what we say in posts and outreach.
 - **Do this before outreach starts**, so partners and their audiences find an active, real presence.
+
+## How Brian gets in touch
+
+**The basics**
+
+- **Warm before cold.** Before reaching out, check who already knows them. Look at mutual LinkedIn connections, ask Kevin, ask the teachers already using YAWP!, and ask people like Justin. An intro beats a cold note every time.
+- **Engage before asking.** Follow them for a week or two. Listen to an episode, read a few posts, leave a real comment or two. Then reach out, mentioning something specific.
+- **Use the door they've opened.** Contact forms, "be a guest" pages, workshop pages, Substack replies, LinkedIn messages. Don't dig for personal emails.
+- **Keep it short.** One reason you're writing, and one small ask: a 20-minute call or "would you try it and tell me what you think?"
+- **Follow up once.** If there's no answer after a week or two, send one friendly nudge, then let it go.
+- **Always ask who else.** End every conversation with "Who else should I be talking to?" That's how the network grows.
+- **Muse helps, Brian sends.** Muse finds each person's public contact route and drafts a first note. Brian makes it his own before sending.
+
+**By type**
+
+| Who | Best way in | Tip |
+|---|---|---|
+| Teacher-creators | Contact or workshop page on their website, Instagram DM, comments on their posts | They're teaching full time. Keep the ask small, and ask about district rules before offering anything |
+| Podcast hosts | "Be a guest" page or contact form, a reply about a specific episode, or an intro from a past guest | Pitch an episode topic that's useful to their listeners, not the product |
+| Substack writers and skeptics | A thoughtful comment on a post, or a reply to their newsletter email | Engage with their argument first. Ask for criticism, not a review |
+| LinkedIn voices (admin audiences) | Comment on their posts for a couple of weeks, then send a connection request with a short note | LinkedIn is also where Brian's twice-a-week posts do the warming up |
+| Organizations and school associations | Partnership or PD inbox, state NCTE affiliate offices, or an intro from a member | Offer a free PD session, not a demo |
+| Facebook groups and Reddit | Join as a person and help with answers | Ask the admins before posting anything about YAWP! |
 
 ## Top 15
 
@@ -72,22 +97,22 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 | 7 | Nick Potkalitsky | *Educating AI* Substack | 3,500–8,000 (conflicting) | Teaches 7–12 English and writes seriously about AI | Comment on his posts, then invite a review |
 | 8 | Marcus Luther | *The Broken Copier* Substack | Unknown | Skeptic. Wrote a post on AI essay grading | Ask for honest feedback only. No pitch, no payment |
 
-**Group B: paid sponsorships (when there's budget).** These are the biggest audiences. Brian should try for a guest appearance first where it's possible. Paid spots come later, once we know which message works.
+**Group B: the biggest shows.** Same approach as Group A, just bigger audiences. Brian connects with the host, ideally through someone from Group A, and works toward a free guest spot or mention. Most of these also sell sponsorships, but paying is a last resort.
 
 | # | Who | Audience (their own numbers) | Notes | First move |
 |---|---|---|---|---|
-| 9 | Vicki Davis, *10 Minute Teacher* | ~8M downloads, 285K social | Has a May 2026 media kit and a "Brain First, AI Second" writing episode | Ask for the media kit; separately pitch Brian as a guest |
-| 10 | Matt Miller, Ditch That Textbook + AI for Admins | "100K+ educators" | Reaches administrators. Wrote "Why is AI writing feedback so bad?" Has Brisk ties | Reply publicly to that post, then ask about sponsoring |
-| 11 | Jennifer Gonzalez, Cult of Pedagogy | ~200K downloads/month (outside estimates much lower) | Sells podcast sponsorships only and screens sponsors for fit | Inquiry form, once there's budget |
-| 12 | Monica Burns, Class Tech Tips / *Easy EdTech* | "Tens of thousands" | Has done sponsored posts, including one for Brisk | Ask for rates |
+| 9 | Vicki Davis, *10 Minute Teacher* | ~8M downloads, 285K social | Has a May 2026 media kit and a "Brain First, AI Second" writing episode | Pitch Brian as a guest, tied to that episode |
+| 10 | Matt Miller, Ditch That Textbook + AI for Admins | "100K+ educators" | Reaches administrators. Wrote "Why is AI writing feedback so bad?" Has Brisk ties | Reply publicly to that post and start a conversation |
+| 11 | Jennifer Gonzalez, Cult of Pedagogy | ~200K downloads/month (outside estimates much lower) | Sells podcast sponsorships only and screens sponsors for fit | Look for a mutual connection; aim for a mention on a future "tools to try" episode |
+| 12 | Monica Burns, Class Tech Tips / *Easy EdTech* | "Tens of thousands" | Has done sponsored posts, including one for Brisk | Pitch a guest segment on AI feedback for student writing |
 
-**Group C: organizations, plus one TikTok test.** These are the rooms to be in. Brian goes as a presenter or a helpful voice, not a booth. That's where he meets directors of teaching and learning.
+**Group C: organizations, plus one TikTok creator.** These are the rooms to be in. Brian goes as a presenter or a helpful voice, not a booth. That's where he meets directors of teaching and learning.
 
 | # | Who | Notes | First move |
 |---|---|---|---|
 | 13 | NCTE + state affiliates | Biggest ELA teacher conference. 2027 dates not out yet. State conferences are cheaper | Get on the 2027 exhibitor list; pick 2–3 state conferences |
 | 14 | Independent-school associations (NCAIS, VAIS, SAIS, NAIS) | They run monthly online groups for academic leaders. Justin's group may be one of these. NAIS Thrive is March 3–5, 2027 | Offer a free 30-minute PD session on AI and writing feedback |
-| 15 | Molly Dugan, @miss.dugan1 | ~1M combined, though one source says 260K. Has done paid brand deals | Later: one paid skit, her creative control, clearly disclosed |
+| 15 | Molly Dugan, @miss.dugan1 | ~1M combined, though one source says 260K. Has done paid brand deals | Later: reach out about a fun collab. Pay only if that's the only way in |
 
 ## Skeptics: ask for feedback, don't pitch
 
@@ -99,17 +124,6 @@ These are some of the most useful conversations Brian can have. If YAWP! holds u
 | Peter Greene (*Curmudgucation*) | Has a running series, "AI Is Bad At Grading Essays" | A short note inviting him to try it and tear it apart |
 | John Warner (*The Biblioracle*, 10K+) | Wants the formulaic five-paragraph essay gone | Engage with his argument publicly |
 | Marcus Luther | Skeptical of AI in schools, especially grading | See #8 |
-
-## How to talk about YAWP!
-
-Almost everyone we looked at, fans and skeptics alike, agrees on one thing: AI shouldn't do the student's thinking.
-
-| Say | Avoid |
-|---|---|
-| The teacher reviews and edits every comment | "AI grades for you" |
-| Students draft first | "Save X hours a week" |
-| The five-paragraph builder is a starting point students grow out of | Presenting the formula as the goal |
-| Feedback while students are writing, not just at the end | Anything that sounds like the AI writes the essay |
 
 ## The longer list
 
@@ -130,7 +144,7 @@ This is the wider network. Brian follows them and engages with their posts, and 
 | Lauralee Moss, Language Arts Classroom | Unknown | Grammar; Exit Ticket angle |
 | Danielle Hall, Nouvelle ELA | Unknown | Peer feedback |
 | Laura Randazzo | Unknown | Check she's still active |
-| Claudine James, Mr. Sloma, SL Rockfish (TikTok) | 1.3M–5.7M each | Comedy. Only for paid skits |
+| Claudine James, Mr. Sloma, SL Rockfish (TikTok) | 1.3M–5.7M each | Comedy. Maybe a collab later |
 
 **Podcasts**
 
@@ -196,7 +210,7 @@ Both, kept small enough for Brian's time.
 | Brian | LinkedIn twice a week with the YAWP! logo on his profile, plus one short feature video a month cut for Reels, Shorts and TikTok | Time |
 | Facebook | A YAWP! page that shares the same posts and videos, so teachers from Facebook groups have somewhere to land | Time |
 | Teacher council | 10–25 ELA teachers get a year of Premium, a monthly call with Brian, and credit on resources they help make. Posting is optional and disclosed | Free seats |
-| Paid pilot | 2–5 small ELA creators, tracked with referral codes | $500–2,500 total |
+| Paid pilot (only if needed) | 2–5 small ELA creators, tracked with referral codes, if free routes stall | $500–2,500 total |
 | Brand TikTok | Wait until there's someone to run it | — |
 
 For comparison:
@@ -215,7 +229,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 | Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Have Muse check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
 | Weeks 2–6 | Personal notes to #1–7. Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
 | Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
-| Weeks 6–12 | Get media kits (#9–12). Run the paid creator pilot. Offer PD sessions to the school associations. Get on the NCTE 2027 list | ~3 hrs/week | $500–2,500+ |
+| Weeks 6–12 | Use first-wave connections to get guest spots with #9–12. Run the paid creator pilot only if free routes stall. Offer PD sessions to the school associations. Get on the NCTE 2027 list | ~3 hrs/week | $500–2,500+ |
 | Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code. Muse keeps the list current and drafts notes for Brian to edit | ~2 hrs/week | — |
 
 ## Open questions for Brian
