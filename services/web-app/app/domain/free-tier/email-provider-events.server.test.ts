@@ -154,7 +154,7 @@ test('a signed SES bounce notification records the message id', async () => {
     rawBody: JSON.stringify(message),
     headers: new Headers(),
     record,
-    fetchImpl: (async () => new Response(certPem)) as typeof fetch,
+    fetchImpl: (async () => new Response(certPem)) as unknown as typeof fetch,
   });
   expect(result.status).toBe(200);
   expect(record).toHaveBeenCalledWith({

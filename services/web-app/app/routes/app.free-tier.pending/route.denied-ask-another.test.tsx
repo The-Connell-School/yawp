@@ -6,7 +6,11 @@ import {
 } from '~/components/card-page-chrome.ssr-test-setup';
 
 mockCardPageChromeForSsr();
-const forward = mock(async () => ({ ok: true, queued: true, adminName: 'Alex Kim' }));
+const forward = mock(async (_args: Record<string, unknown>) => ({
+  ok: true,
+  queued: true,
+  adminName: 'Alex Kim',
+}));
 mock.module('~/utils/free-tier/free-tier-feature-gate.server', () => ({
   requireFreeTierEnabled: async () => {},
 }));
