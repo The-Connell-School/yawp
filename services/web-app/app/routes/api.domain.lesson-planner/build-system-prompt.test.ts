@@ -2516,3 +2516,21 @@ describe('planner prompt — real sources, terms taught right (Nov 24 types test
     expect(prompt).toContain('an example labeled ethos');
   });
 });
+
+describe('planner prompt — a request to plan is built, never answered with only a question (S3, Nov 24 types test)', () => {
+  // The research lesson was answered with only "What are you reading with
+  // them, and what's the research paper on?": the "ask for the text first"
+  // line read as an order on a request that had already asked for a lesson.
+  for (const intakeV2 of [false, true]) {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School', intakeV2 });
+    test(`asking for the text is only for a teacher who has not asked for a lesson yet (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('ask for the text first, alone');
+      expect(prompt).toContain('only when the teacher has not yet asked for a lesson');
+      expect(prompt).toContain('A request to plan a lesson is built at once');
+    });
+    test(`a skill lesson never asks what the class is reading (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('A skill lesson (research, grammar, argument writing) needs no text');
+      expect(prompt).toContain('[the class\'s research topic]');
+    });
+  }
+});
