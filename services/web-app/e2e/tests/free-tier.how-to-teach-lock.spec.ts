@@ -12,6 +12,46 @@ test.describe('free tier: locked assignment type How to Teach It', () => {
     await setFeatureFlag('assignment-type-landing-v2', true);
   });
 
+  test('free teachers can fetch Pre-writing and Thesis Statement files only', async ({
+    page,
+    signIn,
+  }) => {
+    await signIn(FREE_TEACHER_EMAIL, FREE_TEACHER_PASSWORD);
+    expect(
+      (
+        await page.request.get(
+          '/courses/thesis-driven-essay/01-introduction-to-yawp.pptx'
+        )
+      ).status()
+    ).toBe(403);
+    expect(
+      (
+        await page.request.get('/courses/thesis-driven-essay/02-pre-writing.pptx')
+      ).status()
+    ).toBe(200);
+    expect(
+      (
+        await page.request.get(
+          '/courses/thesis-driven-essay/03-develop-your-thesis-statement.pptx'
+        )
+      ).status()
+    ).toBe(200);
+    expect(
+      (
+        await page.request.get(
+          '/courses/thesis-driven-essay/tutorials/02-pre-writing.mp4'
+        )
+      ).status()
+    ).toBe(200);
+    expect(
+      (
+        await page.request.get(
+          '/courses/thesis-driven-essay/tutorials/05-body-paragraphs.mp4'
+        )
+      ).status()
+    ).toBe(403);
+  });
+
   test('thesis-driven essay How to Teach It shows the license popover and blocks course files', async ({
     page,
     signIn,
@@ -56,6 +96,10 @@ test.describe('free tier: locked assignment type How to Teach It', () => {
       '/courses/thesis-driven-essay/02-pre-writing.pptx'
     );
     expect(preWritingDeck.status()).toBe(200);
+    const thesisDeck = await page.request.get(
+      '/courses/thesis-driven-essay/03-develop-your-thesis-statement.pptx'
+    );
+    expect(thesisDeck.status()).toBe(200);
   });
 
   test('how-it-works GuideHowToTeach is locked for thesis-driven essay', async ({
