@@ -13,15 +13,8 @@ Researched 2026-11-27. Purpose: pick EdUp shows and hosts that Kevin can introdu
 
 ## Ranked list (best fit first)
 
-### 1. EdUp K-12
-- **Host:** Kevin Gregorio. He is probably Dr. Kevin Gregorio, Director of Learning Services at St. Joseph's Prep in Philadelphia, who has written about using AI tutors for self-regulated learning with Flint. **The show page doesn't confirm he's that person (unverified).** Note: the host shares a first name with YAWP!'s Kevin, so don't mix them up.
-- **Focus and audience:** K-12. The listing describes candid conversations with experts in "curriculum, instruction, assessment, policy, administration, and edtech." It's published by The EdUp Experience and appears on the network's shows page as "EdUp K-12."
-- **Guests:** Karin Chenoweth (Ed Trust writer) and **Justin Cerenzia** (Buckley Center for Teaching & Learning, Episcopal Academy). Cerenzia is already in our notes: see `anchors_cerenzia_and_cttl.md`. That gives a second warm path to this host.
-- **Active in 2026:** **unverified.** Episode dates weren't in the search results.
-- **Interviews founders/edtech:** edtech is in the stated scope. No specific founder episode was found.
-- **AI or writing episodes:** none found on the show. The host's own published work is on AI and self-regulated learning.
-- **Episode angle:** "AI that makes students do more thinking, not less: teacher-in-the-loop feedback and scaffolded prewriting (thesis, CER) in middle and high school ELA."
-- **Why #1:** best audience and topic fit in the network (K-12 instruction, a learning-science host), and there's already a Cerenzia connection. Confirm the show is still publishing before asking for the intro.
+### (Excluded) EdUp K-12
+- This is Kevin's own show (Kevin is on the YAWP! team), so it is not an outreach target. Kevin's EdUp connection is how Brian gets introduced to the shows below.
 
 ### 2. The EdUp Experience (flagship), especially its Academic Integrity Series
 - **Hosts:** Elvin Freytes (host of the series episodes) with co-host **Thomas Fetsch**, CEO of Integrity4Education, the series sponsor. Joe Sallustio hosts many other flagship episodes.
@@ -116,8 +109,6 @@ Researched 2026-11-27. Purpose: pick EdUp shows and hosts that Kevin can introdu
 
 - edupexperience.com, /shows and episode pages: /jennymaxwell/, /caseycuny/, /edupinnovation/, /edupcurriculum/, /edgek12/, /podconawardfinalists/
 - asugsvsummit.com/schedule/the-edup-experience-podcast-1; asugsvsummit.com speaker pages for Freytes and Sallustio
-- podcast.app/edup-k-12-p7260985 (EdUp K-12 episodes with Cerenzia and Chenoweth)
-- sjprep.org/academics/learning-services; flintk12.com/blog/using-ai-to-facilitate-self-regulated-learning-kevin-gregorio
 - listennotes.com, iHeart and Podcast Addict listings for EdUp L&D; edupedtech.com/about
 - Apple, iHeart and castfox listings for Disrupt Education; iHeart and higherai.substack.com/podcast for EdUp AI
 - podscan.fm/podcasts/edup-xcelerated-excellence; creators.spotify.com/pod/profile/dr-brad-fuster

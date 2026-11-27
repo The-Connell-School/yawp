@@ -9,10 +9,44 @@ Research summary for Brian and Kevin · November 2026
 - **Start with the three anchors, all warm intros through Kevin.** Justin Cerenzia, Kim Marshall, and Glenn Whitman at St. Andrew's CTTL (who can bring in Ian Kelleher).
 - **On the teacher side, start with writing specialists.** Their content lines up with YAWP!'s builders, and none showed ties to Brisk or MagicSchool. Big TikTok accounts are mostly comedy. Several big edtech trainers already work with competitors.
 - **Talk to the skeptics.** Ask for feedback, not promotion. If YAWP! holds up with them, that counts for a lot.
+- **Use Kevin's podcast network.** EdUp shows are a ready source of guest spots for Brian, through Kevin.
 - **A teacher partner opens doors.** These networks want examples led by practitioners. A teacher who uses YAWP! and will co-present or co-write unlocks the Marshall Memo, NCTE's leadership conference, SAIS and the regional cohorts.
 - **Going viral is too big a mountain right now.** Get our own presence solid first.
 
 > **Let Muse do the legwork.** Most audience numbers come from search results and people's own claims, and several people changed jobs in 2026. Muse can confirm titles, handles and contact routes, keep the list current, find new names, track who Brian has talked to, and draft first notes for Brian to edit and send in his own voice. That keeps his hours for the conversations themselves.
+
+## Kevin's warm intros
+
+These come first. A warm introduction from Kevin beats any cold note, and each of these people can open more doors.
+
+| Who | Kevin's connection | First ask |
+|---|---|---|
+| Justin Cerenzia, Episcopal Academy | Knows him | His honest read on YAWP!, then a slot in his monthly T&L leaders' group |
+| Kim Marshall, Marshall Memo | Has interviewed him twice on Kevin's podcast and has his contact info | His view on guardrails for AI feedback, and who else Brian should talk to |
+| Glenn Whitman, CTTL at St. Andrew's | Knows him | A critique of YAWP! against Ian Kelleher's *The Thinking Problem*, with Ian brought in |
+| The EdUp podcast community | Part of the community | Introductions to the hosts below for guest spots |
+
+**EdUp shows for Brian.** Most of the EdUp network is higher ed, and that works. Colleges are about to get students who learned to write with AI in high school, and the college writing, academic integrity and AI people care a lot about what that looks like.
+
+*Higher ed*
+
+| Show | Host(s) | Why it fits | Episode angle for Brian |
+|---|---|---|---|
+| The EdUp Experience (flagship), incl. the Academic Integrity Series | Elvin Freytes, Joe Sallustio; Thomas Fetsch on the integrity series | Active through Nov 2026. Interviews founders often. Had Grammarly's successor (Superhuman) and a high school English teacher on AI | "Integrity by design: an AI writing tool that won't write the essay" |
+| EdUp AI | Jason Gulya (English professor, chairs Berkeley College's AI Council) | AI and writing are his focus. The show may be paused, but Gulya is worth knowing either way | "Can an AI writing tool protect productive struggle?" |
+| EdUp Innovation | Dr. Brad Fuster | Active Sep 2026; has founder guests | "What K-12 writing classrooms are learning about AI, and what's coming to campus" |
+| EdUp Curriculum | Nicole Poff | Active 2026; curriculum design | "Designing writing assignments for the AI era: thesis, CER and exit tickets" |
+| EdUp L&D (formerly EdUp EdTech) | Holly Owens (former high school teacher) | Active Sep 2026; founder interviews are its main format | "Building an AI writing platform with teachers in the loop" |
+
+*K-12 crossover*
+
+| Show | Host(s) | Why it fits | Episode angle for Brian |
+|---|---|---|---|
+| Disrupt Education | Peter Hostrawser, Alli Dahl | K-12 leaders; AI episode in May 2026 | "Writing is thinking: what AI should and shouldn't do" |
+| EDUP Xcelerated Excellence | Dr. Jacob Easley II | K-12 and higher ed, equity focus; records at the national elementary principals' conference | Equity and AI feedback, plus the free teacher tier |
+
+- **Live recordings:** EdUp recorded live episodes at ASU+GSV in April 2026. If they go back in 2027, Kevin can ask about a slot for Brian.
+- **Skip:** the admin-only higher-ed shows (Provost, Accreditation, President Series, Campus Planning and similar).
 
 ## The idea: work the network
 
@@ -405,7 +439,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 | When | Do | Brian's time | Cost |
 |---|---|---|---|
 | Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Have Muse confirm titles, handles and contact routes for both top 15 lists. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
-| Weeks 2–6 | Kevin introduces Brian to Justin, Kim Marshall and Glenn Whitman. Comment on the NCTE AI framework (open through December). Personal notes to the Part 2 writing teachers (#1–7). Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
+| Weeks 2–6 | Kevin introduces Brian to Justin, Kim Marshall and Glenn Whitman, and to 2–3 EdUp hosts. Comment on the NCTE AI framework (open through December). Personal notes to the Part 2 writing teachers (#1–7). Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
 | Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
 | Weeks 6–12 | Use first-wave connections to get guest spots with #9–12. Run the paid creator pilot only if free routes stall. Ask the anchors for introductions. Offer free PD sessions to the associations (SAIS, NCAIS, VAIS, Association for Academic Leaders). Plan a 2027 NCTE or CEL session with a teacher | ~3 hrs/week | $500–2,500+ |
 | Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code. Muse keeps the list current and drafts notes for Brian to edit | ~2 hrs/week | — |
@@ -414,6 +448,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 
 - Which of these people do Brian or Kevin already know?
 - Kevin knows Kim Marshall well. What should the first ask be: advice, introductions, or both?
+- Which EdUp hosts does Kevin know best?
 - What does Kevin know about Justin's monthly group? Who's in it, does it take guests, and is it tied to an association?
 - How do we talk about Flint with Justin, given Episcopal already uses it?
 - Is there a teacher using YAWP! who would co-present or co-write? Several routes depend on one.
@@ -421,4 +456,4 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 - Is there budget for the Marshall Memo ($50), the CTTL Academy, one or two 2027 conferences, and the paid pilot if it's needed?
 - How much of the research and outreach drafting should Muse take on?
 
-*Full research with sources: `reports/ELA education voices for outreach.md`, `research_notes/ELA education voices for outreach/` and `research_notes/Teaching and learning network leaders/`*
+*Full research with sources: `reports/ELA education voices for outreach.md`, `research_notes/ELA education voices for outreach/` and `research_notes/Teaching and learning network leaders/` (EdUp details in `edup_podcast_network.md`)*
