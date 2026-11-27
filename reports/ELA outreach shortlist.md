@@ -18,6 +18,7 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 
 - **LinkedIn.** Put the YAWP! logo on Brian's LinkedIn so people connect him with the product. Brian posts **twice a week**.
 - **Facebook.** Set up a YAWP! Facebook page. Teachers spend time there, and we're planning to show up in Facebook teacher groups, so they need a page to land on.
+- **Website.** Review the website, and update it if needed, so we feel good about it as the place people land. Check that it's clear in a few seconds what YAWP! is and who it's for, that signing up for the free tier is easy, and that it matches what we say in posts and outreach.
 - **Do this before outreach starts**, so partners and their audiences find an active, real presence.
 
 ## Top 15
@@ -171,7 +172,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 
 | When | Do | Brian's time | Cost |
 |---|---|---|---|
-| Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
+| Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
 | Weeks 2–6 | Personal notes to #1–7. Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
 | Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
 | Weeks 6–12 | Get media kits (#9–12). Run the paid creator pilot. Offer PD sessions to the school associations. Get on the NCTE 2027 list | ~3 hrs/week | $500–2,500+ |
