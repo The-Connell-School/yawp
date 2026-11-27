@@ -65,6 +65,7 @@ import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server'
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
+import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
 import { checkQuotations, preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
@@ -1016,6 +1017,9 @@ async function turnAction({ request }: ActionFunctionArgs) {
               const words = checkNoteWords(error.wrong);
               return { what: error.why, words: error.wrong, right: error.right, note: `“${words.slice(0, 80)}${words.length > 80 ? '…' : ''}”: ${error.why}` };
             }),
+          // No reading without the reading (R9, S1; Nov 24): a passage students
+          // mark that is nowhere in their hands.
+          ...passageNotInHand(reply),
         ];
         const askRepair = problems.length ? factCheckCall(attribution, { schema: LESSON_REPAIR_SCHEMA, feature: 'lesson-planner-repair', timeoutMs: 35_000, maxTokens: 6_000 }) : undefined;
         const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: [...quoted.verified, ...companions.verified] }) : { reply, repaired: [], left: problems };
