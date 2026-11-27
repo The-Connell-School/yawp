@@ -236,7 +236,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 
 - Which of these does Brian already know personally?
 - Is there budget for the paid pilot before the angel round?
-- Is Justin Sorenzia's group part of one of the independent-school associations above?
+- Is Justin Cerenzia's group part of one of the independent-school associations above?
 - How much of the research and outreach drafting should Muse take on?
 
 *Full research with sources: `reports/ELA education voices for outreach.md`*
