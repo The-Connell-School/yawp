@@ -2502,3 +2502,17 @@ describe('buildLessonPlannerSystemPrompt — standards every lesson meets (13-le
     expect(off).not.toContain('"Care note"');
   });
 });
+
+describe('planner prompt — real sources, terms taught right (Nov 24 types test)', () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School' });
+  test('never an invented source presented as real: a real one, a labeled slot, or one marked as written for practice', () => {
+    expect(prompt).toContain('Real sources only');
+    expect(prompt).toContain('Never invent a book, article, study, author, expert or web address');
+    expect(prompt).toContain('"studies show"');
+    expect(prompt).toContain('written for practice');
+  });
+  test('a term is taught as the field defines it, and each example is a true case of it', () => {
+    expect(prompt).toContain('Teach a term right');
+    expect(prompt).toContain('an example labeled ethos');
+  });
+});

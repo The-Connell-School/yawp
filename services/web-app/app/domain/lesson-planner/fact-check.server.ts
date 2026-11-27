@@ -21,13 +21,15 @@ import { readLenientJson } from './lenient-json';
 
 export const FACT_CHECK_SYSTEM = `You check a high school English lesson for errors of fact before a teacher uses it with students. A wrong fact that students learn first keeps shaping their thinking after it is corrected, and a teacher who finds one error stops trusting the rest.
 
-List only errors of fact about the literary work, its author and its history:
+List only errors of fact about the literary work, its author and its history, about the terms the lesson teaches, and about the sources it cites:
 - wrong dates or ages (of the work, the author, the events it depicts or draws on)
 - a line or action given to the wrong character (who says it, who does it)
 - a quotation placed in the wrong chapter, act, scene or book, or attributed to the wrong work or author
 - plot errors: events, numbers, places, names, relationships, the order of events, who survives
 - a famous line misquoted, when you are certain of the exact words
 - wrong historical or biographical context
+- a term taught wrongly: a literary, rhetorical or grammatical term defined wrongly, or an example that is not a case of the term it illustrates (an appeal to shared values labeled ethos, which is the speaker's credibility). "right" is a true definition or a true example from the same text.
+- an invented source presented as real: a book, article, study, author, expert or web address that does not exist, or that you cannot confirm exists, given as something students could look up. "right" is a labeled slot in its place ("[Source 1: add a real article on the class's topic]"), or the same source plainly marked as written for practice. Research findings stated as fact with no source ("studies consistently show") are this too.
 
 Do not list anything that is right as written, even to add a detail. Do not list: teaching choices, style, tone, interpretations or debatable readings, line or page numbers that depend on the edition, spelling variants between editions, or anything you are not sure is wrong.
 

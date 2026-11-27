@@ -277,3 +277,18 @@ describe('what the model is asked', () => {
     ]);
   });
 });
+
+describe('the fact check also reads for invented sources and terms taught wrong (Nov 24 types test)', () => {
+  // The research lesson cited "California Dreaming… Dr. Maria Sandoval, UC
+  // Davis" as a real book; the speech lesson's ethos example was not ethos.
+  test('an invented book, study, author or address is an error, put right with a labeled slot', () => {
+    expect(FACT_CHECK_SYSTEM).toContain('invented');
+    expect(FACT_CHECK_SYSTEM).toContain('study');
+    expect(FACT_CHECK_SYSTEM).toContain('web address');
+    expect(FACT_CHECK_SYSTEM).toContain('labeled slot');
+  });
+  test('a term defined wrongly, or an example that is not a case of the term, is an error', () => {
+    expect(FACT_CHECK_SYSTEM).toContain('a term taught wrongly');
+    expect(FACT_CHECK_SYSTEM).toContain('labeled ethos');
+  });
+});
