@@ -83,7 +83,15 @@ export type LandingBlock =
    * (Pre-Writing, Thesis Statement): its slide deck and its tutorial video.
    * `lead` sits above it.
    */
-  | { type: 'lesson'; slug: YawpLessonSlug; lead?: string };
+  | { type: 'lesson'; slug: YawpLessonSlug; lead?: string }
+  /**
+   * A file for teachers to download, shown as its label beside a document
+   * icon, in the style of the Thesis-Driven Essay course's rubric link
+   * (Brian, Nov 25: the 5-Paragraph Essay's student rubric). `href` is under
+   * public/; `fileName` is what the download is saved as. Its extension
+   * names the format for screen readers: .docx is Word, .pdf is PDF.
+   */
+  | { type: 'download'; label: string; href: string; fileName: string };
 
 /**
  * What one step asks of students and how the Tutor helps, for the module
@@ -565,9 +573,21 @@ const FIVE_PARAGRAPH_ESSAY: LandingPage = {
         // Brian, Nov 17: his note, word for word, in place of the old
         // "Teach the steps below in order" intro, then the steps. The Lesson
         // Planner paragraph was removed Nov 24 (the planner is not live yet).
+        // Nov 25: How long, word for word, and the student grading rubric
+        // (from Brian's Google Doc, exported to Word so teachers can change
+        // the wording; it opens in Google Docs too) right above the modules.
         p(
           'Most English teachers already have a way of teaching the five-paragraph essay, and Yawp! is built to work alongside yours. As you teach the process, students work through the steps below in their documents, and the Yawp! Tutor coaches them through each one: pre-writing, a three-point thesis, an introduction, three body paragraphs, a conclusion, a title, and a final review.'
         ),
+        p(
+          '**How long.** Plan on 5 to 7 class periods if students are writing in class (which we support and recommend!). Most students finish one or two modules a day.'
+        ),
+        {
+          type: 'download',
+          label: 'Grading rubric',
+          href: '/courses/five-paragraph-essay/five-paragraph-essay-student-rubric.docx',
+          fileName: 'Yawp! 5-Paragraph Essay Student Rubric.docx',
+        },
         { type: 'steps', descriptions: FIVE_PARAGRAPH_STEP_DESCRIPTIONS },
       ],
     },
@@ -865,6 +885,7 @@ export function landingPagePlainText(page: LandingPage): string {
     .flatMap((block) => {
       if (block.type === 'paragraph') return [block.text];
       if (block.type === 'bullets') return block.items;
+      if (block.type === 'download') return [block.label];
       return block.lead ? [block.lead] : [];
     })
     .map(stripMarkup)

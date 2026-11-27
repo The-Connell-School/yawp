@@ -493,7 +493,46 @@ function Block({
       />
     );
   }
+  if (block.type === 'download') {
+    return <DownloadLink block={block} assetsLocked={assetsLocked} />;
+  }
   return <Steps block={block} modules={modules} />;
+}
+
+/** The format a download's file name says it is, for its link's label. */
+function downloadFormat(fileName: string): string {
+  if (/\.docx?$/i.test(fileName)) return 'Word';
+  if (/\.pdf$/i.test(fileName)) return 'PDF';
+  return fileName.split('.').pop()?.toUpperCase() ?? 'file';
+}
+
+/**
+ * A file to download, as its label beside a document icon, styled like the
+ * Thesis-Driven Essay course's rubric link (Brian, Nov 25).
+ */
+function DownloadLink({
+  block,
+  assetsLocked,
+}: {
+  block: Extract<LandingBlock, { type: 'download' }>;
+  assetsLocked: boolean;
+}) {
+  const link = (
+    <a
+      href={block.href}
+      download={block.fileName}
+      aria-label={`${block.label} (${downloadFormat(block.fileName)})`}
+      className={cn(COURSE_LINK_CLASS, 'text-sm font-medium')}
+    >
+      <FileText className="h-4 w-4" aria-hidden />
+      {block.label}
+    </a>
+  );
+  return (
+    <div data-testid="landing-download">
+      {assetsLocked ? <LockHowToTeachControl>{link}</LockHowToTeachControl> : link}
+    </div>
+  );
 }
 
 /**
