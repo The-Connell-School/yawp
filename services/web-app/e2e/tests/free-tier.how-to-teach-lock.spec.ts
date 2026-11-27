@@ -47,9 +47,15 @@ test.describe('free tier: locked assignment type How to Teach It', () => {
     );
     expect(tutorial.status()).toBe(403);
     const response = await page.request.get(
-      '/courses/thesis-driven-essay/02-pre-writing.pptx'
+      '/courses/thesis-driven-essay/01-introduction-to-yawp.pptx'
     );
     expect(response.status()).toBe(403);
+    // Pre-writing and Thesis Statement are in the free bundle, and their pages
+    // link these files unlocked.
+    const preWritingDeck = await page.request.get(
+      '/courses/thesis-driven-essay/02-pre-writing.pptx'
+    );
+    expect(preWritingDeck.status()).toBe(200);
   });
 
   test('how-it-works GuideHowToTeach is locked for thesis-driven essay', async ({
