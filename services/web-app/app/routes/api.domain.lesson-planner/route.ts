@@ -64,6 +64,7 @@ import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
+import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
 import { checkQuotations, preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
@@ -1076,8 +1077,11 @@ async function turnAction({ request }: ActionFunctionArgs) {
         // eslint-disable-next-line no-console
         console.error('[lesson-planner] accuracy check failed:', error instanceof Error ? error.name : 'error');
       }
-      // Minutes that agree (Nov 22): the deck's agenda and slide minutes come
-      // from the plan's steps, never written separately.
+      // Minutes that add up to the period (S9, Nov 24 types test: 57, 55 and
+      // 47 minutes for 50-minute periods): the plan's own steps first...
+      reply = planFittingPeriod(reply, lessonLength?.minutes);
+      // ...then minutes that agree (Nov 22): the deck's agenda and slide
+      // minutes come from the plan's steps, never written separately.
       reply = withDeckMatchingPlan(reply);
       // The writing on the slides is the writing "Add everything" files (round 3, Nov 22).
       reply = withWriteSlidesAsFiled(reply);
