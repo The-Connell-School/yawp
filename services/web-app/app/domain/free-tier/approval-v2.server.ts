@@ -13,6 +13,8 @@ import type {
 } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server';
+import { providerMessageIdFromSendResult } from '~/utils/email-provider-message-id';
+import { recordAdminApprovalUndeliverable } from './admin-approval-undeliverable.server';
 import { FREE_TIER_FLAG } from '~/domain/feature-flags/feature-flags';
 import {
   isFeatureFlagEnabled,
@@ -204,8 +206,15 @@ async function queue(
   sequence: number,
   now: Date,
   message: Message,
-  extra: { source?: string; actorEmail?: string; idempotencyKey?: string } = {}
+  extra: {
+    source?: string;
+    actorEmail?: string;
+    idempotencyKey?: string;
+    replaceExisting?: boolean;
+  } = {}
 ) {
+  const { replaceExisting, ...fields } = extra;
+  const payload = encrypt(message);
   return tx.freeTierApprovalDelivery.upsert({
     where: { approvalId_kind_sequence: { approvalId, kind, sequence } },
     create: {
@@ -213,10 +222,20 @@ async function queue(
       kind,
       sequence,
       availableAt: now,
-      payload: encrypt(message),
-      ...extra,
+      payload,
+      ...fields,
     },
-    update: {},
+    update: replaceExisting
+      ? {
+          state: 'QUEUED',
+          availableAt: now,
+          payload,
+          error: null,
+          attemptedAt: null,
+          attempts: 0,
+          sentAt: null,
+        }
+      : {},
   });
 }
 
@@ -351,6 +370,7 @@ export async function getApprovalWaitingDetails(app: AppIdentity) {
       adminName: true,
       adminEmail: true,
       autoRemindersStopped: true,
+      stopReason: true,
       createdAt: true,
       firstSentAt: true,
     },
@@ -974,12 +994,21 @@ export async function queueTeacherDenyEmailInTransaction(
   // Held back so an admin who reopens the request soon after denying it
   // (see reopenDeniedSchoolAdminApproval) never sends the teacher a denial.
   const sendAt = new Date(+args.now + TEACHER_DENY_EMAIL_DELAY_MS);
-  return queue(tx, args.approvalId, 'teacher_deny', 1, sendAt, {
-    to: args.teacherEmail,
-    subject: designed.subject,
-    text: designed.text,
-    html: designed.html,
-  });
+  return queue(
+    tx,
+    args.approvalId,
+    'teacher_deny',
+    1,
+    sendAt,
+    {
+      to: args.teacherEmail,
+      subject: designed.subject,
+      text: designed.text,
+      html: designed.html,
+    },
+    // A reopen cancels the first row. Denying again must schedule a new send.
+    { replaceExisting: true }
+  );
 }
 
 export async function flushTeacherDenyEmail(approvalId: string, now = new Date()) {
@@ -1108,6 +1137,12 @@ async function deliverJob(id: string, now: Date) {
     return true;
   });
   if (!claimed) return;
+  let providerMessageId: string | null = null;
+  let undeliverableNotice: {
+    applicationId: string;
+    approvalId: string;
+    reason: 'failed';
+  } | null = null;
   // The claim is durable before sending. A process crash cannot trigger replay.
   await prisma.$transaction(
     async (tx) => {
@@ -1223,6 +1258,7 @@ async function deliverJob(id: string, now: Date) {
           html,
           singleAttempt: true,
         });
+        providerMessageId = providerMessageIdFromSendResult(result);
         accepted = result.status === 'success';
         if (result.status === 'error') {
           const code = result.error.statusCode;
@@ -1258,7 +1294,7 @@ async function deliverJob(id: string, now: Date) {
             },
           },
         });
-        if (!retry)
+        if (!retry) {
           await tx.freeTierAdminApproval.update({
             where: { id: approval.id },
             data: {
@@ -1268,6 +1304,14 @@ async function deliverJob(id: string, now: Date) {
               nextAutoReminderAt: null,
             },
           });
+          if (job.kind === 'admin_approval' || job.kind === 'admin_reminder') {
+            undeliverableNotice = {
+              applicationId: app.id,
+              approvalId: approval.id,
+              reason: 'failed',
+            };
+          }
+        }
         return;
       }
       await tx.freeTierApprovalDelivery.update({
@@ -1288,6 +1332,7 @@ async function deliverJob(id: string, now: Date) {
             deliveryId: id,
             approvalId: approval.id,
             ...(job.source != null ? { source: job.source } : {}),
+            ...(providerMessageId ? { providerMessageId } : {}),
             ...adminApprovalUrlsFromEmailBody(message.text),
           }),
         },
@@ -1354,6 +1399,38 @@ async function deliverJob(id: string, now: Date) {
     },
     { timeout: 30000 }
   );
+  if (undeliverableNotice) {
+    await recordAdminApprovalUndeliverable(undeliverableNotice).catch(() => {
+      console.error({ event: 'admin_approval_undeliverable_notice_failed' });
+    });
+  }
+}
+
+/** Send approval jobs whose availableAt has passed. Safe to run more than once. */
+export async function deliverQueuedApprovalJobs(now = new Date()) {
+  const rollout = await resolvedFreeTierRollout(prisma);
+  if (rollout.mode === 'off') return;
+  const scope =
+    rollout.mode === 'targeted'
+      ? { organizationId: { in: rollout.orgIds } }
+      : {};
+  let jobCursor: string | undefined;
+  while (true) {
+    const jobs = await prisma.freeTierApprovalDelivery.findMany({
+      where: {
+        state: 'QUEUED',
+        availableAt: { lte: now },
+        approval: { application: scope },
+      },
+      orderBy: { id: 'asc' },
+      take: 100,
+      ...(jobCursor ? { cursor: { id: jobCursor }, skip: 1 } : {}),
+      select: { id: true },
+    });
+    for (const job of jobs) await deliverJob(job.id, now);
+    if (jobs.length < 100) break;
+    jobCursor = jobs.at(-1)!.id;
+  }
 }
 
 /** Bounded durable work; multiple app instances may safely run this drain. */
@@ -1399,23 +1476,7 @@ export async function runApprovalJobs(now = new Date()) {
     if (applications.length < 100) break;
     applicationCursor = applications.at(-1)!.id;
   }
-  let jobCursor: string | undefined;
-  while (true) {
-    const jobs = await prisma.freeTierApprovalDelivery.findMany({
-      where: {
-        state: 'QUEUED',
-        availableAt: { lte: now },
-        approval: { application: scope },
-      },
-      orderBy: { id: 'asc' },
-      take: 100,
-      ...(jobCursor ? { cursor: { id: jobCursor }, skip: 1 } : {}),
-      select: { id: true },
-    });
-    for (const job of jobs) await deliverJob(job.id, now);
-    if (jobs.length < 100) break;
-    jobCursor = jobs.at(-1)!.id;
-  }
+  await deliverQueuedApprovalJobs(now);
   const abandoned = await prisma.freeTierApprovalDelivery.findMany({
     where: {
       state: 'DELIVERING',

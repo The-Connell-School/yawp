@@ -1,4 +1,5 @@
 import { sendEmail } from '~/utils/email.server';
+import { providerMessageIdFromSendResult } from '~/utils/email-provider-message-id';
 import { prisma } from '~/utils/db.server';
 import {
   ADMIN_APPROVAL_EMAIL_COPY_VERSION,
@@ -208,6 +209,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
       text,
       html,
     });
+    const providerMessageId = providerMessageIdFromSendResult(result);
     const error = emailSendErrorMessage(result);
     const delivered = error ? { ok: false as const, error } : { ok: true as const };
     if (!delivered.ok) {
@@ -232,6 +234,7 @@ export async function sendFreeTierAdminApprovalEmail(args: {
       payload: {
         approveUrl: args.approveUrl,
         notRightPersonUrl: args.notRightPersonUrl,
+        ...(providerMessageId ? { providerMessageId } : {}),
       },
     });
     return { ok: true };

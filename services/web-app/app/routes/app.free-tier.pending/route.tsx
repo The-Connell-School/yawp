@@ -25,6 +25,10 @@ import {
   teacherDeniedStatusBody,
   teacherDeniedStatusTitle,
 } from '~/domain/free-tier/admin-deny-copy';
+import {
+  isAdminEmailUndeliverableStop,
+  teacherPendingUndeliverableBody,
+} from '~/domain/free-tier/admin-approval-undeliverable-copy';
 import { approvalSentDate } from '~/domain/free-tier/approval-waiting';
 import { teacherPendingForwardError } from '~/domain/free-tier/admin-approval-copy';
 import {
@@ -326,6 +330,9 @@ export default function FreeTierPendingRoute() {
     navigation.formData?.get('intent') !== 'forward';
   const forwardActionData = forwardFetcher.data;
   const adminName = pending?.adminName ?? 'your administrator';
+  const adminEmailUndeliverable = isAdminEmailUndeliverableStop(
+    approvalV2?.approval?.stopReason
+  );
   const [askAnotherOpen, setAskAnotherOpen] = useState(askOpen);
   const [forwardOpen, setForwardOpen] = useState(false);
   const forwarding = forwardFetcher.state !== 'idle';
@@ -475,7 +482,12 @@ export default function FreeTierPendingRoute() {
                   ? MANUAL_REVIEW_PENDING_COPY
                   : 'We will email you when your request is ready.'}
             </p>
-            {app?.status === 'SENT' && current ? (
+            {adminEmailUndeliverable && current ? (
+              <p className="text-sm text-destructive" role="alert">
+                {teacherPendingUndeliverableBody(current.adminName)}
+              </p>
+            ) : null}
+            {app?.status === 'SENT' && current && !adminEmailUndeliverable ? (
               <p className="text-sm text-muted-foreground">
                 You’re almost there! It may be a good idea to give{' '}
                 {current.adminName} a quick heads-up so the email doesn’t get
