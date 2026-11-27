@@ -393,7 +393,8 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-new',
         title: 'Make one',
-        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
+        // Brian, Nov 27.
+        body: 'Click New → Assignment to create a prompt that will get students thinking at the start of class.',
       },
       {
         target: 'type-directions',
@@ -422,8 +423,9 @@ const TOURS: Record<TourId, PageTour> = {
     steps: [
       {
         target: 'type-new',
-        title: 'Make one',
-        body: 'New → Assignment gives it to your class. Use these assignments to help students practice and develop their own ideas.',
+        // Matches the Thesis Statement tour's first step (Brian, 11/27).
+        title: 'Make an assignment',
+        body: 'Click New → Assignment to give students room to explore the topic alongside the Yawp! Tutor and discover what they really think before they write.',
       },
       {
         target: 'type-how-to-teach',
@@ -559,7 +561,8 @@ const TOURS: Record<TourId, PageTour> = {
       {
         target: 'type-how-to-teach',
         title: 'How to teach it',
-        body: 'Learn how to teach this step of the writing process. Download the slide deck and watch the quick tutorial video!',
+        // This type has no slide deck or tutorial video (Brian, 11/27).
+        body: "Walk students through these steps in order. Class time works best, so they can write with the Yawp! Tutor while you're there to help, but any step can also be done at home.",
       },
       {
         target: 'type-directions',

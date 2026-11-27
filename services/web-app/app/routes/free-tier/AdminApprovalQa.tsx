@@ -17,7 +17,7 @@ export const ADMIN_APPROVE_FAQ = [
     id: 'what',
     question: 'What Yawp! is',
     answer:
-      'Yawp! is a writing program that makes teaching writing far more efficient. It gives teachers a full curriculum, ready-to-teach lessons, and grading tools that save hours of feedback time, so students can write more often and improve faster. As they write, an AI tutor gives them immediate feedback that pushes them to think critically and develop their own ideas. It never writes for them, and teachers can see every draft and every tutor conversation. It’s the writing program teachers, students, and parents have been waiting for.',
+      'Yawp! is a writing program that makes teaching writing far more efficient. It gives teachers materials, ready-to-teach lessons, and grading tools that save hours of feedback time, so students can write more often and improve faster. As they write, an AI tutor gives them immediate feedback that pushes them to think critically and develop their own ideas. It never writes for them, and teachers can see every draft and every tutor conversation. It’s the writing program teachers, students, and parents have been waiting for.',
   },
   {
     id: 'free',

@@ -85,6 +85,36 @@ describe('tourForPage', () => {
     );
   });
 
+  test('5-paragraph essay tour does not point to a slide deck it does not have', () => {
+    const step = getTour('type-five-paragraph-essay').steps.find(
+      (s) => s.title === 'How to teach it'
+    );
+    expect(step?.body).toBe(
+      "Walk students through these steps in order. Class time works best, so they can write with the Yawp! Tutor while you're there to help, but any step can also be done at home."
+    );
+    // The other types keep their own text.
+    expect(
+      getTour('type-prewriting').steps.find((s) => s.title === 'How to teach it')
+        ?.body
+    ).toContain('slide deck');
+  });
+
+  test('Pre-writing tour starts with Make an assignment in Brian\'s words', () => {
+    const first = getTour('type-prewriting').steps[0];
+    expect(first?.title).toBe('Make an assignment');
+    expect(first?.body).toBe(
+      'Click New → Assignment to give students room to explore the topic alongside the Yawp! Tutor and discover what they really think before they write.'
+    );
+    // Class Starter keeps its own first step.
+    expect(getTour('type-class-starter').steps[0]?.title).toBe('Make one');
+  });
+
+  test('Class Starter tour starts with Brian\'s start-of-class line', () => {
+    expect(getTour('type-class-starter').steps[0]?.body).toBe(
+      'Click New → Assignment to create a prompt that will get students thinking at the start of class.'
+    );
+  });
+
   test('no tour for other types, or before the page says which type it is', () => {
     const path = '/app/assignment-types/at_123';
     expect(tourForPage(path, 'daily_pages')).toBeNull();

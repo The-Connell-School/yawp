@@ -39,6 +39,7 @@ import {
   AdminLinkInvalidCard,
   AdminLinkReplacedCard,
   AdminThankYouCard,
+  AdminWhatIsYawpLink,
   adminApprovePageTitle,
   approveCheckboxError,
 } from '../free-tier/AdminApprovalStates';
@@ -409,7 +410,12 @@ export default function FreeAdminApproveRoute() {
         );
       } else if (actionData.reason === 'email_failed') {
         content = (
-          <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
+          <FreeTierAuthCard
+            title="Thank you"
+            icon={<CircleCheck />}
+            status
+            aboveCard={<AdminWhatIsYawpLink />}
+          >
             <p className="text-sm text-muted-foreground">
               {thankYouTeacherEmailFailedBody(
                 data.teacherName,
@@ -468,6 +474,7 @@ function renderApproveForm(
   return (
     <FreeTierAuthCard
       title={adminApprovePageTitle(data.teacherName, data.schoolName)}
+      aboveCard={<AdminWhatIsYawpLink />}
       belowCard={
         data.showDenyAndQa && data.forwardToken ? (
           <AdminForwardLink

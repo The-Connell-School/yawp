@@ -227,7 +227,7 @@ describe("Brian's pages, word for word", () => {
     const philosophy = section('prewriting', 'philosophy');
     expect(philosophy.heading).toBe('Yawp! philosophy on essay prompts');
     expect(paragraphs(philosophy.blocks)).toEqual([
-      "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset.",
+      "We've found that students write their best essays about something they actually care about, so many of our prompts (even those about literature or other source material) are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset, etc.",
     ]);
     // "Have your own prompt? Click New above…" is gone: How it works says it.
     // The library itself follows the boxes, with nothing loose above it.
