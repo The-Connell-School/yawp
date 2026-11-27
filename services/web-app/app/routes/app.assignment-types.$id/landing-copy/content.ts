@@ -325,12 +325,13 @@ const PREWRITING: LandingPage = {
     // Kevin and Brian, Nov 11: "Have your own prompt? Click New above…" is
     // gone (How it works says it), and the note is its own box. The library
     // follows it, with nothing loose in between.
+    // Brian, Nov 27: prompts about literature are open too.
     {
       id: 'philosophy',
       heading: PHILOSOPHY_HEADING,
       blocks: [
         p(
-          "We've found that students write their best essays about something they actually care about, so many of our prompts are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset."
+          "We've found that students write their best essays about something they actually care about, so many of our prompts (even those about literature or other source material) are open on purpose and let students choose their own adventure within a topic. That's exactly what pre-writing is for. Still, some students and teachers prefer a tighter, more specific scope, and that's OK too! Either way, help students find their personal connection to the topic. If a student is stuck, send them to the emotional charge: what they loved, what grabbed them, what made them upset, etc."
         ),
       ],
     },

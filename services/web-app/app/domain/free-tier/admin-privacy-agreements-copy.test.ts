@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   ADMIN_APPROVE_NDPA_TRUST,
+  ADMIN_APPROVE_STUDENT_PRIVACY_FAQ,
   PRIVACY_LAWS_AND_AGREEMENTS,
 } from './admin-privacy-agreements-copy';
 
@@ -16,4 +17,11 @@ test('privacy laws section lists FERPA, COPPA, and SDPC NDPA', () => {
   const ndpa = PRIVACY_LAWS_AND_AGREEMENTS.find((item) => item.id === 'ndpa');
   expect(ndpa?.text).toContain('will sign');
   expect(ndpa?.text).toContain('SDPC National Data Privacy Agreement');
+});
+
+test('admin Student privacy answer ends with the agreement offer', () => {
+  expect(ADMIN_APPROVE_STUDENT_PRIVACY_FAQ).toEndWith(
+    'Our practices align with the SDPC National Data Privacy Agreement, and we will sign your state’s terms if/when you need an agreement.'
+  );
+  expect(ADMIN_APPROVE_STUDENT_PRIVACY_FAQ).not.toMatch(/signed agreement/i);
 });

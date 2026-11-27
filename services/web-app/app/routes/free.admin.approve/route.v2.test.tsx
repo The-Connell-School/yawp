@@ -111,3 +111,12 @@ test('approve page uses the designed heading and forward link', () => {
   );
 });
 
+
+test('approve page links to What is Yawp!', () => {
+  const html = renderWithCardPageChrome(
+    <Page />,
+    '/free/admin/approve?t=token'
+  );
+  expect(html).toContain('>What is Yawp!<');
+  expect(html).toContain('href="https://yawpwritingprogram.com"');
+});

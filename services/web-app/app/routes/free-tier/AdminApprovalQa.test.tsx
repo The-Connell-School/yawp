@@ -27,8 +27,10 @@ test('FAQ copy uses the Oxford comma in serial lists', () => {
   const doesnt = ADMIN_APPROVE_FAQ.find((item) => item.id === 'doesnt');
   const what = ADMIN_APPROVE_FAQ.find((item) => item.id === 'what');
   expect(what?.answer).toContain(
-    'a full curriculum, ready-to-teach lessons, and grading tools'
+    'materials, ready-to-teach lessons, and grading tools'
   );
+  // Districts buy and approve curriculum; Yawp! works with the one they use.
+  expect(what?.answer).not.toMatch(/curriculum/i);
   expect(what?.answer).toContain('teachers, students, and parents');
   // The doesn't-do answer has no serial list; it leads with the no-writing rule.
   expect(doesnt?.answer).toContain('it will not write for students');

@@ -35,7 +35,7 @@ import { CLASS_STARTER_DEFAULT_POINT_VALUE } from '~/domain/assignments/new-assi
 
 export const FIRST_ASSIGNMENT_PAGE_TITLE = 'Create your first assignment';
 export const FIRST_ASSIGNMENT_INTRO =
-  "You're approved. We set up a Class Starter for you: a short, low-stakes write that gets every student into Yawp! on day one.";
+  "You're approved! For your first assignment, we recommend this Class Starter: a short, low-stakes write that gets every student easing into Yawp! on day one. We've had great luck with this one, but feel free to edit or change it if you'd like.";
 export const FIRST_ASSIGNMENT_DEFAULT_TITLE = 'Something I Love';
 export const FIRST_ASSIGNMENT_DEFAULT_PROMPT =
   'Tell me about a movie, TV show, book, or musical artist you love. What is it, and what makes it so great? Convince me to check it out.';

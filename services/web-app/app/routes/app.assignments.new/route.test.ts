@@ -114,7 +114,7 @@ mock.module('~/utils/db.server', () => ({
   },
 }));
 
-const { loader, action, FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE, FIRST_ASSIGNMENT_DEFAULT_PROMPT, FIRST_ASSIGNMENT_DEFAULT_TITLE } =
+const { loader, action, FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE, FIRST_ASSIGNMENT_DEFAULT_PROMPT, FIRST_ASSIGNMENT_DEFAULT_TITLE, FIRST_ASSIGNMENT_INTRO } =
   await import('./route');
 
 describe('app.assignments.new route gate', () => {
@@ -159,6 +159,12 @@ describe('app.assignments.new route gate', () => {
     expect(result.defaults.title).toBe(FIRST_ASSIGNMENT_DEFAULT_TITLE);
     expect(result.defaults.prompt).toBe(FIRST_ASSIGNMENT_DEFAULT_PROMPT);
     expect(result.defaults.pointValue).toBe(String(FIRST_ASSIGNMENT_DEFAULT_POINT_VALUE));
+  });
+
+  test('first-assignment intro recommends the Class Starter in Brian\'s words', () => {
+    expect(FIRST_ASSIGNMENT_INTRO).toBe(
+      "You're approved! For your first assignment, we recommend this Class Starter: a short, low-stakes write that gets every student easing into Yawp! on day one. We've had great luck with this one, but feel free to edit or change it if you'd like."
+    );
   });
 
   test('prompt query pre-fills the assignment prompt when not first assignment', async () => {

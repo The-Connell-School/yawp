@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { WhatIsYawpLink } from '~/components/what-is-yawp-link';
 import {
   CircleAlert,
   CircleCheck,
@@ -120,6 +121,15 @@ export function AdminApprovalFeatureList() {
   );
 }
 
+/** Above the administrator's cards, for anyone who wants to read about Yawp! first (Brian, 11/27). */
+export function AdminWhatIsYawpLink() {
+  return (
+    <p className="text-center text-sm">
+      <WhatIsYawpLink className="underline underline-offset-2" />
+    </p>
+  );
+}
+
 export function AdminThankYouCard({
   teacherName,
   schoolName,
@@ -128,7 +138,12 @@ export function AdminThankYouCard({
   schoolName: string;
 }) {
   return (
-    <FreeTierAuthCard title="Thank you" icon={<CircleCheck />} status>
+    <FreeTierAuthCard
+      title="Thank you"
+      icon={<CircleCheck />}
+      status
+      aboveCard={<AdminWhatIsYawpLink />}
+    >
       <p className="text-sm text-muted-foreground">
         {thankYouBody(teacherName, schoolName)}
       </p>
