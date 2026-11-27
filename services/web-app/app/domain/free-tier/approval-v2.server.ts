@@ -1138,6 +1138,9 @@ async function deliverJob(id: string, now: Date) {
   });
   if (!claimed) return;
   let providerMessageId: string | null = null;
+  // A thrown send is ambiguous: the provider may already have accepted it.
+  // Only a finished client rejection is safe to describe as undelivered.
+  let providerClientRejected = false;
   let undeliverableNotice: {
     applicationId: string;
     approvalId: string;
@@ -1263,6 +1266,7 @@ async function deliverJob(id: string, now: Date) {
         if (result.status === 'error') {
           const code = result.error.statusCode;
           retryable = code >= 400 && code < 500 && code !== 408;
+          providerClientRejected = retryable;
         }
       } catch {
         /* network/provider ambiguity must never be retried automatically */
@@ -1304,7 +1308,10 @@ async function deliverJob(id: string, now: Date) {
               nextAutoReminderAt: null,
             },
           });
-          if (job.kind === 'admin_approval' || job.kind === 'admin_reminder') {
+          if (
+            providerClientRejected &&
+            (job.kind === 'admin_approval' || job.kind === 'admin_reminder')
+          ) {
             undeliverableNotice = {
               applicationId: app.id,
               approvalId: approval.id,
