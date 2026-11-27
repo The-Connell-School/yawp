@@ -368,3 +368,53 @@ describe('with the work found and fetched', () => {
     expect(offline.work?.id).toBe('wilfred-owen');
   });
 });
+
+describe('a prose passage is corrected a sentence at a time, never into the next (memoir handout, Nov 24)', () => {
+  // The Douglass handout printed "bear heavily upon my." (a word lost) and a
+  // stray fragment repeating the next paragraph: a sentence the planner wrote
+  // a little long or short was replaced with the same number of the book's
+  // words, which ran past (or stopped short of) the sentence's end.
+  const handout = (sentence: string) => `## Handout: Chapter 1 opening
+
+> He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that. In consequence, I'm inclined to reserve all judgments, a habit that has opened up many curious natures to me and also made me the victim of not a few veteran bores. Reserving judgments is a matter of infinite hope. ${sentence}
+>
+> And, after boasting this way of my tolerance, I come to the admission that it has a limit. Conduct may be founded on the hard rock or the wet marshes, but after a certain point I don't care what it's founded on.
+
+1. What does Nick mean by "reserve all judgments"?`;
+
+  test('a sentence with words added ends where the book ends it, and the next paragraph is not pulled in', () => {
+    const reply = handout(
+      'I am still a little afraid of missing something if I forget that, as my father snobbishly suggested, and I snobbishly repeat, a sense of the fundamental decencies is parcelled out unequally at birth, and it weighs upon my heart.'
+    );
+    const out = checkQuotations(reply, GATSBY, { work: gatsby });
+    expect(out.reply).toContain('a sense of the fundamental decencies is parcelled out unequally at birth.\n>\n> And, after boasting');
+    expect(out.reply).not.toContain('at birth. And, after boasting.');
+    expect(out.reply.match(/And, after boasting/g)?.length).toBe(1);
+  });
+
+  test('a sentence whose last words are off ends on the book\'s last word, not cut short ("upon my.")', () => {
+    const reply = handout(
+      'I am still a little afraid of missing something if I forget that, as my father snobbishly suggested, and I snobbishly repeat, a sense of the fundamental decencies is parcelled out unequally to us all.'
+    );
+    const out = checkQuotations(reply, GATSBY, { work: gatsby });
+    expect(out.reply).toContain('is parcelled out unequally at birth.\n>');
+    expect(out.reply).not.toContain('unequally at.');
+  });
+
+  test('a sentence too far from the book to end where it ends is left as written and reported, never cut to fit', () => {
+    const sentence =
+      'I am still a little afraid of missing something if I forget that, as my father snobbishly suggested, and I snobbishly repeat, a sense of decency is unequal.';
+    const out = checkQuotations(handout(sentence), GATSBY, { work: gatsby });
+    expect(out.reply).not.toContain('a sense of.');
+    expect(out.reply).toContain(sentence);
+    expect(out.unverified.some((miss) => miss.quote.includes('a sense of decency is unequal'))).toBe(true);
+  });
+
+  test('a sentence one word off is still corrected word for word', () => {
+    const reply = handout(
+      'I am still a little afraid of missing something if I forget that, as my father snobbishly suggested, and I snobbishly repeat, a sense of the basic decencies is parcelled out unequally at birth.'
+    );
+    const out = checkQuotations(reply, GATSBY, { work: gatsby });
+    expect(out.reply).toContain('a sense of the fundamental decencies is parcelled out unequally at birth.\n>');
+  });
+});

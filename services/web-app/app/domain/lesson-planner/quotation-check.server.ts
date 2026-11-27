@@ -390,6 +390,46 @@ export function closest(source: PreparedSource, quote: string[]): Near | null {
   return best;
 }
 
+/** Whether the source has a sentence end between word `k - 1` and word `k` (or `k` is the source's first word). */
+function sentenceBreakBefore(source: PreparedSource, k: number): boolean {
+  if (k <= 0) return true;
+  if (k >= source.words.length) return true;
+  const between = source.text.slice(source.ends[k - 1], source.starts[k]);
+  return /[.!?…]/.test(between) || /\n\s*\n/.test(between);
+}
+
+const SNAP = 4;
+
+/**
+ * A whole sentence of a prose passage, corrected to the whole sentence the
+ * source has (memoir handout, Nov 24): the nearest run of words is found a
+ * few words longer or shorter than the quotation, so a sentence the planner
+ * wrote a little long ran into the next paragraph ("…at birth. And, after
+ * boasting."), and one a little short lost its last word ("upon my."). The
+ * run is moved to the source's own sentence ends within a few words, when
+ * there are ones. When a whole sentence has none near, it is not corrected
+ * at all (null): "…a sense of." is worse than the planner's own words, which
+ * are then reported as not found as written.
+ */
+export function snapToSentence(source: PreparedSource, near: Near, quote: string): Near | null {
+  const starts = /^["“‘'*_(]*[A-Z]/.test(quote.trim());
+  const ends = /[.!?…]["”’'*_)]*$/.test(quote.trim());
+  if (!starts && !ends) return near;
+  const pick = (at: number, low: number, high: number) => {
+    let best: number | null = null;
+    for (let k = Math.max(low, at - SNAP); k <= Math.min(high, at + SNAP); k += 1)
+      if (sentenceBreakBefore(source, k) && (best === null || Math.abs(k - at) < Math.abs(best - at))) best = k;
+    return best;
+  };
+  const start = starts ? pick(near.start, 0, near.end - 1) : near.start;
+  if (start === null) return null;
+  const end = ends ? pick(near.end, start + 1, source.words.length) : near.end;
+  if (end === null || end - start < 2) return null;
+  // A sentence of the source inside the run is a break the quotation does not have.
+  for (let k = start + 1; k < end; k += 1) if (sentenceBreakBefore(source, k) && !/[.!?…]\s+["“‘'*_]*[A-Z]/.test(quote)) return near;
+  return start === near.start && end === near.end ? near : { ...near, start, end };
+}
+
 /** The section a point of the source is in. */
 function sectionAt(source: PreparedSource, pos: number): Section | null {
   let found: Section | null = null;
@@ -1262,7 +1302,10 @@ function runCheck(
         noteFound(text, exact, span, widen(reply, passage.near));
         continue;
       }
-      const near = closest(source, unit.words);
+      const found = closest(source, unit.words);
+      const snapped = found && passage.explicit ? snapToSentence(source, found, text) : found;
+      // A sentence with no sentence of the source near enough is reported, never cut to fit.
+      const near = snapped ?? (found ? { ...found, close: 0 } : null);
       const score = near?.score ?? 0;
       if (near && isClose(near) && correct) {
         if (
