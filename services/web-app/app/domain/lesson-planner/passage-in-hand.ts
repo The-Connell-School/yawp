@@ -31,10 +31,10 @@ const PRINTED = /(?:^|\n)\s{0,3}>[^\n]{120,}|(?:^|\n)\s{0,3}>[^\n]*\n\s{0,3}>[^\
 /** A labeled slot for the teacher's own copy of the passage. */
 const SLOT = /\[[^\]\n]{0,160}\b(?:passage|pages?|excerpt|copy|chapter|text)\b[^\]\n]{0,160}\]/i;
 
-type LooseSlide = { layout?: unknown; title?: unknown; body?: unknown; speakerNotes?: unknown; tasks?: unknown; bullets?: unknown };
+export type LooseSlide = { layout?: unknown; title?: unknown; body?: unknown; speakerNotes?: unknown; tasks?: unknown; bullets?: unknown };
 
 /** The deck's slides, read leniently: this check must not depend on the deck validating. */
-function deckSlides(reply: string): LooseSlide[] {
+export function deckSlides(reply: string): LooseSlide[] {
   for (const match of reply.matchAll(/```[^\n]*\n([\s\S]*?)```/g)) {
     const inner = match[1] ?? '';
     if (!inner.includes('"slides"')) continue;
