@@ -1,0 +1,187 @@
+# YAWP! outreach: who to contact
+
+Research summary for Brian and Kevin · November 2026
+
+## The short version
+
+- Start with teachers who are known for teaching writing: essays, thesis, argument, feedback. Their content lines up with YAWP!'s builders and Grading Assistant, and none of them showed ties to Brisk or MagicSchool.
+- Big TikTok English teachers have huge followings, but it's mostly comedy. Fine for one paid test later, not the place to start.
+- Several of the big edtech trainers already work with competitors. Matt Miller and Monica Burns have Brisk ties.
+- Talk to the AI skeptics, but ask for feedback, not promotion. If they think the product is sound, that counts for a lot.
+- Going viral is too big a mountain to climb right now. Get our own presence solid first, then borrow audiences through a small group of partner teachers.
+
+> **Check the numbers first.** We couldn't open TikTok, Instagram, YouTube, TpT, Apple Podcasts, Facebook or LinkedIn from the research tools. Most audience numbers come from search results or the creator's own claims, and some conflict. Check each one before anyone reaches out.
+
+## First: firm up our own presence
+
+Going viral is too big a mountain to climb right now. When a teacher or principal hears about YAWP! from someone on this list, the first thing they'll do is look us up. We need something solid for them to find.
+
+- **LinkedIn.** Put the YAWP! logo on Brian's LinkedIn so people connect him with the product. Brian posts **twice a week**.
+- **Facebook.** Set up a YAWP! Facebook page. Teachers spend time there, and we're planning to show up in Facebook teacher groups, so they need a page to land on.
+- **Do this before outreach starts**, so partners and their audiences find an active, real presence.
+
+## Top 15
+
+**Group A: build a relationship (free)**
+
+| # | Who | Where | Audience | Why them | First move |
+|---|---|---|---|---|---|
+| 1 | [Jenna Copper](https://jennacopper.com/contact/workshops/) | TpT, workshops | Unknown | Sells essay units and published 2026 research on teachers' views of AI in writing | Ask her to test YAWP! against her AI-in-writing framework |
+| 2 | Brave New Teaching (Amanda Cardenas, Marie Morris) | Podcast | Unknown; Mud and Ink TpT store has ~9,400 reviews | Middle and high school ELA show, active in 2026. Knows other ELA creators | Give them free access, then pitch an episode |
+| 3 | [Catlin Tucker](https://catlintucker.com) | *The Balance* podcast, blog | Unknown | Already had two AI writing-feedback founders on the show | Pitch an episode on what good AI feedback should and shouldn't do |
+| 4 | Christina Schneider | @thedaringenglishteacher | ~80K Instagram | Wrote *Building Strong Writers*, which is about scaffolding writing | Free pilot pairing her book with our outline builder |
+| 5 | Melissa Kruse | Reading and Writing Haven | Unknown | Writes about multi-paragraph essays and grading faster | Show the Grading Assistant as a version of her comment-code method |
+| 6 | Jen Roberts | Point Loma HS, press, conferences | No follower count | Uses Brisk and MagicSchool for feedback now, and gets press coverage | Side-by-side trial against what she uses now |
+| 7 | Nick Potkalitsky | *Educating AI* Substack | 3,500–8,000 (conflicting) | Teaches 7–12 English and writes seriously about AI | Comment on his posts, then invite a review |
+| 8 | Marcus Luther | *The Broken Copier* Substack | Unknown | Skeptic. Wrote a post on AI essay grading | Ask for honest feedback only. No pitch, no payment |
+
+**Group B: paid sponsorships (when there's budget)**
+
+| # | Who | Audience (their own numbers) | Notes | First move |
+|---|---|---|---|---|
+| 9 | Vicki Davis, *10 Minute Teacher* | ~8M downloads, 285K social | Has a May 2026 media kit and a "Brain First, AI Second" writing episode | Ask for the media kit; separately pitch Brian as a guest |
+| 10 | Matt Miller, Ditch That Textbook + AI for Admins | "100K+ educators" | Reaches administrators. Wrote "Why is AI writing feedback so bad?" Has Brisk ties | Reply publicly to that post, then ask about sponsoring |
+| 11 | Jennifer Gonzalez, Cult of Pedagogy | ~200K downloads/month (outside estimates much lower) | Sells podcast sponsorships only and screens sponsors for fit | Inquiry form, once there's budget |
+| 12 | Monica Burns, Class Tech Tips / *Easy EdTech* | "Tens of thousands" | Has done sponsored posts, including one for Brisk | Ask for rates |
+
+**Group C: organizations, plus one TikTok test**
+
+| # | Who | Notes | First move |
+|---|---|---|---|
+| 13 | NCTE + state affiliates | Biggest ELA teacher conference. 2027 dates not out yet. State conferences are cheaper | Get on the 2027 exhibitor list; pick 2–3 state conferences |
+| 14 | Independent-school associations (NCAIS, VAIS, SAIS, NAIS) | They run monthly online groups for academic leaders. Justin's group may be one of these. NAIS Thrive is March 3–5, 2027 | Offer a free 30-minute PD session on AI and writing feedback |
+| 15 | Molly Dugan, @miss.dugan1 | ~1M combined, though one source says 260K. Has done paid brand deals | Later: one paid skit, her creative control, clearly disclosed |
+
+## Skeptics: ask for feedback, don't pitch
+
+| Who | What they've said | Approach |
+|---|---|---|
+| Marc Watkins (*Rhetorica*, 6K+) | "The Dangers of Using AI to Grade." Calls out "time saved" marketing | Reply on his Substack about how the teacher stays in control |
+| Peter Greene (*Curmudgucation*) | Has a running series, "AI Is Bad At Grading Essays" | A short note inviting him to try it and tear it apart |
+| John Warner (*The Biblioracle*, 10K+) | Wants the formulaic five-paragraph essay gone | Engage with his argument publicly |
+| Marcus Luther | Skeptical of AI in schools, especially grading | See #8 |
+
+## How to talk about YAWP!
+
+Almost everyone we looked at, fans and skeptics alike, agrees on one thing: AI shouldn't do the student's thinking.
+
+| Say | Avoid |
+|---|---|
+| The teacher reviews and edits every comment | "AI grades for you" |
+| Students draft first | "Save X hours a week" |
+| The five-paragraph builder is a starting point students grow out of | Presenting the formula as the goal |
+| Feedback while students are writing, not just at the end | Anything that sounds like the AI writes the essay |
+
+## The longer list
+
+**ELA teacher-creators**
+
+| Who | Audience | Note |
+|---|---|---|
+| Meredith Dobbs, Bespoke ELA / TeachWriting.org | Unknown | Writing instruction; resource swap idea |
+| Beth Hall, Coach Hall Writes (YouTube) | ~24.7K | AP Lang argument writing |
+| Timm Freitas, The Garden of English | Unknown | AP Lang; intro possible via Brave New Teaching |
+| Magliozzi, Peterson & Kelly Gallagher (Heinemann) | Unknown, high credibility | "AI is a writing partner, not a replacement" |
+| Lindsay Ann Learning | Unknown | Designs assignments AI can't easily do |
+| Ashley Bible, Building Book Love | Unknown | OK with teachers using AI, not students. Lead with Lesson Planner |
+| Betsy Potash, Spark Creativity | Unknown | Upbeat about AI; co-create a CER freebie |
+| Dave Stuart Jr. | Unknown | Only 2023 posts on AI; ask for critique |
+| Lauralee Moss, Language Arts Classroom | Unknown | Grammar; Exit Ticket angle |
+| Danielle Hall, Nouvelle ELA | Unknown | Peer feedback |
+| Laura Randazzo | Unknown | Check she's still active |
+| Claudine James, Mr. Sloma, SL Rockfish (TikTok) | 1.3M–5.7M each | Comedy. Only for paid skits |
+
+**Podcasts**
+
+| Show | Audience | Note |
+|---|---|---|
+| My EdTech Life (Fonz Mendoza) | Unknown | Careful about AI; hard but fair interviews |
+| Teaching Middle School ELA | 317 ratings, 515 episodes | Has done ChatGPT episodes on rubrics and feedback |
+| Truth for Teachers (Angela Watson) | 14M downloads (her number) | "Stay human" on AI; not a fit for an ad right now |
+| Better Leaders Better Schools | 1M+ downloads (their number) | Reaches principals; takes sponsors |
+| Coaching Conversations (Jim Knight) | Unknown | Instructional coaches |
+| Principal Center Radio | Unknown | Later, once Brian has an article |
+| Edtech Insiders | 5K–40K (conflicting) | Investors and founders, not teachers |
+| EdSurge podcast | Unknown | News coverage, not a pitch |
+
+**Edtech trainers and AI voices**
+
+| Who | Note |
+|---|---|
+| Eric Curts, Control Alt Achieve | Has a public rubric for judging AI tools. Ask him to score YAWP! |
+| Kasey Bell, Shake Up Learning | Takes sponsors |
+| Amanda Bickerstaff, AI for Education | ~72K LinkedIn; reaches district leaders |
+| Dan Fitzpatrick, The AI Educator | LinkedIn Top Voice, daily podcast |
+| Eric Hudson | Independent-school leaders; assessment design |
+| Ken Shelton | Equity and bias |
+| Leon Furze | Made the AI Assessment Scale; map YAWP! to it |
+| Tony Vincent | Now a district AI coordinator; better as a pilot contact |
+| Tom Mullaney, Benjamin Riley | Skeptics; expect criticism, treat it as feedback |
+| Vera Cubero | Advises MagicSchool. Low priority |
+
+**Newsletters, groups and events**
+
+| Where | Size | Note |
+|---|---|---|
+| EdSurge newsletter | 260K+ subscribers (2024) | K-12 slot was $3,500 in 2024 |
+| AP Lang Teachers (Facebook) | ~12K | Professional, moderated. Join as a person, don't sell |
+| High School English Teachers (Facebook) | 11K+ | Same approach |
+| r/ELATeachers, r/Teachers | r/Teachers ~1M | Strict self-promotion rules |
+| Larry Ferlazzo, EdWeek | Unknown | Have a teacher (not the company) answer his reader questions |
+| ISTELive + ASCD, Boston, June 27–30, 2027 | Large | Booth ~$4,315. A partner-school session is a better use of money |
+| Learning Forward | Coaches, PD leaders | ~$5,000 bronze sponsorship (2024 pricing) |
+| ATLIS 2027 | ~1,000 | Independent-school tech leaders |
+
+Two other notes:
+
+- We didn't find a big ELA teacher Discord or Slack. That's a gap the Teacher's Lounge could fill.
+- We couldn't find anything on Brittany Hege / Write on with Miss G, Room 213, Presto Plans, Tracee Orman or Trevor Muir. Worth a manual look.
+
+## Rules to know
+
+- **Anything we give a creator must be disclosed**, free Premium included, even if we didn't ask them to post. Disclosure goes in the post or video itself, not just a platform label. We have to tell them how to disclose and check that they do.
+- **No fake or AI-written reviews.** No reviews from staff, investors, friends or family unless they disclose. Fines run up to ~$51K per violation (2024 figure).
+- **Teachers have district rules.** Many districts limit gifts from vendors, and some ban teachers from making money on social media. Keep perks small for current teachers, and ask about their district before offering cash.
+- **No real student work on camera.** Build a demo class with made-up sample essays that creators can use instead.
+- **"AP" is a College Board trademark.** Check before using it in materials.
+- **Facebook groups and Reddit are for helping, not ads.**
+
+## Build our own, or partner?
+
+Both, kept small enough for Brian's time.
+
+| | What | Cost |
+|---|---|---|
+| Brian | LinkedIn twice a week with the YAWP! logo on his profile, plus one short feature video a month cut for Reels, Shorts and TikTok | Time |
+| Facebook | A YAWP! page that shares the same posts and videos, so teachers from Facebook groups have somewhere to land | Time |
+| Teacher council | 10–25 ELA teachers get a year of Premium, a monthly call with Brian, and credit on resources they help make. Posting is optional and disclosed | Free seats |
+| Paid pilot | 2–5 small ELA creators, tracked with referral codes | $500–2,500 total |
+| Brand TikTok | Wait until there's someone to run it | — |
+
+For comparison:
+- MagicSchool says it got to about 1M users in five months, all through teachers telling teachers.
+- Brisk started the same way and now also pays influencers.
+- Small creators are cheap: an education creator post averages about $220, and podcast ads run about $25–40 per thousand listens.
+
+One caution: an AI writing company posting AI-sounding content is an easy target. Keep posts in Brian's own voice, and credit the illustrator on the cartoon characters.
+
+## 90-day plan
+
+Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses, not researched figures.
+
+| When | Do | Brian's time | Cost |
+|---|---|---|---|
+| Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Check every handle and number on the top 15. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
+| Weeks 2–6 | Personal notes to #1–7. Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
+| Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
+| Weeks 6–12 | Get media kits (#9–12). Run the paid creator pilot. Offer PD sessions to the school associations. Get on the NCTE 2027 list | ~3 hrs/week | $500–2,500+ |
+| Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code | ~2 hrs/week | — |
+
+## Open questions for Brian
+
+- Which of these does Brian already know personally?
+- Is there budget for the paid pilot before the angel round?
+- Is Justin Sorenzia's group part of one of the independent-school associations above?
+- Who will check the numbers in weeks 1–2?
+
+*Full research with sources: `reports/ELA education voices for outreach.md`*
