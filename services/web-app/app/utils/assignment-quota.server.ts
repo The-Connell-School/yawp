@@ -37,7 +37,7 @@ export function freeClassroomQuotaMessage(
     five_paragraph_essay: '5-Paragraph Essay assignments',
     prewriting: 'Pre-writing assignments',
     thesis_statement: 'Thesis Builder assignments',
-    claim_evidence_reasoning: 'C-E-R assignments',
+    claim_evidence_reasoning: 'CER Paragraph assignments',
   };
   const cap = FREE_CLASSROOM_ASSIGNMENT_QUOTAS[kind];
   if (remaining <= 0) {

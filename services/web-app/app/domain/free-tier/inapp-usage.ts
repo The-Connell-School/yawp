@@ -11,7 +11,7 @@ export const FREE_ASSIGNMENT_LABELS: Record<string, string> = {
   five_paragraph_essay: `5${NB_HYPHEN}Paragraph Essay`,
   prewriting: `Pre${NB_HYPHEN}writing`,
   thesis_statement: 'Thesis Builder',
-  claim_evidence_reasoning: 'C-E-R',
+  claim_evidence_reasoning: 'CER Paragraph',
 };
 
 export const FREE_CLASSROOM_BUNDLE_TILE_LABELS = FREE_CLASSROOM_BUNDLE_KIND_ORDER.map(

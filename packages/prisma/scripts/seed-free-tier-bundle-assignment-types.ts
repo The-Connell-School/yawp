@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /**
  * Creates and maintains the six free-classroom bundle assignment types
- * (Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, C-E-R).
+ * (Class Starter, Exit Ticket, 5-Paragraph Essay, Pre-writing, Thesis Builder, CER Paragraph).
  * Does not link them to school org catalogs — FREE_CLASSROOM orgs receive them
  * via provisioning and the idempotent org-grant backfill below.
  *
@@ -679,7 +679,10 @@ async function linkAssignmentTypeToLibraryRubric(
 }
 
 async function ensureClaimEvidenceReasoningBundleType(prisma: PrismaClient) {
-  const title = 'C-E-R';
+  // Brian renamed it from C-E-R (Nov 24). Production deploys re-run this seed,
+  // so this is the name the live site keeps.
+  const title = 'CER Paragraph';
+  const legacyTitle = 'C-E-R';
   const description =
     'Short argument writing with a claim, evidence, and reasoning.';
   const kind = CLAIM_EVIDENCE_REASONING_ASSIGNMENT_TYPE_KIND;
@@ -701,7 +704,10 @@ async function ensureClaimEvidenceReasoningBundleType(prisma: PrismaClient) {
     } else {
       const byTitle = await prisma.assignmentType.findFirst({
         where: {
-          title: { equals: title, mode: 'insensitive' },
+          OR: [
+            { title: { equals: title, mode: 'insensitive' } },
+            { title: { equals: legacyTitle, mode: 'insensitive' } },
+          ],
           ownerOrgId: null,
           ownerMembershipId: null,
         },

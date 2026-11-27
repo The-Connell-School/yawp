@@ -73,7 +73,7 @@ const usage: FreeAccountUsage = {
     },
     {
       kind: 'claim_evidence_reasoning',
-      label: 'C-E-R',
+      label: 'CER Paragraph',
       used: 0,
       total: 3,
       remaining: 3,
@@ -131,7 +131,7 @@ test('FreeAssignmentTiles renders only entitled free assignment rows on the dash
   expect(html).toContain('5-Paragraph Essay');
   expect(html).toContain('Pre-writing');
   expect(html).toContain('Thesis Builder');
-  expect(html).toContain('C-E-R');
+  expect(html).toContain('CER Paragraph');
   expect(html).not.toContain('site-license-locked-assignment-tile');
   expect(html).not.toContain('Daily Pages');
   expect(html).toContain('/api/image/course/img-starter');

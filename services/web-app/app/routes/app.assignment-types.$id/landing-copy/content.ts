@@ -276,10 +276,10 @@ const PREWRITING: LandingPage = {
   key: 'prewriting',
   description: [
     p(
-      '**Step one of the critical essay writing process.** Start here, before students write a word of their essay.'
+      "**Step one of the Thesis-driven Essay writing process.** Start here, before students write a word of their essay. Note: This is a standalone pre-writing step for higher level essays. If you're teaching the 5-paragraph essay, the first module of that assignment type offers pre-writing specifically for that essay."
     ),
     p(
-      'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!'
+      'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before* they write their essay. We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!'
     ),
   ],
   sections: [
@@ -345,10 +345,10 @@ const THESIS_STATEMENT: LandingPage = {
   key: 'thesis-statement',
   description: [
     p(
-      '**Step 2 of the Yawp! writing process.** Note: Before you ask students to write a thesis statement, we highly recommend letting them pre-write on your prompt (Step 1).'
+      '**Step 2 of the Thesis-driven Essay process.** Note: Before you ask students to write a thesis statement, we highly recommend letting them pre-write on your prompt (Step 1).'
     ),
     p(
-      "The classic three-part thesis of the five-paragraph essay is a great place to start with younger writers, and it's easy enough to teach. What we’re teaching here takes it to a higher level: a more complex thesis for a more complex essay. In one class period, students turn an observation and an analysis into one clear, arguable sentence. It's the heart of Yawp!'s Thesis-Driven Essay as a standalone assignment, so students can practice it with any text or topic."
+      "You're familiar with the simpler three-part thesis of the five-paragraph essay. What we’re teaching here takes it to a higher level: a more complex thesis for a more complex essay. In one class period, students turn an observation and an analysis into one clear, arguable sentence. It's the heart of Yawp!'s Thesis-driven Essay as a standalone assignment, so students can practice it with any text or topic."
     ),
   ],
   sections: [
@@ -735,7 +735,8 @@ export const CER_PARAGRAPH_TITLE = 'The CER Paragraph';
 
 /**
  * The title at the top of a landing page. A type still titled Daily Pages
- * reads Short Response; a type still titled C-E-R reads The CER Paragraph.
+ * reads Short Response; a type titled C-E-R or CER Paragraph reads The CER
+ * Paragraph.
  * A title a school chose for it, and every other type's title, is shown as
  * it is.
  */
@@ -749,7 +750,9 @@ export function landingPageHeading(
   }
   if (
     key === 'cer-paragraph' &&
-    (normalized === 'c-e-r' || normalized === 'the cer paragraph')
+    (normalized === 'c-e-r' ||
+      normalized === 'cer paragraph' ||
+      normalized === 'the cer paragraph')
   ) {
     return CER_PARAGRAPH_TITLE;
   }
@@ -796,6 +799,7 @@ export function resolveLandingPageKey(type: {
     case 'the 5-paragraph essay':
       return 'five-paragraph-essay';
     case 'c-e-r':
+    case 'cer paragraph':
     case 'the cer paragraph':
       return 'cer-paragraph';
     case 'act writing section':

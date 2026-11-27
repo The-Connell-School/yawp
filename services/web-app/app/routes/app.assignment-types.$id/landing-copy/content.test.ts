@@ -51,6 +51,8 @@ describe('resolveLandingPageKey', () => {
     [{ title: 'C-E-R', kind: 'claim_evidence_reasoning' }, 'cer-paragraph'],
     [{ title: 'C-E-R' }, 'cer-paragraph'],
     [{ title: ' The CER Paragraph ' }, 'cer-paragraph'],
+    // Brian's name for the type (Nov 24); the deploy seed now writes it.
+    [{ title: 'CER Paragraph' }, 'cer-paragraph'],
     [{ title: 'ACT Writing Section ' }, 'act-writing'],
     [{ title: 'Welcome to Yawp! ' }, 'welcome-to-yawp'],
   ] as const)('%o resolves to %s', (type, key) => {
@@ -200,11 +202,11 @@ describe("Brian's pages, word for word", () => {
     expect(page('prewriting').description).toEqual([
       {
         type: 'paragraph',
-        text: '**Step one of the critical essay writing process.** Start here, before students write a word of their essay.',
+        text: "**Step one of the Thesis-driven Essay writing process.** Start here, before students write a word of their essay. Note: This is a standalone pre-writing step for higher level essays. If you're teaching the 5-paragraph essay, the first module of that assignment type offers pre-writing specifically for that essay.",
       },
       {
         type: 'paragraph',
-        text: 'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before they write their essay.* We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!',
+        text: 'Pre-writing may be the most important (and most overlooked) part of the writing process. Most students skip straight from the prompt to the essay, and it shows. They end up sorting out their ideas in the essay itself, which can result in a big, hot, rambling mess. Pre-writing is where students figure out what they actually think about the topic or prompt...*before* they write their essay. We promise: the writing they do before the actual writing of their essays will greatly improve the quality of their finished products (and the quality of your reading/grading experience)!',
       },
     ]);
     expect(section('prewriting', 'when-to-use-it').heading).toBe('When to use it');
@@ -239,7 +241,8 @@ describe("Brian's pages, word for word", () => {
     ]);
     const text = landingPagePlainText(page('prewriting'));
     expect(text).not.toContain('Have your own prompt');
-    expect(text).not.toContain('Note:');
+    // The old prompt-library note stays out (the description's own Note is Brian's, Nov 24).
+    expect(text).not.toContain("Note: We've found");
     expect(text).not.toContain('—');
     expect(page('prewriting').libraryNote).toBeNull();
     // Reuses the Thesis-Driven Essay library rather than building a new one.
@@ -248,8 +251,8 @@ describe("Brian's pages, word for word", () => {
 
   test('Thesis Statement', () => {
     expect(paragraphs(page('thesis-statement').description)).toEqual([
-      '**Step 2 of the Yawp! writing process.** Note: Before you ask students to write a thesis statement, we highly recommend letting them pre-write on your prompt (Step 1).',
-      "The classic three-part thesis of the five-paragraph essay is a great place to start with younger writers, and it's easy enough to teach. What we’re teaching here takes it to a higher level: a more complex thesis for a more complex essay. In one class period, students turn an observation and an analysis into one clear, arguable sentence. It's the heart of Yawp!'s Thesis-Driven Essay as a standalone assignment, so students can practice it with any text or topic.",
+      '**Step 2 of the Thesis-driven Essay process.** Note: Before you ask students to write a thesis statement, we highly recommend letting them pre-write on your prompt (Step 1).',
+      "You're familiar with the simpler three-part thesis of the five-paragraph essay. What we’re teaching here takes it to a higher level: a more complex thesis for a more complex essay. In one class period, students turn an observation and an analysis into one clear, arguable sentence. It's the heart of Yawp!'s Thesis-driven Essay as a standalone assignment, so students can practice it with any text or topic.",
     ]);
     expect(paragraphs(section('thesis-statement', 'when-to-use-it').blocks)).toEqual([
       'After students pre-write on a prompt and have found a specific focus for their essays, students use this assignment to develop complex, beautiful thesis statements that will drive their essays.',
@@ -541,6 +544,7 @@ describe('The CER Paragraph (Brian, Nov 24)', () => {
   test('the heading reads The CER Paragraph while the type is still titled C-E-R', () => {
     expect(landingPageHeading('cer-paragraph', 'C-E-R')).toBe('The CER Paragraph');
     expect(landingPageHeading('cer-paragraph', ' c-e-r ')).toBe('The CER Paragraph');
+    expect(landingPageHeading('cer-paragraph', 'CER Paragraph')).toBe('The CER Paragraph');
     expect(landingPageHeading('cer-paragraph', 'The CER Paragraph')).toBe(
       'The CER Paragraph'
     );
