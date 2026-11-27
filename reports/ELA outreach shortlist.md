@@ -4,6 +4,7 @@ Research summary for Brian and Kevin · November 2026
 
 ## The short version
 
+- The strategy is to work the network. Brian talks to the voices in this space, shows up where they are, and collects opinions, advice and connections. He isn't pitching.
 - Start with teachers who are known for teaching writing: essays, thesis, argument, feedback. Their content lines up with YAWP!'s builders and Grading Assistant, and none of them showed ties to Brisk or MagicSchool.
 - Big TikTok English teachers have huge followings, but it's mostly comedy. Fine for one paid test later, not the place to start.
 - Several of the big edtech trainers already work with competitors. Matt Miller and Monica Burns have Brisk ties.
@@ -11,6 +12,41 @@ Research summary for Brian and Kevin · November 2026
 - Going viral is too big a mountain to climb right now. Get our own presence solid first, then borrow audiences through a small group of partner teachers.
 
 > **Check the numbers first.** We couldn't open TikTok, Instagram, YouTube, TpT, Apple Podcasts, Facebook or LinkedIn from the research tools. Most audience numbers come from search results or the creator's own claims, and some conflict. Check each one before anyone reaches out.
+
+## The idea: work the network
+
+The people in this report are the network we want to be part of. The point isn't to sell to them. Brian gets to know them, shows up where they are, and learns from them. Sign-ups and sales come later, from the trust and the connections.
+
+**What Brian is doing**
+
+- **Talking to voices in this space.** Short calls, thoughtful comments on their posts, personal emails.
+- **Making appearances when he can.** Podcast guest spots, guest posts, free PD sessions, conference sessions, live demos for groups that want one.
+- **Getting opinions.** What do they think of YAWP!? What's missing? What would make them nervous?
+- **Getting advice.** How would they reach ELA teachers? What do teachers actually need help with right now?
+- **Getting connections.** Who else should he be talking to?
+- **Getting impressions.** How do teachers react the first time they see the product?
+
+**His angle**
+
+Brian is a builder who wants to get it right, not a vendor with a pitch. He's curious, he's open about how YAWP! uses AI, and he wants honest reactions, including criticism. Something like:
+
+> "I'm building YAWP!, a writing tool for middle and high school ELA teachers. I've been following your work on [specific post or episode]. I'd love 20 minutes of your honest take on what we're building, especially [the part that relates to their work]. No pitch. I'm trying to get this right."
+
+**What a good outcome looks like**
+
+- A 20-minute call
+- Honest feedback, even if it stings
+- An intro to someone else on the list
+- An invitation onto a show, a blog or a PD session
+- A teacher who tries it with their class and tells us what happened
+
+**How it fits together**
+
+1. **Presence first** (below), so people who look us up find something real.
+2. **Conversations** with Group A and the skeptics.
+3. **Appearances** wherever we're invited: podcasts, guest posts, PD sessions, conferences.
+4. **A teacher council** made up of the people who stick around.
+5. **Paid spots** only once we know which message works.
 
 ## First: firm up our own presence
 
@@ -23,7 +59,7 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 
 ## Top 15
 
-**Group A: build a relationship (free)**
+**Group A: build a relationship (free).** These are Brian's first conversations. He reaches out personally, asks for their honest take, and looks for a way to appear on their show, blog or workshop.
 
 | # | Who | Where | Audience | Why them | First move |
 |---|---|---|---|---|---|
@@ -36,7 +72,7 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 | 7 | Nick Potkalitsky | *Educating AI* Substack | 3,500–8,000 (conflicting) | Teaches 7–12 English and writes seriously about AI | Comment on his posts, then invite a review |
 | 8 | Marcus Luther | *The Broken Copier* Substack | Unknown | Skeptic. Wrote a post on AI essay grading | Ask for honest feedback only. No pitch, no payment |
 
-**Group B: paid sponsorships (when there's budget)**
+**Group B: paid sponsorships (when there's budget).** These are the biggest audiences. Brian should try for a guest appearance first where it's possible. Paid spots come later, once we know which message works.
 
 | # | Who | Audience (their own numbers) | Notes | First move |
 |---|---|---|---|---|
@@ -45,7 +81,7 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 | 11 | Jennifer Gonzalez, Cult of Pedagogy | ~200K downloads/month (outside estimates much lower) | Sells podcast sponsorships only and screens sponsors for fit | Inquiry form, once there's budget |
 | 12 | Monica Burns, Class Tech Tips / *Easy EdTech* | "Tens of thousands" | Has done sponsored posts, including one for Brisk | Ask for rates |
 
-**Group C: organizations, plus one TikTok test**
+**Group C: organizations, plus one TikTok test.** These are the rooms to be in. Brian goes as a presenter or a helpful voice, not a booth. That's where he meets directors of teaching and learning.
 
 | # | Who | Notes | First move |
 |---|---|---|---|
@@ -54,6 +90,8 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 | 15 | Molly Dugan, @miss.dugan1 | ~1M combined, though one source says 260K. Has done paid brand deals | Later: one paid skit, her creative control, clearly disclosed |
 
 ## Skeptics: ask for feedback, don't pitch
+
+These are some of the most useful conversations Brian can have. If YAWP! holds up to their criticism, it'll hold up with anyone.
 
 | Who | What they've said | Approach |
 |---|---|---|
@@ -74,6 +112,8 @@ Almost everyone we looked at, fans and skeptics alike, agrees on one thing: AI s
 | Feedback while students are writing, not just at the end | Anything that sounds like the AI writes the essay |
 
 ## The longer list
+
+This is the wider network. Brian follows them and engages with their posts, and reaches out when there's a natural reason: a post he has a real response to, an intro from someone in the top 15, or a conference they're both at.
 
 **ELA teacher-creators**
 
@@ -133,7 +173,7 @@ Almost everyone we looked at, fans and skeptics alike, agrees on one thing: AI s
 | Learning Forward | Coaches, PD leaders | ~$5,000 bronze sponsorship (2024 pricing) |
 | ATLIS 2027 | ~1,000 | Independent-school tech leaders |
 
-Two other notes:
+**Two other notes**
 
 - We didn't find a big ELA teacher Discord or Slack. That's a gap the Teacher's Lounge could fill.
 - We couldn't find anything on Brittany Hege / Write on with Miss G, Room 213, Presto Plans, Tracee Orman or Trevor Muir. Worth a manual look.
