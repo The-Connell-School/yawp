@@ -23,3 +23,37 @@ test('the approval worker runs in production and demo, and stays off in tests', 
     })
   ).toBe(true);
 });
+
+test('overlapping drains share one run, and a failed drain resolves failed and frees the slot', async () => {
+  const { drainApprovalDelivery } = await import(
+    './approval-delivery-runtime.server'
+  );
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let runs = 0;
+  const slow = async () => {
+    runs += 1;
+    await gate;
+  };
+  const first = drainApprovalDelivery([slow]);
+  const second = drainApprovalDelivery([slow]);
+  release();
+  expect(await first).toBe('ok');
+  expect(await second).toBe('ok');
+  expect(runs).toBe(1);
+
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    expect(
+      await drainApprovalDelivery([
+        async () => {
+          throw new Error('boom');
+        },
+      ])
+    ).toBe('failed');
+  } finally {
+    console.error = originalError;
+  }
+  expect(await drainApprovalDelivery([async () => {}])).toBe('ok');
+});

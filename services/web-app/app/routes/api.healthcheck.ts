@@ -7,8 +7,9 @@ import { isDatabaseReady } from '~/utils/db-readiness.server';
 export async function loader(_args: LoaderFunctionArgs) {
   const ok = await isDatabaseReady();
   if (ok) {
-    // Give a throttled App Runner instance a slice of CPU to send due mail,
-    // without letting a slow drain fail the health check.
+    // Temporary fallback: the scheduled POST /api/jobs/approval-delivery job
+    // (infra/main.tf) is the real sender. Remove this drain once that job is
+    // live so the probe stays a plain database check.
     await settleWithin(kickApprovalDelivery(), 1500);
   }
   return new Response(ok ? 'OK' : 'UNAVAILABLE', { status: ok ? 200 : 503 });

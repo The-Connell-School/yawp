@@ -983,9 +983,12 @@ resource "aws_iam_role_policy" "events_invoke_api_destination_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect   = "Allow",
-      Action   = ["events:InvokeApiDestination"],
-      Resource = aws_cloudwatch_event_api_destination.retention.arn
+      Effect = "Allow",
+      Action = ["events:InvokeApiDestination"],
+      Resource = [
+        aws_cloudwatch_event_api_destination.retention.arn,
+        aws_cloudwatch_event_api_destination.approval_delivery.arn,
+      ]
     }]
   })
 }
@@ -1001,4 +1004,39 @@ resource "aws_cloudwatch_event_target" "retention_daily_target" {
   rule     = aws_cloudwatch_event_rule.retention_daily.name
   arn      = aws_cloudwatch_event_api_destination.retention.arn
   role_arn = aws_iam_role.events_invoke_api_destination.arn
+}
+
+# -----------------------
+# EventBridge rule to send due free-tier approval email every minute
+# -----------------------
+# The one-hour teacher denial email, admin reminders and follow-ups sit in an
+# outbox that the app drains. App Runner throttles an idle instance's CPU, so an
+# in-process timer cannot be trusted to fire; this call wakes the service and
+# runs one bounded drain inside the request. It reuses the retention
+# connection, so it sends the same x-internal-token header and adds no secret.
+resource "aws_cloudwatch_event_api_destination" "approval_delivery" {
+  name                             = "${var.app_name}-${var.env}-approval-delivery-destination"
+  description                      = "Calls the app free-tier approval email delivery job"
+  invocation_endpoint              = "https://${local.apprunner_origin_domain}/api/jobs/approval-delivery"
+  http_method                      = "POST"
+  invocation_rate_limit_per_second = 1
+  connection_arn                   = aws_cloudwatch_event_connection.retention.arn
+}
+
+resource "aws_cloudwatch_event_rule" "approval_delivery_every_minute" {
+  name                = "${var.app_name}-${var.env}-approval-delivery-every-minute"
+  schedule_expression = "rate(1 minute)"
+  description         = "Sends due free-tier approval email"
+}
+
+resource "aws_cloudwatch_event_target" "approval_delivery_target" {
+  rule     = aws_cloudwatch_event_rule.approval_delivery_every_minute.name
+  arn      = aws_cloudwatch_event_api_destination.approval_delivery.arn
+  role_arn = aws_iam_role.events_invoke_api_destination.arn
+
+  # The next minute's call is the retry, so do not queue stale ones.
+  retry_policy {
+    maximum_retry_attempts       = 0
+    maximum_event_age_in_seconds = 60
+  }
 }
