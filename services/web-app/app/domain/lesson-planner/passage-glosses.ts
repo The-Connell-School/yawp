@@ -14,7 +14,7 @@
  * the repairer's; finding that none are glossed is this check's.
  */
 import { readLessonMaterials } from './lesson-material';
-import { deckSlides, type PassageProblem } from './passage-in-hand';
+import { deckSlides, proseRuns, type PassageProblem } from './passage-in-hand';
 
 const MIN_WORDS = 40;
 /** A passage the lesson wrote itself, not a work's. */
@@ -31,7 +31,7 @@ const wordsIn = (value: string) => new Set((value.toLowerCase().match(/[\p{L}]+(
 type Passage = { text: string; work: string; anchor: string };
 
 /** Passages of a work the lesson prints: on excerpt slides and quoted on its handouts. */
-function printedPassages(reply: string): { passages: Passage[]; handouts: string[] } {
+function printedPassages(reply: string, literature: boolean): { passages: Passage[]; handouts: string[] } {
   const passages: Passage[] = [];
   for (const slide of deckSlides(reply) as Array<Record<string, unknown>>) {
     if (slide.layout !== 'excerpt') continue;
@@ -40,7 +40,18 @@ function printedPassages(reply: string): { passages: Passage[]; handouts: string
     if (!work || OWN_WRITING.test(work) || wordCount(body) < MIN_WORDS) continue;
     passages.push({ text: body, work, anchor: text(slide.title) || work });
   }
-  const handouts = readLessonMaterials(reply).materials.map((material) => material.content);
+  const materials = readLessonMaterials(reply).materials;
+  const handouts = materials.map((material) => material.content);
+  // A story or chapter printed as plain paragraphs (The Necklace, Nov 28).
+  for (const material of materials) {
+    const runs = proseRuns(material.content);
+    if (!runs.length) continue;
+    const heading = /^\s{0,3}#{1,4}\s+(.+)$/m.exec(material.content)?.[1]?.trim();
+    const work = (heading || material.title).replace(/[*_]/g, '').trim();
+    if (OWN_WRITING.test(work) || OWN_WRITING.test(material.title)) continue;
+    const firstLine = runs[0]!.split('\n')[0]!;
+    passages.push({ text: runs.join('\n\n'), work, anchor: firstLine.slice(0, 120) });
+  }
   for (const content of handouts) {
     const blocks = content.split(/\n[ \t]*\n/);
     blocks.forEach((block, index) => {
@@ -48,16 +59,26 @@ function printedPassages(reply: string): { passages: Passage[]; handouts: string
       if (!lines.every((line) => /^\s{0,3}>/.test(line))) return;
       const quoted = lines.map((line) => line.replace(/^\s{0,3}>\s?/, '')).join('\n');
       const source = (blocks[index + 1] ?? '').split('\n')[0] ?? '';
-      if (wordCount(quoted) < MIN_WORDS || !SOURCE_LINE.test(source) || OWN_WRITING.test(source)) return;
-      passages.push({ text: quoted, work: source.replace(/^\s*(?:[—–]|-{1,2})\s*/, '').trim(), anchor: source.trim() });
+      if (wordCount(quoted) < MIN_WORDS) return;
+      if (SOURCE_LINE.test(source)) {
+        if (OWN_WRITING.test(source)) return;
+        passages.push({ text: quoted, work: source.replace(/^\s*(?:[—–]|-{1,2})\s*/, '').trim(), anchor: source.trim() });
+        return;
+      }
+      // A literature lesson's quoted passages are the work's, with or without a source line (Gatsby, Nov 28).
+      if (!literature) return;
+      const material = materials.find((m) => m.content === content);
+      const work = (material?.title ?? 'the text').replace(/[*_]/g, '').split(/\s[—–-]\s/)[0]!.trim();
+      if (OWN_WRITING.test(material?.title ?? '')) return;
+      passages.push({ text: quoted, work, anchor: lines[0]!.replace(/^\s{0,3}>\s?/, '').slice(0, 120) });
     });
   }
   return { passages, handouts };
 }
 
 /** A problem for each lesson whose printed passage has none of its words glossed. */
-export function passageWithoutGlosses(reply: string): PassageProblem[] {
-  const { passages, handouts } = printedPassages(reply);
+export function passageWithoutGlosses(reply: string, { literature = false }: { literature?: boolean } = {}): PassageProblem[] {
+  const { passages, handouts } = printedPassages(reply, literature);
   if (!passages.length) return [];
   if (handouts.some((content) => GLOSS_LIST.test(content))) return [];
   const defined = (deckSlides(reply) as Array<Record<string, unknown>>)

@@ -26,12 +26,12 @@ List each place where the words students see tell them what the work means:
 - a writing prompt that hands students a claim to illustrate ("Ambition costs something. Say what it costs.")
 - a plot turn (a twist, a death, the ending) given away before students have read it
 
-Do not list: facts, definitions of terms, a question that leaves the answer open, words that say "seems" or "might", or anything outside what students see.
+Do not list, and never list a question of any kind: a question asks, it does not tell. Never list words that say "seems", "might", "may" or "perhaps"; facts, definitions of terms, or a sentence starter; what happens in the pages students have already read in this lesson (a plot summary after the reading is a fact, not a claim); or anything outside what students see. When in doubt, leave it out: a sentence that tells students the meaning is rare, and changing a good prompt does harm.
 
 For each:
 - "wrong": the words, copied exactly, character for character, as short as possible but long enough to occur only once in the lesson. Never a code-fence line, a link or a JSON key.
 - "right": the same place rewritten so it asks instead of tells (often as a question), or as a plain fact, in the lesson's own voice and format, so it can replace "wrong" directly.
-- "confidence": "high" when any English teacher would agree it tells students the meaning; "medium" when it is close.
+- "confidence": "high" only when any English teacher would agree it tells students the meaning; otherwise "medium". Only "high" is acted on.
 - "why": one short sentence a teacher can read.
 
 Answer with JSON only:
@@ -51,6 +51,9 @@ export function isLiterature(messages: string[]): boolean {
 /** "This is not an error, so ignore it": the reader's own note that it is fine. */
 const NOT_ONE = /\bnot (?:a|an) (?:real |actual )?(?:error|problem|issue)\b|\b(?:so )?ignore (?:it|this)\b|\bis fine as written\b|\b(?:correct|right|fine) as written\b|\bno change needed\b/i;
 
+/** A question, or words that already hedge: these ask, they do not tell. */
+const ASKS = /\?\s*["”’']?\s*$|\b(?:seems?|seemed|might|may|perhaps|possibly)\b/i;
+
 export type MeaningProblem = { what: string; words: string; right: string; note: string };
 
 /** Each place the words students see tell them what the work means, as a problem for the repair pass. */
@@ -65,14 +68,19 @@ export async function meaningProblems(reply: string, ask: AskFactChecker): Promi
   }
   try {
     const escaped = (words: string) => JSON.stringify(words).slice(1, -1);
+    const seen = new Set<string>();
     return readFactCheckAnswer(answer)
-      .filter((found) => found.confidence !== 'low' && !NOT_ONE.test(found.why))
+      // Sure finds only (fiction run, Nov 28: most finds were false alarms, and their repairs changed good prompts).
+      .filter((found) => found.confidence === 'high' && !NOT_ONE.test(found.why))
+      .filter((found) => !ASKS.test(found.wrong))
       .filter((found) => reply.includes(found.wrong) || reply.includes(escaped(found.wrong)))
+      .filter((found) => !seen.has(found.wrong.trim()) && Boolean(seen.add(found.wrong.trim())))
       .map((found) => ({
         what: `${found.why || 'These words tell students what the work means.'} Rewrite them so they ask instead of tell (often as a question), or as a plain fact; the claim itself belongs in the teacher's notes, as what to listen for. Change every place students see it.`,
         words: found.wrong,
         right: found.right,
-        note: `“${found.wrong.slice(0, 80)}${found.wrong.length > 80 ? '…' : ''}” tells students what the work means: ask it instead.`,
+        // No note: an unfixed false alarm in "Check before class" does more harm than good (Nov 28).
+        note: '',
       }));
   } catch {
     return [];

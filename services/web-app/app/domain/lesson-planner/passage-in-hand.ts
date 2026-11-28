@@ -26,7 +26,36 @@ const SAYS_WHERE = [
 ];
 
 /** A passage printed for students: a run of `>` lines, two or more, or one long one. */
-const PRINTED = /(?:^|\n)\s{0,3}>[^\n]{120,}|(?:^|\n)\s{0,3}>[^\n]*\n\s{0,3}>[^\n]*\S/;
+const QUOTED = /(?:^|\n)\s{0,3}>[^\n]{120,}|(?:^|\n)\s{0,3}>[^\n]*\n\s{0,3}>[^\n]*\S/;
+
+const MIN_PROSE_WORDS = 120;
+const proseWords = (block: string) => (block.match(/[\p{L}’']+/gu) ?? []).length;
+/** A paragraph of a text, not the handout's own furniture: a heading, a list, a table, a question, a bold label. */
+export const isProse = (block: string) => {
+  const text = block.trim();
+  return proseWords(text) >= 25 && !/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\||>|\*\*[^*]{1,40}:?\*\*|\[)/.test(text) && !/\?\s*$/.test(text);
+};
+
+/** The runs of prose paragraphs a handout prints: a story or chapter set as plain paragraphs (The Necklace, Nov 28). */
+export function proseRuns(content: string): string[] {
+  const runs: string[] = [];
+  let run: string[] = [];
+  for (const block of content.split(/\n[ \t]*\n/)) {
+    if (isProse(block)) run.push(block.trim());
+    else if (!/^\s*(?:---|\*{3})\s*$/.test(block)) {
+      if (run.length) runs.push(run.join('\n\n'));
+      run = [];
+    }
+  }
+  if (run.length) runs.push(run.join('\n\n'));
+  return runs.filter((text) => proseWords(text) >= MIN_PROSE_WORDS);
+}
+
+/** The handout prints a passage: quoted, or as plain paragraphs. */
+const prints = (content: string) => QUOTED.test(content) || proseRuns(content).length > 0;
+
+/** The handout itself has students mark it. */
+const HANDOUT_MARKS = /\b(?:underline|circle|annotate|highlight|star|bracket|mark)\b/i;
 
 /** A labeled slot for the teacher's own copy of the passage. */
 const SLOT = /\[[^\]\n]{0,160}\b(?:passage|pages?|excerpt|copy|chapter|text)\b[^\]\n]{0,160}\]/i;
@@ -65,14 +94,17 @@ export function passageNotInHand(reply: string): PassageProblem[] {
   if (!slides.length) return [];
   const printedOnSlide = slides.some((slide) => slide.layout === 'excerpt' && text(slide.body).trim().length >= 40);
   const handouts = readLessonMaterials(reply).materials.map((material) => material.content);
-  const inHand = printedOnSlide || handouts.some((content) => PRINTED.test(content) || SLOT.test(content));
+  const inHand = printedOnSlide || handouts.some((content) => prints(content) || SLOT.test(content));
   if (inHand) return [];
+  // Students mark a handout that has no text on it: where the passage runs is not enough (Of Mice and Men, Nov 28).
+  const marksTheHandout = handouts.some((content) => HANDOUT_MARKS.test(content));
   const problems: PassageProblem[] = [];
   for (const slide of slides) {
     if (slide.layout !== 'read') continue;
-    const where = `${text(slide.title)} ${text(slide.body)} ${text(slide.speakerNotes)}`;
+    // What students see: the speaker notes are the teacher's.
+    const where = `${text(slide.title)} ${text(slide.body)}`;
     if (!MARKING.test(`${text(slide.body)} ${taskWords(slide)}`)) continue;
-    if (SAYS_WHERE.some((pattern) => pattern.test(where))) continue;
+    if (!marksTheHandout && SAYS_WHERE.some((pattern) => pattern.test(where))) continue;
     const title = text(slide.title).trim() || 'reading';
     const body = text(slide.body).trim();
     problems.push({

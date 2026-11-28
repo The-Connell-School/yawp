@@ -21,7 +21,7 @@ describe('meaningProblems (R28, R29: never tell students what the work means)', 
           confidence: 'high',
           why: 'A big-idea slide tells students what the play means before they have read it.',
         },
-        { wrong: 'Wants recognition — and more', right: 'Thane of Glamis; a general', confidence: 'medium', why: 'The cast slide tells students what Macbeth wants.' },
+        { wrong: 'Wants recognition — and more', right: 'Thane of Glamis; a general', confidence: 'high', why: 'The cast slide tells students what Macbeth wants.' },
       ]);
     const problems = await meaningProblems(MACBETH, ask);
     expect(problems).toHaveLength(2);
@@ -29,7 +29,7 @@ describe('meaningProblems (R28, R29: never tell students what the work means)', 
     expect(problems[0]!.right).toContain('?');
     expect(problems[0]!.what).toContain('tells students what the play means');
     expect(problems[0]!.what).toContain("teacher's notes");
-    expect(problems[1]!.note).toContain('Wants recognition');
+    expect(problems[1]!.words).toBe('Wants recognition — and more');
   });
 
   it('drops what the reader itself is unsure of, says is fine, or cannot be found in the lesson', async () => {
@@ -61,5 +61,32 @@ describe('isLiterature: the lessons the meaning check reads', () => {
     expect(isLiterature(['Teach a 50-minute lesson for 9th grade on using semicolons correctly in their own writing.'])).toBe(false);
     expect(isLiterature(["Teach a 50-minute rhetorical analysis lesson for 11th grade on Lincoln's Gettysburg Address."])).toBe(false);
     expect(isLiterature(['Help me plan tomorrow'])).toBe(false);
+  });
+});
+
+describe('meaningProblems after the fiction run (Nov 28): fewer false alarms, and none left for the teacher', () => {
+  const lesson = `Write: "By the end of the story, Mathilde has paid ten years of her life for a single night. What does Maupassant seem to be saying about desire?" The narrator is cool, precise, and a little merciless. Who is in it: Lennie — Large, powerful, childlike. The witches name what is already in him.`;
+  const ask = async () =>
+    answer([
+      { wrong: 'What does Maupassant seem to be saying about desire?', right: 'x', confidence: 'high', why: 'Tells the theme.' },
+      { wrong: 'Mathilde has paid ten years of her life for a single night.', right: 'x', confidence: 'medium', why: 'A plot fact.' },
+      { wrong: 'Large, powerful, childlike', right: 'Lennie Small; George\'s friend', confidence: 'high', why: 'The cast slide says what Lennie is like.' },
+      { wrong: 'Large, powerful, childlike', right: 'Lennie Small', confidence: 'high', why: 'Same line again.' },
+      { wrong: 'The witches name what is already in him.', right: 'Do the witches name what is already in him?', confidence: 'high', why: 'Tells students what the play means.' },
+    ]);
+
+  it('keeps only sure finds that are not questions or "seems", each once', async () => {
+    const problems = await meaningProblems(lesson, ask);
+    expect(problems.map((p) => p.words)).toEqual(['Large, powerful, childlike', 'The witches name what is already in him.']);
+  });
+
+  it('leaves no note for the teacher: an unfixed false alarm in "Check before class" does more harm than good', async () => {
+    const problems = await meaningProblems(lesson, ask);
+    for (const problem of problems) expect(problem.note).toBe('');
+  });
+
+  it('tells the reader not to list questions, "seems", or what students have already read', () => {
+    expect(MEANING_CHECK_SYSTEM).toContain('never list a question');
+    expect(MEANING_CHECK_SYSTEM).toContain('already read');
   });
 });

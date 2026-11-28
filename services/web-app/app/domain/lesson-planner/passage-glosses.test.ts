@@ -64,3 +64,50 @@ describe('passageWithoutGlosses (R5, S5: the passage’s hard words glossed wher
     expect(passageWithoutGlosses('# Plan\n\n> I met a traveller from an antique land')).toEqual([]);
   });
 });
+
+describe('passageWithoutGlosses on a story printed as plain paragraphs (The Necklace, Nov 28: "paste" glossed nowhere)', () => {
+  const story = (extra = '') => `# The Necklace
+
+\`\`\`yawp-material
+kind: handout
+title: The Necklace — Reading and Discussion
+---
+## "The Necklace"
+*Guy de Maupassant, 1884 · translated by Jonathan Sturges*
+${extra}
+She was one of those pretty and charming girls who are sometimes, as if by a mistake of destiny, born in a family of clerks. She had no dowry, no expectations, no means of being known, understood, loved, or wedded by any rich and distinguished man; and she let herself be married to a little clerk at the Ministry of Public Instruction.
+
+She dressed plainly because she could not dress well, but she was as unhappy as though she had really fallen from her proper station, since with women there is neither caste nor rank; and beauty, grace, and charm act instead of family and birth.
+
+She suffered ceaselessly, feeling herself born for all the delicacies and all the luxuries. She suffered from the poverty of her dwelling, from the wretched look of the walls, from the worn-out chairs, from the ugliness of the curtains.
+\`\`\``;
+  it('finds the story with none of its words glossed', () => {
+    const problems = passageWithoutGlosses(story());
+    expect(problems).toHaveLength(1);
+    expect(problems[0]!.what).toContain('The Necklace');
+  });
+  it('is satisfied by a gloss list on the handout', () => {
+    expect(passageWithoutGlosses(story('\n**Words to know:** *dowry*: money a bride brings · *paste*: fake jewels\n'))).toEqual([]);
+  });
+});
+
+describe('passageWithoutGlosses on quoted passages with no source line (Gatsby, Nov 28)', () => {
+  const gatsby = `# Gatsby
+
+\`\`\`yawp-material
+kind: handout
+title: The Great Gatsby — Chapter 1 Opening: Close Reading
+---
+### Passage A
+
+> "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since. 'Whenever you feel like criticizing anyone,' he told me, 'just remember that all the people in this world haven't had the advantages that you've had.'"
+
+**Questions:** 1. What does Nick's father tell him?
+\`\`\``;
+  it('reads them in a literature lesson', () => {
+    expect(passageWithoutGlosses(gatsby, { literature: true })).toHaveLength(1);
+  });
+  it('leaves them alone in any other lesson, where a quoted paragraph is often the lesson\'s own model', () => {
+    expect(passageWithoutGlosses(gatsby)).toEqual([]);
+  });
+});

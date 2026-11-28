@@ -64,9 +64,10 @@ import { withoutRunawayBlanks } from '~/domain/lesson-planner/runaway-blanks';
 import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server';
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
-import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
+import { periodOf, planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
 import { readGenre } from '~/domain/lesson-planner/genre-rules';
 import { isLiterature, meaningProblems } from '~/domain/lesson-planner/meaning-check.server';
+import { printedFromMemory } from '~/domain/lesson-planner/memory-quotes';
 import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { passageWithoutGlosses } from '~/domain/lesson-planner/passage-glosses';
 import { checkDuringProblems, modelFirstProblems } from '~/domain/lesson-planner/shape-checks';
@@ -1037,11 +1038,13 @@ async function turnAction({ request }: ActionFunctionArgs) {
           // mark that is nowhere in their hands.
           ...passageNotInHand(reply),
           // The passage's hard words glossed where students meet them (R5, S5).
-          ...passageWithoutGlosses(reply),
+          ...passageWithoutGlosses(reply, { literature: isLiterature(askedSoFar) }),
           // The shape of a lesson (section 1): a check everyone answers, with
           // a plan for a miss (S6), and a model before students try (S4).
           ...checkDuringProblems(reply),
           ...modelFirstProblems(reply),
+          // Never quoted from memory (R24; Nov 28): a literature work Yawp! could not check.
+          ...printedFromMemory(reply, { checked: against.kind !== 'none', literature: isLiterature(askedSoFar) }),
           // What the meaning check found, where the fact check left it.
           ...meaning.filter((problem) => reply.includes(problem.words) || reply.includes(JSON.stringify(problem.words).slice(1, -1))),
         ];
@@ -1108,7 +1111,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
       }
       // Minutes that add up to the period (S9, Nov 24 types test: 57, 55 and
       // 47 minutes for 50-minute periods): the plan's own steps first...
-      reply = planFittingPeriod(reply, lessonLength?.minutes);
+      reply = planFittingPeriod(reply, lessonLength?.minutes ?? periodOf(turn.message));
       // ...then minutes that agree (Nov 22): the deck's agenda and slide
       // minutes come from the plan's steps, never written separately.
       reply = withDeckMatchingPlan(reply);

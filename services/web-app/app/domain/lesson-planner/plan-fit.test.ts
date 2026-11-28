@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { planFittingPeriod } from './plan-fit';
+import { periodOf, planFittingPeriod } from './plan-fit';
 import { readPlanSteps } from './plan-steps';
 
 const total = (reply: string) => readPlanSteps(reply).reduce((sum, step) => sum + (step.minutes ?? 0), 0);
@@ -85,5 +85,17 @@ describe('planFittingPeriod (S9: minutes that agree)', () => {
     const plan = `**1. Starter (5 min)**\nWrite.\n\n**2. Read aloud (20 min)**\nRead.\n\n**3. Discussion (20 min)**\nTalk.\n\n**4. Exit ticket (10 min)**\nExit.`;
     const out = planFittingPeriod(plan, 50);
     expect(total(out)).toBe(50);
+  });
+});
+
+describe('periodOf: the period from the request when the length was not stored (fiction run, Nov 28)', () => {
+  it('reads "50 minutes:" and "a 45-minute lesson" as the request says them', () => {
+    expect(periodOf('Build day 1 of an Of Mice and Men unit for 10th grade, 50 minutes: introduce the novel.')).toBe(50);
+    expect(periodOf('Teach a 45-minute close reading of the opening.')).toBe(45);
+    expect(periodOf('A lesson on chapter 3 for 80 min blocks')).toBe(80);
+  });
+  it('is null with no period, or one no class has', () => {
+    expect(periodOf('Teach chapter 3 of Gatsby.')).toBeNull();
+    expect(periodOf('Read for 5 minutes, then discuss.')).toBeNull();
   });
 });
