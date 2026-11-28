@@ -34,6 +34,15 @@ describe('the planner never narrates its own process', () => {
     expect(withoutProcessTalk('Here\'s the full plan. "Dulce et Decorum Est" is in the public domain, so all passages are quoted directly from Owen\'s text.\n\n## Step 1')).toBe('Here\'s the full plan.\n\n## Step 1');
   });
 
+  test('the narration the fiction run still printed (Nov 28) is gone', () => {
+    expect(withoutProcessTalk("*Of Mice and Men* (1937) is still in copyright, so I'll use labeled slots for the text.\n\n## Step 1")).toBe('## Step 1');
+    expect(withoutProcessTalk("I'll write a Short Response prompt since the library has none for this text and scene. For the class starter I have strong options. Building now.\n\n## Step 1")).toBe('## Step 1');
+    expect(withoutProcessTalk('Here is the Act 1, Scene 1 handout for students, and the slide deck follows.\n\n## Handout')).toBe('## Handout');
+    expect(withoutProcessTalk('Now the deck:\n\n## Slides')).toBe('## Slides');
+    // A teacher's step that says what the teacher will do stays.
+    expect(withoutProcessTalk('Students write first. Then you read the opening aloud.')).toBe('Students write first. Then you read the opening aloud.');
+  });
+
   test('the lesson’s own words, lists and fenced blocks are never touched', () => {
     const plain = 'Students read the opening aloud. I’ll model the first annotation myself.\n\n- Let me know if you want a shorter version.\n\n```yawp-slides\n{"note":"Let me build this now."}\n```';
     expect(withoutProcessTalk(plain)).toBe(plain);

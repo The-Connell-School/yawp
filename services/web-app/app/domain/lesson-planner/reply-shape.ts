@@ -37,6 +37,18 @@ const PROCESS_TALK = [
   /\b(?:the )?(?:Teacher['’]s )?(?:Lounge|library) (?:has|had) (?:no|nothing)\b/i,
   /\b(?:is|was) built from scratch\b/i,
   /\bI['’]ve (?:written|drafted|created|made|built)\b[^.!?]*\b(?:myself|from scratch)\b/i,
+  // Nov 28 (fiction run): "Of Mice and Men (1937) is still in copyright, so I'll use labeled slots for the text."
+  /\bis (?:still )?(?:in|under) copyright\b[^.!?]*\bso (?:I|I['’]ll|I will|we|the|its|it|all)\b/i,
+  // "I'll write a Short Response prompt since the library has none for this text and scene."
+  /\bI['’]ll (?:write|draft|create|make)\b[^.!?]*\b(?:since|because|as)\b[^.!?]*\b(?:library|Lounge)\b/i,
+  /\bthe (?:library|Lounge) has (?:none|nothing|no)\b/i,
+  // "For the class starter I have strong options." "Building now."
+  /\bI have (?:strong|good|great|several|solid) options\b/i,
+  /^Building (?:it |this |the (?:lesson|deck|unit|plan) )?now\.?$/i,
+  // "Here is the Act 1, Scene 1 handout for students, and the slide deck follows."
+  /\b(?:and )?the (?:slide )?deck follows\b/i,
+  // "Now the deck:"
+  /^(?:Now|And now|Next),?\s+the (?:deck|handout|slides|slide deck|materials?)\s*[:.]?$/i,
 ];
 
 /** A sentence that is only "Good —", "Great!" or "Okay." on its own says nothing either. */
@@ -49,7 +61,8 @@ function splitSentences(paragraph: string): string[] {
 
 /** A paragraph with its process talk taken out; '' when nothing is left. */
 function withoutTalk(paragraph: string): string {
-  if (/^\s*(?:[-*+]|\d+[.)]|#{1,6}|>|\|)/.test(paragraph)) return paragraph;
+  // A list, heading, quotation or table; an *italic* title opening a sentence is not a bullet (Nov 28).
+  if (/^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\|)/.test(paragraph)) return paragraph;
   const sentences = splitSentences(paragraph.trim());
   // "Good — I have everything I need." opens with its own little word: split it off first.
   const kept = sentences

@@ -68,6 +68,7 @@ import { periodOf, planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
 import { readGenre } from '~/domain/lesson-planner/genre-rules';
 import { isLiterature, meaningProblems } from '~/domain/lesson-planner/meaning-check.server';
 import { printedFromMemory } from '~/domain/lesson-planner/memory-quotes';
+import { careNoteProblems } from '~/domain/lesson-planner/care-notes';
 import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { passageWithoutGlosses } from '~/domain/lesson-planner/passage-glosses';
 import { checkDuringProblems, modelFirstProblems } from '~/domain/lesson-planner/shape-checks';
@@ -1043,6 +1044,8 @@ async function turnAction({ request }: ActionFunctionArgs) {
           // a plan for a miss (S6), and a model before students try (S4).
           ...checkDuringProblems(reply),
           ...modelFirstProblems(reply),
+          // Care with hard content (S7; Nov 28): a commonly taught work, a full care note.
+          ...careNoteProblems(reply, askedSoFar),
           // Never quoted from memory (R24; Nov 28): a literature work Yawp! could not check.
           ...printedFromMemory(reply, { checked: against.kind !== 'none', literature: isLiterature(askedSoFar) }),
           // What the meaning check found, where the fact check left it.
