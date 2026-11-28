@@ -1,0 +1,128 @@
+/**
+ * Where found pictures are kept (Nov 22): rows of the lesson's own pictures,
+ * marked `found`, with the subject each one is of. Only open pictures are
+ * ever found, so one kept for a subject may be copied for any teacher's
+ * lesson; a teacher's own uploads have no subject and are never shared.
+ */
+import { prisma } from '~/utils/db.server';
+import type { PictureShelf } from './picture-lookup.server';
+import { screenPrint } from './poster-print.server';
+
+/**
+ * Pictures kept before the second look existed (Nov 22, 14:10 UTC) were kept
+ * under weaker rules: the novel's cover for its characters, a disputed
+ * copyright. They stay with the lessons that use them and are never offered
+ * again; judging old mistakes one by one let one through (Jim Casy, the
+ * Grapes rerun).
+ */
+export const SHELF_SINCE = new Date('2026-11-22T14:10:00Z');
+
+export const pictureShelf: PictureShelf = {
+  async findKept(keys) {
+    if (!keys.length) return [];
+    const rows = await prisma.lessonPlanUploadPicture.findMany({
+      where: {
+        origin: 'found',
+        subject: { in: keys },
+        createdAt: { gte: SHELF_SINCE },
+      },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['subject'],
+      select: {
+        id: true,
+        subject: true,
+        credit: true,
+        altText: true,
+        blob: true,
+        contentType: true,
+      },
+    });
+    return rows.flatMap((row) =>
+      row.subject
+        ? [
+            {
+              key: row.subject,
+              id: row.id,
+              credit: row.credit ?? '',
+              altText: row.altText ?? '',
+              blob: row.blob ? new Uint8Array(row.blob) : undefined,
+              contentType: row.contentType,
+            },
+          ]
+        : []
+    );
+  },
+  async copy(id, owner, changes) {
+    const row = await prisma.lessonPlanUploadPicture.findFirst({
+      where: { id, origin: 'found' },
+    });
+    if (!row) throw new Error('That picture is no longer kept.');
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      uploadId: _uploadId,
+      membershipId: _membershipId,
+      conversationId: _conversationId,
+      ...picture
+    } = row;
+    return prisma.lessonPlanUploadPicture.create({
+      data: {
+        ...picture,
+        // A credit kept before Commons' hidden Wikidata line was dropped (Nov 22).
+        credit: picture.credit?.replace(/\s*label QS:[\s\S]*$/i, '') ?? null,
+        ...(changes?.altText ? { altText: changes.altText } : {}),
+        membershipId: owner.membershipId,
+        conversationId: owner.conversationId,
+        position: 0,
+        slideNumbers: [],
+      },
+      select: { id: true },
+    });
+  },
+  async print(id, owner) {
+    const row = await prisma.lessonPlanUploadPicture.findFirst({
+      where: { id, membershipId: owner.membershipId },
+    });
+    if (!row?.blob) return null;
+    const printed = screenPrint(new Uint8Array(row.blob), row.contentType);
+    if (!printed) return null;
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      uploadId: _uploadId,
+      membershipId: _membershipId,
+      conversationId: _conversationId,
+      ...picture
+    } = row;
+    return prisma.lessonPlanUploadPicture.create({
+      data: {
+        ...picture,
+        // Never on the shelf for its subject: the photo is, the print is this deck's.
+        subject: null,
+        altText: `${row.altText ?? 'The place the work is set in'}, drawn as a print`.slice(0, 500),
+        credit: row.credit ? `Print by Yawp! after ${row.credit}` : 'Print by Yawp!',
+        contentType: printed.contentType,
+        byteSize: printed.data.length,
+        width: printed.width,
+        height: printed.height,
+        blob: Buffer.from(printed.data),
+        membershipId: owner.membershipId,
+        conversationId: owner.conversationId,
+        position: 0,
+        slideNumbers: [],
+      },
+      select: { id: true },
+    });
+  },
+  async forget(id) {
+    await prisma.lessonPlanUploadPicture.update({
+      where: { id },
+      data: { subject: null },
+    });
+  },
+  create: (data) =>
+    prisma.lessonPlanUploadPicture.create({
+      data: { ...data, blob: Buffer.from(data.blob) },
+      select: { id: true },
+    }),
+};

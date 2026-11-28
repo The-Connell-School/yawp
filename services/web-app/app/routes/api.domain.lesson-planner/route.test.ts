@@ -80,7 +80,7 @@ const prisma = {
   class: {
     findMany: mock(),
   },
-  lessonPlanUploadPicture: { findMany: mock(async () => []) },
+  lessonPlanUploadPicture: { findMany: mock(async () => []), create: mock(), updateMany: mock(async () => ({ count: 0 })) },
   $transaction: mock(),
 };
 
@@ -104,6 +104,11 @@ mock.module('~/domain/assignment-types/exit-ticket-builder-v3-gate.server', () =
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
 }));
+const withResolvedPictures = mock();
+mock.module('~/domain/lesson-planner/picture-lookup.server', () => ({ withResolvedPictures }));
+// The fact check is a model call of its own, tested on its own; here it is off.
+mock.module('~/domain/lesson-planner/fact-check-model.server', () => ({ factCheckCall: () => undefined }));
+mock.module('~/domain/lesson-planner/picture-shelf.server', () => ({ pictureShelf: {} }));
 mock.module('~/domain/lesson-planner/lesson-planner-tools.server', () => ({
   handleLessonPlannerToolCall,
   LESSON_PLANNER_TOOLS: [{ name: 'list_classes' }],
@@ -268,6 +273,53 @@ describe('api.domain.lesson-planner action', () => {
     } as any);
 
     expect(jsonResult(response).data.messageId).toBe('msg-assistant');
+  });
+
+  test('a picture beside the words (Nov 22): after the reply, the deck’s pictures are found and attached to the new lesson', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ foundPictures: true });
+    withResolvedPictures.mockReset().mockResolvedValue({ reply: 'The deck, with pictures.', ids: ['ckfound00001'], counts: { wanted: 2, filled: 1, reused: 0, empty: 1 }, empty: [{ subject: 'x', why: 'none' }] });
+    prisma.lessonPlanUploadPicture.updateMany.mockClear();
+    getLLMCompletion.mockResolvedValue('The deck.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({ request: formRequest({ message: 'America in 1955, day 1' }) } as any);
+
+    // No picture tool for the model: Yawp! fills what the deck asks for.
+    expect(getLLMCompletion.mock.calls[0][0].tools.map((tool: { name: string }) => tool.name)).not.toContain('find_pictures');
+    expect(withResolvedPictures.mock.calls[0][0]).toBe('The deck.');
+    expect(withResolvedPictures.mock.calls[0][1]).toEqual({ membershipId: 'teacher-1', conversationId: null });
+    // The picture editor and the second look go with it (Nov 22, night), the whole step inside sixteen seconds.
+    const deps = withResolvedPictures.mock.calls[0][2];
+    expect(typeof deps.name).toBe('function');
+    expect(typeof deps.look).toBe('function');
+    expect(deps.deadlineMs).toBe(32_000);
+    // The lesson is written after the reply: the pictures are kept without one, then attached.
+    expect(prisma.lessonPlanUploadPicture.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['ckfound00001'] }, membershipId: 'teacher-1', conversationId: null, uploadId: null },
+      data: { conversationId: 'plan-1' },
+    });
+    const stored = prisma.lessonPlanMessage.create.mock.calls.map((call: any[]) => call[0].data.content);
+    expect(stored).toContain('The deck, with pictures.');
+  });
+
+  test('pictures that fail never fail the lesson', async () => {
+    getLessonPlannerReviewFlags.mockResolvedValue({ foundPictures: true });
+    withResolvedPictures.mockReset().mockRejectedValue(new Error('column "subject" does not exist'));
+    getLLMCompletion.mockResolvedValue('The deck.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    const response = await action({ request: formRequest({ message: 'America in 1955, day 1' }) } as any);
+    expect(jsonResult(response).data.messageId).toBe('msg-assistant');
+  });
+
+  test('without the flag, no pictures are looked for', async () => {
+    withResolvedPictures.mockReset();
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+    await action({ request: formRequest({ message: 'hi' }) } as any);
+    expect(withResolvedPictures).not.toHaveBeenCalled();
   });
 
   test('passes the planner tool allowlist and a teacher-scoped context to the LLM', async () => {
@@ -585,6 +637,27 @@ describe('api.domain.lesson-planner action', () => {
       'provider-secret'
     );
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
+  });
+
+  test('a planner call that fails early is tried once more, quietly (preview, Nov 22: two of three failures came in 5 and 22 seconds)', async () => {
+    getLLMCompletion.mockReset().mockRejectedValueOnce(new Error('overloaded')).mockResolvedValue('The lesson.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1', messages: [] });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({ request: formRequest({ message: 'hi' }) } as any);
+
+    expect(jsonResult(response).init?.status).toBeUndefined();
+    expect(jsonResult(response).data.reply).toBe('The lesson.');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  test('a planner call that keeps failing is tried twice at most, and the teacher gets the plain failure', async () => {
+    getLLMCompletion.mockReset().mockRejectedValue(new Error('overloaded'));
+
+    const response = await action({ request: formRequest({ message: 'hi' }) } as any);
+
+    expect(jsonResult(response).init?.status).toBe(500);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
   });
 
   test('never accepts a client request to transfer planner data to fallback', async () => {
@@ -1281,7 +1354,10 @@ test('streamed monthly admission and replay use the same terminal-event protocol
     );
     const text = await response.text();
     expect(text.endsWith('\n')).toBe(true);
-    expect(JSON.parse(text.trim())).toMatchObject({
+    // The stream opens before the checks (round 3, Nov 22); their answer is the last line.
+    const lines = text.trim().split('\n');
+    expect(JSON.parse(lines[0]!)).toMatchObject({ type: 'progress' });
+    expect(JSON.parse(lines.at(-1)!)).toMatchObject({
       type: 'done',
       status: kind === 'replay' ? 200 : kind === 'exhausted' ? 403 : 409,
       payload: kind === 'replay' ? { reply: 'Saved lesson' } : { error: kind },
@@ -1289,4 +1365,30 @@ test('streamed monthly admission and replay use the same terminal-event protocol
   }
   expect(getLLMCompletion).not.toHaveBeenCalled();
   expect(reserveAiRequest).not.toHaveBeenCalled();
+});
+
+test('a streamed turn answers before the checks finish (round 3, Nov 22: eight minutes of silence)', async () => {
+  monthlyEnabled = true;
+  let release: () => void = () => {};
+  beginMonthlyOperation.mockClear();
+  beginMonthlyOperation.mockImplementation(
+    () => new Promise((resolve) => (release = () => resolve({ kind: 'exhausted' })))
+  );
+  const response = (await action({
+    request: formRequest({ message: 'A slow check', requestId: 'slow-check', stream: '1' }),
+  } as any)) as Response;
+  const reader = response.body!.getReader();
+  const first = new TextDecoder().decode((await reader.read()).value);
+  expect(JSON.parse(first.trim().split('\n')[0]!)).toMatchObject({ type: 'progress' });
+  // The check is still waiting: the first line came before it.
+  for (let i = 0; i < 400 && beginMonthlyOperation.mock.calls.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(beginMonthlyOperation).toHaveBeenCalledTimes(1);
+  release();
+  let rest = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    rest += new TextDecoder().decode(value);
+  }
+  expect(JSON.parse(rest.trim().split('\n').at(-1)!)).toMatchObject({ type: 'done', status: 403 });
 });

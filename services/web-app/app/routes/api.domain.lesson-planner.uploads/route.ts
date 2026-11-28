@@ -24,10 +24,16 @@ import {
 } from '~/domain/lesson-planner/source-documents.server';
 import { PENDING_UPLOAD_MS, isDeckMode } from '~/domain/lesson-planner/lesson-uploads';
 import { readBoundedBytes } from '~/utils/bounded-body.server';
+import { pagePhotoTranscriber } from '~/domain/lesson-planner/page-photo.server';
+import { computeIpHash } from '~/utils/ai-usage-log.server';
 import {
   safeDomainErrorTextForClientResponse,
   safeErrorTextForClientResponse,
 } from '~/utils/server-error-request-context.server';
+
+/** Photos of pages read in an hour, per teacher: each is a call to a model. */
+const MAX_PAGE_PHOTOS_PER_HOUR = 30;
+const PHOTO_NAME = /\.(jpe?g|png|webp)$/i;
 
 /** File plus multipart framing; matches other upload routes' headroom. */
 const MAX_UPLOAD_BODY_BYTES = MAX_SOURCE_BYTES + 1024 * 1024;
@@ -124,9 +130,27 @@ export async function action({ request }: ActionFunctionArgs) {
     return bad(`A lesson can hold ${MAX_SOURCES_PER_LESSON} documents. Remove one to add another.`);
   }
 
+  // A photo of the pages (plan item 12, Nov 23) is read by a model: a few an hour is plenty for any lesson.
+  if (PHOTO_NAME.test(file.name.trim())) {
+    const recent = await prisma.lessonPlanUpload.count({
+      where: {
+        membershipId: access.membership.id,
+        createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) },
+        OR: ['.jpg', '.jpeg', '.png', '.webp', '.JPG', '.JPEG', '.PNG', '.WEBP'].map((ending) => ({ name: { endsWith: ending } })),
+      },
+    });
+    if (recent >= MAX_PAGE_PHOTOS_PER_HOUR) return bad('That is a lot of photos for one hour. Try again a little later, or add the pages as a PDF.', 429);
+  }
+  const transcribe = pagePhotoTranscriber(() => ({
+    organizationId: access.membership.organization.id,
+    membershipId: access.membership.id,
+    route: 'routes/api.domain.lesson-planner.uploads',
+    requestId: crypto.randomUUID(),
+    ipHash: computeIpHash(request),
+  }));
   let read;
   try {
-    read = await readSourceDocument(file, { keepDeck: Boolean(flags.uploadPictures) });
+    read = await readSourceDocument(file, { keepDeck: Boolean(flags.uploadPictures), transcribe });
   } catch (error) {
     if (error instanceof SourceDocumentError) {
       return bad(

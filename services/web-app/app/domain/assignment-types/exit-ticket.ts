@@ -303,6 +303,12 @@ export type ExitTicketFocusOption = {
   /** `{topic}` is replaced with what the teacher typed. */
   template: string;
   /**
+   * The sentence for a topic that is a clause ("what the frame narrative
+   * does in Chapter 1"), when `template` only reads with a noun ("the
+   * poem"). See `exitTicketFocusSentence`.
+   */
+  clauseTemplate?: string;
+  /**
    * Retired 2026-11-17. The grading assistant does not read this. Kept so the
    * current builder and its tests still typecheck. Do not paste it into a prompt.
    */
@@ -344,10 +350,32 @@ export const EXIT_TICKET_FOCUS_OPTIONS: ExitTicketFocusOption[] = [
     topicPlaceholder: 'e.g., the second stanza of the poem',
     template:
       'What is {topic} actually saying? Put it in your own words, then point to what in it made you read it that way.',
+    // "What is what Macbeth's first aside reveals … actually saying?" (Nov 22
+    // review): a clause cannot follow "What is".
+    clauseTemplate:
+      'In your own words, explain {topic}. Then point to what in the text made you read it that way.',
     gradingCriteria:
       'Judge whether the reading is the student’s own and whether it is anchored to the source. Look for both: a restatement in their own words, and them pointing at what in the text produced that reading. A plausible summary with nothing pointed at is partly there.',
   },
 ];
+
+/**
+ * A topic written as a clause ("what the frame narrative does in Chapter 1",
+ * "how Edwards persuades", "why Odysseus shouts his name") rather than a noun
+ * ("the poem"). The planner writes clauses as often as nouns.
+ */
+const CLAUSE_TOPIC = /^(?:what|how|why|whether|who|whom|whose|where|when|which|if)\b(?!['’])/i;
+
+export function isClauseTopic(topic: string): boolean {
+  return CLAUSE_TOPIC.test(topic.trim());
+}
+
+/** A focus's sentence around the teacher's topic, worded to fit it. */
+export function exitTicketFocusSentence(option: ExitTicketFocusOption, topic: string): string {
+  const normalized = normalizeTopic(topic);
+  const template = option.clauseTemplate && isClauseTopic(normalized) ? option.clauseTemplate : option.template;
+  return template.replace('{topic}', normalized);
+}
 
 /** The standard prompt every basic exit ticket asks. */
 export const BASIC_EXIT_TICKET_PROMPT =
@@ -895,10 +923,7 @@ export function composeExitTicketPrompt(config: ExitTicketConfig): string {
     return `${BASIC_EXIT_TICKET_PROMPT}\n\n${EXIT_TICKET_ELABORATION_NOTE}`;
   }
 
-  const sentence = option.template.replace(
-    '{topic}',
-    normalizeTopic(config.topic)
-  );
+  const sentence = exitTicketFocusSentence(option, config.topic);
   return `${sentence}\n\n${exitTicketEnding(config)}`;
 }
 
@@ -1639,7 +1664,9 @@ function draftFromConfigFields(
     return emptyExitTicketV3Draft({
       activity: 'engage-text',
       starter: null,
-      promptText: `What is ${topic} saying? Point to the part that shows it.`,
+      promptText: isClauseTopic(topic)
+        ? `In your own words, explain ${topic}. Point to the part that shows it.`
+        : `What is ${topic} saying? Point to the part that shows it.`,
       answerType,
     });
   }
@@ -2005,7 +2032,7 @@ export function exitTicketRevisedDraftFromConfig(
   const promptText =
     config.promptText ||
     (option
-      ? option.template.replace('{topic}', normalizeTopic(config.topic))
+      ? exitTicketFocusSentence(option, config.topic)
       : config.topic);
   return emptyExitTicketRevisedDraft({
     kind: 'check',

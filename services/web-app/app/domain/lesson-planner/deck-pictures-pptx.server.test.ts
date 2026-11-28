@@ -73,3 +73,19 @@ describe('picture slides in PowerPoint', () => {
     });
   }
 });
+
+describe('a found picture carries its credit into PowerPoint (Nov 21, phase 2)', () => {
+  const credited: DeckPictureFiles = new Map([
+    ['cmh0elephant0000abcd', { ...PICTURES.get('cmh0elephant0000abcd')!, credit: 'Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons' }],
+  ]);
+  for (const [name, render] of RENDERERS) {
+    test(`${name}: the credit is on the slide`, async () => {
+      const slide = parts(await render(DECK, { pictures: credited })).text('ppt/slides/slide2.xml');
+      expect(slide).toContain('Mathew Brady, Garibaldi, Public domain, via Wikimedia Commons');
+    });
+  }
+  test('the teacher’s own picture has none', async () => {
+    const slide = parts(await renderDeckPptxGallery(DECK, { pictures: PICTURES })).text('ppt/slides/slide2.xml');
+    expect(slide).not.toContain('via Wikimedia Commons');
+  });
+});

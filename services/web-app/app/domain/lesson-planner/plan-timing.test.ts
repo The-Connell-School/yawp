@@ -30,3 +30,21 @@ describe('overTime', () => {
     expect(overTime(null, 50)).toBeNull();
   });
 });
+
+describe('a subtitle is not a step (re-test, Nov 22)', () => {
+  test('"## Book 9 · 9th Grade · 50 min" over 50 minutes of steps is 50 minutes', () => {
+    const body = ['## Book 9, *The Odyssey* · 9th Grade · 50 min', '', '## Class starter (5 min)', '', '## Close reading (45 min)'].join('\n');
+    expect(planMinutes(body)).toBe(50);
+  });
+});
+
+describe('a two-part subtitle is not a step (round 4, Nov 22: Hamlet’s plan "ran" 100 minutes)', () => {
+  test('"## 12th Grade English · 50 minutes" over 50 minutes of steps is 50 minutes', () => {
+    const body = ['## 12th Grade English · 50 minutes', '', '## Class starter (5 min)', '', '## Close reading (45 min)'].join('\n');
+    expect(planMinutes(body)).toBe(50);
+  });
+  test('a step written with a dot is still a step', () => {
+    const body = ['## Read aloud · 10 min', '', '## Close reading · 40 min'].join('\n');
+    expect(planMinutes(body)).toBe(50);
+  });
+});

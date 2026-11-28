@@ -24,7 +24,8 @@ export type DeckChoices = { teach: boolean; refresh: boolean };
 
 const NO_CHOICES: DeckChoices = { teach: false, refresh: false };
 
-const ACCEPT = '.pdf,.docx,.pptx,.txt,.md';
+// A photo of the pages is read as text (plan item 12, Nov 23).
+const ACCEPT = '.pdf,.docx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp';
 const API = '/api/domain/lesson-planner/uploads';
 
 export function useSourceDocuments({
@@ -149,7 +150,7 @@ export function SourceAttachButton({ state, disabled }: { state: SourceDocuments
       <button
         type="button"
         aria-label="Add your own document"
-        title="Add your own document: PDF, Word, PowerPoint or text"
+        title="Add your own document: PDF, Word, PowerPoint, text, or a photo of the pages"
         disabled={disabled || state.busy}
         onClick={() => input.current?.click()}
         className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"

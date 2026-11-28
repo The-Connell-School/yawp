@@ -103,7 +103,9 @@ export function withoutTrailingCommentary(text: string): string {
 export function readPlanSteps(content: string): PlanStep[] {
   // Headings inside a fence are not the plan's.
   const masked = content.replace(FENCE, (fence) => fence.replace(/[^\n]/g, ' '));
-  const headings = [...masked.matchAll(/^\s{0,3}(#{2,3})\s+(.+)$/gm)].map((match) => ({
+  // A subtitle written as a heading ("### *Things Fall Apart* · English 10 ·
+  // 50 minutes") is not a step: it once filed as a 50-minute step (Nov 22).
+  const headings = [...masked.matchAll(/^\s{0,3}(#{2,3})\s+(.+)$/gm)].filter((match) => !isPlanSubtitle(match[2]!)).map((match) => ({
     level: match[1]!.length,
     text: match[2]!,
     start: match.index!,
@@ -271,4 +273,19 @@ export function splitAtStepHeadings(
   }
   flush();
   return { chunks, next };
+}
+
+/**
+ * A plan's subtitle written as a heading, never a step: "Things Fall Apart ·
+ * English 10 · 50 minutes", or "12th Grade English · 50 minutes" (round 4,
+ * Nov 22: that one became a 50-minute step, and Hamlet's stack said 100 of
+ * 50). Three parts or more, or a grade, class or period beside the length.
+ */
+export function isPlanSubtitle(heading: string): boolean {
+  const parts = heading.split(/\s·\s/).map((part) => part.replace(/[*_]/g, '').trim());
+  if (parts.length >= 3) return true;
+  if (parts.length < 2) return false;
+  const length = parts.some((part) => /^\d{1,3}[-\s]?(?:min|mins|minutes)$/i.test(part));
+  const who = parts.some((part) => /\b(?:grade|english|period|class|block)\b|\b\d{1,2}(?:st|nd|rd|th)\b/i.test(part));
+  return length && who;
 }

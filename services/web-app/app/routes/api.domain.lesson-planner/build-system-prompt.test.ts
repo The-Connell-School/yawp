@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
-import { CLASSIC_SLIDE_LAYOUTS, GALLERY_SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
+import { CLASSIC_SLIDE_LAYOUTS, GALLERY_SLIDE_LAYOUTS, validateSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import { EXIT_TICKET_FENCE } from '~/domain/lesson-planner/exit-ticket-block';
@@ -16,6 +16,7 @@ import {
 import {
   buildLessonPlannerSystemPrompt,
   buildLessonPlannerSystemPromptBlocks,
+  buildTextStructureSection,
   LESSON_PLANNER_PROMPT_VERSION,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
   recommendedLessonPlannerPrompts,
@@ -965,9 +966,9 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
     );
   });
 
-  test('teaches the recurring open-writing route by theme, not by plot', () => {
+  test('teaches the recurring open-writing route by thematic topic, not by plot', () => {
     expect(lower).toContain('recurring open class starter arc across the unit');
-    expect(lower).toContain("the unit's big themes, not its plot");
+    expect(lower).toContain("the unit's big thematic topics (asked as open questions, never as the theme itself), not its plot");
     expect(lower).toContain('how do people gain and lose power');
   });
 
@@ -991,7 +992,8 @@ describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis
   });
 
   test('keeps the day cell to one line and defers the full prompt to when the day is built', () => {
-    expect(lower).toContain('the day cell just names it');
+    // Kevin, Nov 25: the starter's words go on the day's row, not in a list under the map.
+    expect(lower).toContain("its words go in that day's `starter` field");
     expect(lower).toContain('the full prompt with its id appears in its own');
   });
 
@@ -1039,14 +1041,12 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     // The exact failure: "Days 1-4 use FW-001, FW-014, FW-011, FW-172" tells a
     // teacher nothing about what their students will actually be asked.
     expect(lower).toContain('never drop bare ids like');
-    expect(lower).toContain(
-      'an id with no words behind it is not a preview, it is a code the teacher has to go look up'
-    );
+    expect(lower).toContain('an id with no words behind it is a code the teacher has to look up');
   });
 
-  test('requires the cluster preview to bullet the real text, with the ids kept out of sight', () => {
-    expect(lower).toContain('bullet the cluster instead, one line per day');
-    expect(lower).toContain("day 1 — 'how do people gain power?'");
+  test('puts the starters on the days, never in a list in the reply, with the ids kept out of sight (Kevin, Nov 25)', () => {
+    expect(lower).toContain('the starters live on the days, in `starter`, never in a list in the reply');
+    expect(lower).toContain('**before you build:**');
     expect(lower).toContain('the ids stay in the blocks, out of sight');
   });
 
@@ -2337,5 +2337,215 @@ describe('planner prompt — the Lesson Deck Kit, spec v4.1', () => {
     expect(v3).toContain('italic mode word');
     expect(v3).not.toContain('Lesson Deck Kit, spec v4');
     expect(textOf({ deckKitV4: true, deckKitV41: true, deckGallery: false })).not.toContain('Lesson Deck Kit, spec v4');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — slides that teach (Kevin, Nov 21)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckGallery: true, deckKitV4: true, deckKitV41: true, contextTools })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('with context tools on, the deck is about its subject, not one painting', () => {
+    const on = textOf(true);
+    expect(on).not.toContain('one painting inside it');
+    expect(on).toContain('the pictures in it come from the subject’s world');
+    // Off, the kit reads as it always has.
+    expect(textOf(false)).toContain('one painting inside it');
+  });
+
+  test('a painting is never a metaphor for a lesson’s history, and the model is told where it hangs', () => {
+    const on = textOf(true);
+    expect(on).toContain('Never use a painting as a metaphor');
+    expect(on).toContain('on the title, beside a big idea, on a look slide and at the exit');
+    expect(textOf(false)).not.toContain('Never use a painting as a metaphor');
+  });
+
+  test('a reading slide is never shipped without its reading', () => {
+    const on = textOf(true);
+    expect(on).toContain('A read or excerpt slide needs its passage');
+    expect(on).toContain('the passage comes only from the teacher\'s own pages');
+    expect(on).toContain('Yawp! asks the teacher for the pages itself');
+    expect(textOf(false)).not.toContain('A read or excerpt slide needs its passage');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — how a text is built (Nov 22)', () => {
+  const textOf = (flags: { deckGallery?: boolean; deckKitV4?: boolean; contextTools?: boolean } = { deckGallery: true, deckKitV4: true, contextTools: true }) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', deckKitV41: true, ...flags })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('the diagram, its three kinds and when to use one', () => {
+    const on = textOf();
+    expect(on).toContain('- diagram — boxes and words');
+    for (const kind of ['parts', 'frames', 'cast']) expect(on).toContain(`\`"kind": "${kind}"\``);
+    expect(on).toContain('when a slide teaches how a text is built or who is in it');
+    expect(on).toContain('has one diagram, before its first passage');
+    expect(on).toContain('Never a diagram of something the lesson does not teach, and never more than two.');
+  });
+
+  test('each example is a diagram the deck takes exactly as written', () => {
+    const examples = buildTextStructureSection().flatMap((line) => [...line.matchAll(/`("diagram": \{.*\})`/g)].map((match) => JSON.parse(`{${match[1]}}`).diagram));
+    expect(examples.map((diagram) => diagram.kind)).toEqual(['parts', 'frames', 'cast']);
+    for (const diagram of examples) {
+      const checked = validateSlideDeck(JSON.stringify({ title: 'Deck', slides: [{ layout: 'diagram', title: 'How it is built', diagram, speakerNotes: 'n' }] }));
+      expect(checked.ok && checked.deck.slides[0]).toMatchObject({ layout: 'diagram', diagram });
+    }
+    // The sonnet's couplet is half a quatrain.
+    expect(examples[0].items.map((item: { weight: number }) => item.weight)).toEqual([4, 4, 4, 2]);
+  });
+
+  test('the phrases an excerpt slide marks, in the order of its tasks', () => {
+    const on = textOf();
+    expect(on).toContain('`highlight` on an excerpt slide: name the one to three phrases the tasks point at, copied exactly from the passage, in the order of the tasks; Yawp! draws each in the color of its task.');
+    expect(on).toContain('never words that are not in `body`');
+  });
+
+  test('only with context tools on the kit’s v4 look, which draws them', () => {
+    expect(textOf({ deckGallery: true, deckKitV4: true, contextTools: false })).not.toContain('- diagram —');
+    expect(textOf({ deckGallery: true, deckKitV4: false, contextTools: true })).not.toContain('- diagram —');
+    expect(textOf({ deckGallery: false, deckKitV4: true, contextTools: true })).not.toContain('`highlight` on an excerpt slide');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the arc of a lesson (Kevin, Nov 21)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', contextTools })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('it opens on the theme in the students’ own lives, always at the start of a unit', () => {
+    const on = textOf(true);
+    expect(on).toContain('Start with the students, and start with a thematic topic');
+    expect(on).toContain('Always on the first day of a unit');
+    expect(on).toContain('What do you think it is like to lose power?');
+    expect(on).toContain('recall what came earlier in the unit');
+  });
+
+  test('then what they already know, shorter the less they know', () => {
+    const on = textOf(true);
+    expect(on).toContain('find out what they already know');
+    expect(on).toContain('The less they are likely to know, the shorter this part');
+  });
+
+  test('then short, direct teaching, key terms included', () => {
+    expect(textOf(true)).toContain('short, punchy pieces of information');
+  });
+
+  test('then the novel against what the students said, alone, together and taught', () => {
+    const on = textOf(true);
+    expect(on).toContain('Then bring in the text against what the students said, through questions');
+    expect(on).toContain('time alone to think and write, time to discuss with peers, and the teacher teaching directly');
+  });
+
+  test('off, none of it', () => {
+    expect(textOf(false)).not.toContain('Start with the students, and start with a thematic topic');
+  });
+
+  test('theme and thematic topic (Kevin, Nov 24): students find the theme; no lesson tells them', () => {
+    const on = textOf(true);
+    expect(on).toContain('"Love" is a topic, never a theme.');
+    expect(on).toContain('Never tell students the theme.');
+    expect(on).toContain('Never open with a theme for students to agree or disagree with');
+    expect(on).toContain('A writing task asks students to make the claim, never to illustrate one given to them.');
+    expect(on).toContain('The themes go only in the teacher\'s notes');
+    expect(textOf(false)).not.toContain('Theme and thematic topic.');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — standards every lesson meets (13-lesson review, Nov 22)', () => {
+  const textOf = (contextTools: boolean) =>
+    buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', contextTools, deckGallery: true, deckKitV4: true, deckKitV41: true })
+      .map((block) => block.text)
+      .join('\n');
+
+  test('the text in students’ hands: the passage on the slide and the handout, a slot for a work in copyright', () => {
+    const on = textOf(true);
+    expect(on).toContain('The text in students’ hands');
+    expect(on).toContain('printed in full on the student handout, above the questions');
+    expect(on).toContain('includes that handout in this reply');
+    expect(on).toContain('[Add your pages: chapter 1');
+    expect(on).toContain('nothing in the lesson quotes the work from memory');
+    expect(on).toContain('published in 1930 or earlier');
+    // The excerpt rule now lets a public-domain passage on the slide, exactly as printed.
+    expect(on).toContain('For a work in the public domain');
+    expect(on).not.toContain('40–90 words, only text the teacher supplied or a tool returned');
+  });
+
+  test('exactly right, teach what was asked, model first, words and access, checks during, care, units backward, minutes agree', () => {
+    const on = textOf(true);
+    for (const line of [
+      'Never put a famous line in the wrong chapter or the wrong mouth',
+      'find the step that teaches each thing the request names',
+      'Never answer a request to plan with only a question',
+      'I do, we do, you do',
+      'Gloss the passage’s hard words',
+      'two or three sentence starters',
+      'a one-minute check',
+      '"Care note"',
+      'Never ask students to write about wanting to end their life',
+      'A unit plan starts from its final task',
+      'never whole chapters aloud day after day',
+      'its slides’ minutes add up to the plan’s',
+    ])
+      expect(on).toContain(line);
+  });
+
+  test('a map never shades today’s country for a colony', () => {
+    expect(textOf(true)).toContain('never shade today’s country to stand for a colony');
+  });
+
+  test('off, none of it', () => {
+    const off = textOf(false);
+    expect(off).not.toContain('The text in students’ hands');
+    expect(off).not.toContain('"Care note"');
+  });
+});
+
+describe('planner prompt — real sources, terms taught right (Nov 24 types test)', () => {
+  const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School' });
+  test('never an invented source presented as real: a real one, a labeled slot, or one marked as written for practice', () => {
+    expect(prompt).toContain('Real sources only');
+    expect(prompt).toContain('Never invent a book, article, study, author, expert or web address');
+    expect(prompt).toContain('"studies show"');
+    expect(prompt).toContain('written for practice');
+  });
+  test('a term is taught as the field defines it, and each example is a true case of it', () => {
+    expect(prompt).toContain('Teach a term right');
+    expect(prompt).toContain('an example labeled ethos');
+  });
+});
+
+describe('planner prompt — a request to plan is built, never answered with only a question (S3, Nov 24 types test)', () => {
+  // The research lesson was answered with only "What are you reading with
+  // them, and what's the research paper on?": the "ask for the text first"
+  // line read as an order on a request that had already asked for a lesson.
+  for (const intakeV2 of [false, true]) {
+    const prompt = buildLessonPlannerSystemPrompt({ teacherName: null, organizationName: 'School', intakeV2 });
+    test(`asking for the text is only for a teacher who has not asked for a lesson yet (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('ask for the text first, alone');
+      expect(prompt).toContain('only when the teacher has not yet asked for a lesson');
+      expect(prompt).toContain('A request to plan a lesson is built at once');
+    });
+    test(`a skill lesson never asks what the class is reading (intake v2: ${intakeV2})`, () => {
+      expect(prompt).toContain('A skill lesson (research, grammar, argument writing) needs no text');
+      expect(prompt).toContain('[the class\'s research topic]');
+    });
+  }
+});
+
+describe('planner prompt — rules by genre (Nov 28, behind lesson_planner_genre_rules)', () => {
+  test('a lesson whose genre is known gets its genre\'s own set after the rules for every lesson', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', genre: 'poem' });
+    const text = blocks.map((block) => block.text).join('\n');
+    expect(text).toContain('THIS LESSON IS A POEM');
+    expect(text).toContain('heard at least twice');
+    // After the cache breakpoint: the cached instructions are the same for every genre.
+    expect(blocks[0]!.text).not.toContain('THIS LESSON IS');
+  });
+  test('no genre (the flag off, or a request whose genre cannot be told): no genre section, as before', () => {
+    const text = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School' }).map((block) => block.text).join('\n');
+    expect(text).not.toContain('THIS LESSON IS');
   });
 });

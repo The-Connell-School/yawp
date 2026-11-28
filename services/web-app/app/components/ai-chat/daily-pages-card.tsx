@@ -116,6 +116,7 @@ export function DailyPagesCard({
             <Button
               type="button"
               size="sm"
+              wrap
               variant={added ? 'default' : 'outline-primary'}
               disabled={disabled}
               onClick={() => onToggle(!added)}
@@ -130,6 +131,7 @@ export function DailyPagesCard({
             <Button
               type="button"
               size="sm"
+              wrap
               variant="outline-primary"
               disabled={disabled || added}
               onClick={onReplace}
@@ -143,7 +145,7 @@ export function DailyPagesCard({
           {created ? (
             <CreatedInYawp href={created.href} />
           ) : targetTypeId ? (
-          <Button asChild size="sm" data-testid="daily-pages-create">
+          <Button asChild size="sm" wrap data-testid="daily-pages-create">
             <Link
               to={withPiece(
                 dailyPagesCreateHref(targetTypeId, exercise.prompt, conversationId),

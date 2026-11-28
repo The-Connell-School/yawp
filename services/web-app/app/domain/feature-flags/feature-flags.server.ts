@@ -20,6 +20,11 @@ import {
   LESSON_PLANNER_WRITING_OVERRIDE_FLAG,
   LESSON_PLANNER_DECK_KIT_V4_FLAG,
   LESSON_PLANNER_DECK_KIT_V41_FLAG,
+  LESSON_PLANNER_DECK_STUDIO_FLAG,
+  LESSON_PLANNER_DECK_CHAT_FLAG,
+  LESSON_PLANNER_CONTEXT_TOOLS_FLAG,
+  LESSON_PLANNER_FOUND_PICTURES_FLAG,
+  LESSON_PLANNER_GENRE_RULES_FLAG,
   deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
@@ -319,6 +324,11 @@ export async function getLessonPlannerReviewFlags(
     writingOverride,
     deckKitV4,
     deckKitV41,
+    deckStudio,
+    deckChat,
+    contextTools,
+    foundPictures,
+    genreRules,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -340,6 +350,11 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_WRITING_OVERRIDE_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_KIT_V4_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_KIT_V41_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_STUDIO_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_DECK_CHAT_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_CONTEXT_TOOLS_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_FOUND_PICTURES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_GENRE_RULES_FLAG, orgId),
   ]);
   const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
@@ -366,6 +381,16 @@ export async function getLessonPlannerReviewFlags(
     deckKitV4: deckKitV4 && deckGallery && deckV2,
     // Spec v4.1 is spec v4 with four changes, so it needs spec v4 on.
     deckKitV41: deckKitV41 && deckKitV4 && deckGallery && deckV2,
+    // The studio edits the kit's own layout, so it needs spec v4 on.
+    deckStudio: deckStudio && deckKitV4 && deckGallery && deckV2,
+    // The chat lives in the studio.
+    deckChat: deckChat && deckStudio && deckKitV4 && deckGallery && deckV2,
+    // A timeline and a map are drawn by the kit's v4 layout.
+    contextTools: contextTools && deckKitV4 && deckGallery && deckV2,
+    // Pictures go on the context slides.
+    foundPictures: foundPictures && contextTools && deckKitV4 && deckGallery && deckV2,
+    // Rules by genre (Nov 28): needs nothing else.
+    genreRules,
   };
 }
 
@@ -407,6 +432,16 @@ export type LessonPlannerReviewFlags = {
   deckKitV4: boolean;
   /** The Lesson Deck Kit, spec v4.1 (Nov 11); needs deckKitV4. */
   deckKitV41: boolean;
+  /** The deck studio: edit on the slide (Nov 19); needs deckKitV4. */
+  deckStudio: boolean;
+  /** Ask Yawp! in the deck studio (Nov 19); needs deckStudio. */
+  deckChat: boolean;
+  /** Timelines and maps for introducing a text (Nov 19); needs deckKitV4. */
+  contextTools: boolean;
+  /** Pictures that belong (Nov 21); needs contextTools. */
+  foundPictures: boolean;
+  /** Rules for every lesson, plus its genre's own set (Nov 28). */
+  genreRules: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

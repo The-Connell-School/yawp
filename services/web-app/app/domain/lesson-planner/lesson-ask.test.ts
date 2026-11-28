@@ -1,17 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  ASK_FENCE,
-  asksWorthShowing,
-  composeAskReply,
-  LESSON_ACTIVITIES,
-  LESSON_MINUTES_MAX,
-  LESSON_MINUTES_MIN,
-  LESSON_MINUTES_STEP,
-  PLANNER_PICKS_ACTIVITIES,
-  readLessonAsks,
-  type LessonAsk,
-  composeIntakeReply,
-} from './lesson-ask';
+import { ASK_FENCE, LESSON_ACTIVITIES, LESSON_MINUTES_MAX, LESSON_MINUTES_MIN, LESSON_MINUTES_STEP, NO_COMPANION, PLANNER_PICKS_ACTIVITIES, PLANNER_PICKS_COMPANION, asksWorthShowing, companionOnlyOffered, composeAskReply, composeIntakeReply, purposeToAsk, readLessonAsks, type LessonAsk } from './lesson-ask';
 
 function fenced(body: string): string {
   return `\`\`\`${ASK_FENCE}\n${body}\n\`\`\``;
@@ -382,5 +370,90 @@ describe('a unit asks about each class period (Kevin, Oct 25, note 1)', () => {
     expect(composeIntakeReply({ classes: [{ title: 'English 10', minutes: 60 }], choice: null, activityIds: [], severalDays: true })).toContain(
       'For English 10, 60 minutes each class period.'
     );
+  });
+});
+
+describe('what the lesson is for (Kevin, Nov 26)', () => {
+  const reply = [
+    'A few quick choices before I build the unit.',
+    '```yawp-ask',
+    'goal: Make and defend a claim about when the law should be defied',
+    'goal: Read a Greek tragedy aloud and follow who is speaking',
+    'balance',
+    'leads',
+    'companion: “If We Must Die” — Claude McKay, poem, 1919: justice',
+    'companion: “Invictus” — William Ernest Henley, poem, 1888: free will',
+    '```',
+  ].join('\n');
+
+  test('the planner’s candidates and the bare questions are read as their own steps', () => {
+    const { asks, body } = readLessonAsks(reply);
+    expect(body).toBe('A few quick choices before I build the unit.');
+    expect(asks).toEqual([
+      { kind: 'goal', options: ['Make and defend a claim about when the law should be defied', 'Read a Greek tragedy aloud and follow who is speaking'] },
+      { kind: 'balance' },
+      { kind: 'leads' },
+      { kind: 'companion', options: ['“If We Must Die” — Claude McKay, poem, 1919: justice', '“Invictus” — William Ernest Henley, poem, 1888: free will'] },
+    ]);
+  });
+
+  test('asked on the first reply when the subject is named, never under a written plan', () => {
+    const { asks } = readLessonAsks(reply);
+    expect(asksWorthShowing(asks, { topicSettled: false }).map((ask) => ask.kind)).toEqual(['goal', 'balance', 'leads', 'companion']);
+    expect(asksWorthShowing(asks, { topicSettled: true, planAlreadyWritten: true })).toEqual([]);
+  });
+
+  test('the answers in the teacher’s voice', () => {
+    expect(
+      composeIntakeReply({
+        classes: [{ title: 'English 10', minutes: 50 }],
+        choice: null,
+        activityIds: [],
+        severalDays: true,
+        goal: 'Make and defend a claim about when the law should be defied',
+        balance: 'writing',
+        leads: 'essay',
+        companion: '“If We Must Die” — Claude McKay, poem, 1919: justice',
+      })
+    ).toBe(
+      'For English 10, 50 minutes each class period. If they leave with one thing: Make and defend a claim about when the law should be defied. Lean it toward writing. It leads to an essay. Pair it with “If We Must Die” — Claude McKay, poem, 1919: justice.'
+    );
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], companion: NO_COMPANION, justBuild: true })).toBe(
+      'No companion text. Just build it: choose the rest yourself and say in one line what you assumed.'
+    );
+  });
+});
+
+describe('when to ask what the work is for (Nov 26: the Antigone unit was built without asking)', () => {
+  test('a unit, or a pairing, whose purpose is not said: asked, on its first turn only', () => {
+    expect(purposeToAsk("Plan a 6-day unit on Sophocles' Antigone for 10th grade, 50-minute periods.", { firstTurn: true })).toEqual({ unit: true, companion: false });
+    expect(purposeToAsk('Plan a 50-minute lesson pairing Macbeth Act 5, scene 5 with a poem on the same topic.', { firstTurn: true })).toEqual({ unit: false, companion: true });
+    expect(purposeToAsk("Plan a 6-day unit on Antigone.", { firstTurn: false })).toBeNull();
+  });
+
+  test('not when the request already says what it is for, and never for an ordinary lesson', () => {
+    expect(purposeToAsk('Plan a 6-day unit on Antigone so that students can write a thesis about civil disobedience.', { firstTurn: true })).toBeNull();
+    expect(purposeToAsk('Plan a unit on Gatsby. I want them to leave able to write a theme statement.', { firstTurn: true })).toBeNull();
+    expect(purposeToAsk('Plan a 50-minute lesson on Macbeth Act 1, scene 3.', { firstTurn: true })).toBeNull();
+  });
+});
+
+describe('a companion text is the teacher’s choice (Kevin, Nov 26)', () => {
+  test('"Just build", or the question left unanswered, says so in the teacher’s words', () => {
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], justBuild: true })).toContain('No companion text unless I choose one.');
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], balance: 'writing', companionAsked: true })).toBe('Lean it toward writing. No companion text unless I choose one.');
+    expect(composeIntakeReply({ classes: [], choice: null, activityIds: [], companionAsked: true, companion: PLANNER_PICKS_COMPANION })).toBe('You choose a companion text.');
+  });
+
+  test('then the work is built without one, and one may only be offered', () => {
+    expect(companionOnlyOffered('Just build it: choose the rest yourself and say in one line what you assumed. No companion text unless I choose one.', { firstTurn: false })).toBe(true);
+    expect(companionOnlyOffered('Lean it toward writing. No companion text unless I choose one.', { firstTurn: false })).toBe(true);
+    // A unit whose request said what it is for: the card never asked.
+    expect(companionOnlyOffered('Plan a 6-day unit on Antigone so that students can write a thesis.', { firstTurn: true })).toBe(true);
+    // Chosen, handed to the planner, or declined: nothing to offer.
+    expect(companionOnlyOffered('Pair it with “Ozymandias” — Percy Bysshe Shelley, poem, 1818.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('You choose a companion text.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('It leads to an essay. No companion text.', { firstTurn: false })).toBe(false);
+    expect(companionOnlyOffered('Plan a 50-minute lesson on Macbeth 1.3.', { firstTurn: true })).toBe(false);
   });
 });

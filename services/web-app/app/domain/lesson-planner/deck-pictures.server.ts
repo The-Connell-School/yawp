@@ -26,7 +26,7 @@ export async function loadDeckPictures(
   if (!ids.length || !membershipId) return {};
   const rows = await prisma.lessonPlanUploadPicture.findMany({
     where: { id: { in: ids }, membershipId },
-    select: { id: true, altText: true, width: true, height: true },
+    select: { id: true, altText: true, width: true, height: true, credit: true },
   });
   return Object.fromEntries(rows.map((row) => [row.id, row]));
 }
@@ -40,7 +40,7 @@ export async function loadDeckPictureFiles(
   if (!ids.length || !membershipId) return new Map();
   const rows = await prisma.lessonPlanUploadPicture.findMany({
     where: { id: { in: ids }, membershipId },
-    select: { id: true, altText: true, width: true, height: true, contentType: true, blob: true },
+    select: { id: true, altText: true, width: true, height: true, contentType: true, blob: true, credit: true },
   });
   return new Map(
     rows.map((row) => [
@@ -52,6 +52,7 @@ export async function loadDeckPictureFiles(
         height: row.height,
         contentType: row.contentType,
         data: Buffer.from(row.blob),
+        credit: row.credit ?? null,
       },
     ])
   );
@@ -82,6 +83,12 @@ export function addPptxPicture(
   if (picture) {
     const fit = containBox(box, picture);
     slide.addImage({ data: pptxImageData(picture), ...fit, altText: picture.altText || undefined });
+    // A found picture's credit, on a dark band along its foot (Nov 21).
+    if (picture.credit) {
+      const band = Math.min(0.24, fit.h / 4);
+      slide.addShape('rect' as never, { x: fit.x, y: fit.y + fit.h - band, w: fit.w, h: band, fill: { color: '1B1B1B', transparency: 40 }, line: { type: 'none' } } as never);
+      slide.addText(picture.credit, { x: fit.x + 0.05, y: fit.y + fit.h - band, w: fit.w - 0.1, h: band, fontSize: 7, color: 'FFFFFF', valign: 'middle', fit: 'shrink', ...(style.fontFace ? { fontFace: style.fontFace } : {}) } as never);
+    }
     return;
   }
   slide.addShape('rect' as never, { ...box, fill: { type: 'none' }, line: { color: style.rule, width: 1, dashType: 'dash' } });

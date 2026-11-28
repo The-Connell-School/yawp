@@ -80,10 +80,16 @@ interface Params {
   /** Disable automatic cross-provider transfer for sensitive workloads. */
   allowFallbackProvider?: boolean;
   signal?: AbortSignal;
-  /** Metadata-only redacts payloads; audit-only skips persistence for internal scratch checks. */
-  logPayload?: 'full' | 'metadata-only' | 'audit-only';
+  /**
+   * Metadata-only redacts payloads; response-only redacts the input but keeps
+   * the model's answer (for calls whose input is sensitive or huge and whose
+   * answer is not); audit-only skips persistence for internal scratch checks.
+   */
+  logPayload?: 'full' | 'metadata-only' | 'response-only' | 'audit-only';
   /** Known names or direct identifiers that must be scrubbed from LlmLog text. */
   deidentificationPhrases?: unknown;
+  /** Anthropic only: sent as `output_config` (e.g. `{ effort: 'low' }` for a small, fast call). */
+  outputConfig?: Record<string, unknown>;
 }
 
 async function logLlmCall(data: {
@@ -98,17 +104,19 @@ async function logLlmCall(data: {
   totalTokens?: number;
   durationMs?: number;
   metadata?: Record<string, unknown>;
-  logPayload?: 'full' | 'metadata-only' | 'audit-only';
+  logPayload?: 'full' | 'metadata-only' | 'response-only' | 'audit-only';
   deidentificationPhrases?: unknown;
 }) {
   if (data.logPayload === 'audit-only') return;
   const metadataOnly = data.logPayload === 'metadata-only';
+  const responseOnly = data.logPayload === 'response-only';
+  const redactInput = metadataOnly || responseOnly;
   try {
     await createDeidentifiedLlmLog(prisma, {
       model: data.model,
       provider: data.provider,
-      systemPrompt: metadataOnly ? undefined : data.systemPrompt,
-      messages: metadataOnly
+      systemPrompt: redactInput ? undefined : data.systemPrompt,
+      messages: redactInput
         ? {
             redacted: true,
             messageCount:
@@ -118,7 +126,7 @@ async function logLlmCall(data: {
           }
         : (data.messages as object),
       response: metadataOnly ? undefined : data.response,
-      error: metadataOnly && data.error ? 'LLM request failed' : data.error,
+      error: redactInput && data.error ? 'LLM request failed' : data.error,
       inputTokens: data.inputTokens,
       outputTokens: data.outputTokens,
       totalTokens: data.totalTokens,
@@ -126,7 +134,7 @@ async function logLlmCall(data: {
       deidentificationPhrases: data.deidentificationPhrases,
       metadata: {
         ...data.metadata,
-        ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
+        ...(redactInput ? { payloadLogging: data.logPayload } : {}),
       } as object,
     });
   } catch (err) {
@@ -266,6 +274,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         messages: messages as any,
         ...anthropicSamplingParams(params.model, params.temperature),
         ...(params.tools?.length ? { tools: params.tools as any } : {}),
+        ...(params.outputConfig ? { output_config: params.outputConfig } : {}),
       };
       const message = params.signal
         ? await anthropic.messages.create(request, { signal: params.signal })

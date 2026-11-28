@@ -938,12 +938,13 @@ test.describe("Lesson Planner — Brian's second run", () => {
         'Yawp! LESSON PLAN · THE CRITICAL ESSAY',
         'Land the plane',
         '5 of the writing process: conclusion',
-        '[ Add the standards this lesson covers ]',
         'Student access to yawp.school',
         'An ending you remember',
       ]) {
         expect(document).toContain(text);
       }
+      // No standards named: no Standards box, never a placeholder (Nov 22 review).
+      expect(document).not.toContain('[ Add the standards this lesson covers ]');
       // The lesson color is the painting's rust.
       expect(document).toContain('9C4A22');
 

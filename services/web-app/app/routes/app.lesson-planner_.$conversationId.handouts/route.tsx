@@ -146,6 +146,9 @@ export default function StepHandoutsRoute() {
                     step.needsVersion ? 'Written for students' : 'Ready'
                   ) : isIn ? (
                     'Waiting to be written for students'
+                  ) : step.covered ? (
+                    // Its prompts, exit ticket or handout are steps of their own (Nov 22 review).
+                    'Its own pieces print instead'
                   ) : (
                     'Not in this handout'
                   )}

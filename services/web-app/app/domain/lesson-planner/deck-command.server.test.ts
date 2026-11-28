@@ -1,0 +1,111 @@
+import { describe, expect, mock, test } from 'bun:test';
+import type { SlideDeck } from './slide-deck';
+
+// The model call is handed in (`complete`), so nothing here is mocked for other files.
+const { runDeckCommand } = await import('./deck-command.server');
+
+const DECK: SlideDeck = {
+  title: 'Sudan before the novel',
+  kit: 'v4.1',
+  slides: [
+    { layout: 'title', title: 'Sudan before the novel', speakerNotes: 'Open.' },
+    { layout: 'discuss', title: 'Why the Nile?', question: 'Why would the river matter to an empire?', speakerNotes: 'Listen.' },
+    { layout: 'bullets', title: 'Words to know', bullets: ['Condominium'], speakerNotes: 'Quick.' },
+  ],
+};
+const access = { membership: { id: 'teacher-1', organization: { id: 'org-1', numOfTeacherSeats: 5 } } };
+const request = new Request('http://localhost/api/domain/lesson-planner/deck-command', { method: 'POST' });
+
+function run(answer: string | Error, extra: Partial<Parameters<typeof runDeckCommand>[0]> = {}) {
+  const complete = mock(async () => {
+    if (answer instanceof Error) throw answer;
+    return answer;
+  });
+  return { complete, outcome: runDeckCommand({ request, access, deck: DECK, line: 'Cut the vocabulary slide', selection: null, periodMinutes: 45, complete, ...extra }) };
+}
+
+describe('runDeckCommand', () => {
+  test('a good answer: the changed deck, in the look it came in, with what changed', async () => {
+    const { complete, outcome } = run('{"reply": "Cut the vocabulary slide.", "ops": [{"op": "remove_slide", "slide": 3}]}');
+    expect(await outcome).toMatchObject({
+      reply: 'Cut the vocabulary slide.',
+      applied: true,
+      changes: [{ slide: 3, kind: 'removed', title: 'Words to know' }],
+    });
+    const deck = (await outcome).deck!;
+    expect(deck.slides).toHaveLength(2);
+    expect(deck.kit).toBe('v4.1');
+
+    const call = (complete.mock.calls[0] as unknown[])[0] as { system: string; user: string; feature: string; maxTokens: number };
+    expect(call.feature).toBe('lesson-planner-deck-command');
+    expect(call.user).toContain('Cut the vocabulary slide');
+    expect(call.user).toContain('"number": 3');
+    // The school's deck spec: v4.1.
+    expect(call.system).toContain('Lesson Deck Kit, spec v4.1');
+    expect(call.system).toContain('replace_slide');
+  });
+
+  test('a deck drawn in spec v4 is edited to spec v4’s rules', async () => {
+    const { complete, outcome } = run('{"reply": "Nothing to change."}', { deck: { ...DECK, kit: 'v4' } });
+    await outcome;
+    const call = (complete.mock.calls[0] as unknown[])[0] as { system: string };
+    expect(call.system).toContain('Lesson Deck Kit, spec v4)');
+    expect(call.system).not.toContain('spec v4.1');
+  });
+
+  test('what is pointed at goes to the model with the line', async () => {
+    const { complete, outcome } = run('{"reply": "ok"}', { selection: { slide: 2, field: 'question', text: 'Why would the river matter to an empire?' } });
+    await outcome;
+    const call = (complete.mock.calls[0] as unknown[])[0] as { user: string };
+    expect(call.user).toContain('pointing at slide 2, its question');
+  });
+
+  test('an answer with nothing to do says so and changes nothing', async () => {
+    expect(await run('{"reply": "I can’t make pictures here."}').outcome).toEqual({ reply: 'I can’t make pictures here.', applied: false, changes: [] });
+  });
+
+  test('an answer in plain words is the model saying why: it is passed on, and nothing changes', async () => {
+    expect(await run('I can’t add photos here, only pictures already in the deck.').outcome).toEqual({
+      reply: 'I can’t add photos here, only pictures already in the deck.',
+      applied: false,
+      changes: [],
+    });
+  });
+
+  test('an answer that would break the deck, or names a slide that is not there, leaves it alone and says so', async () => {
+    const broken = await run('{"reply": "Done.", "ops": [{"op": "replace_slide", "slide": 2, "with": {"layout": "big_idea", "title": "Idea"}}]}').outcome;
+    expect(broken.applied).toBe(false);
+    expect(broken.reply).toContain('couldn’t make that change');
+    const missing = await run('{"reply": "Done.", "ops": [{"op": "remove_slide", "slide": 9}]}').outcome;
+    expect(missing).toEqual(broken);
+    // It said "Done" and nothing it wrote could be read: not done.
+    const unreadable = await run('{"reply": "Done.", "ops": [{"op": "tidy_everything"}]}').outcome;
+    expect(unreadable).toEqual(broken);
+    expect(await run('{"reply": ').outcome).toEqual(broken);
+  });
+
+  test('a change to every slide, each with only what changed: applied, and the rest of each slide kept', async () => {
+    const answer = JSON.stringify({
+      reply: 'Tightened all three.',
+      ops: [
+        { op: 'replace_slide', slide: 1, with: { title: 'Sudan first' } },
+        { op: 'replace_slide', slide: 2, with: { question: 'Why the river?' } },
+        { op: 'replace_slide', slide: 3, with: { bullets: ['Condominium: shared rule'] } },
+      ],
+    });
+    const outcome = await run(answer, { line: 'Fewer words on every slide' }).outcome;
+    expect(outcome.applied).toBe(true);
+    expect(outcome.changes).toHaveLength(3);
+    expect(outcome.deck!.slides[1]).toMatchObject({ layout: 'discuss', title: 'Why the Nile?', question: 'Why the river?', speakerNotes: 'Listen.' });
+  });
+
+  test('ops that change nothing are not a change', async () => {
+    const same = await run(`{"reply": "It already says that.", "ops": [{"op": "replace_slide", "slide": 1, "with": ${JSON.stringify(DECK.slides[0])}}]}`).outcome;
+    expect(same).toEqual({ reply: 'It already says that.', applied: false, changes: [] });
+  });
+
+  test('a rate limit is the route’s to answer', async () => {
+    const limit = new Error('too many');
+    await expect(run(limit).outcome).rejects.toBe(limit);
+  });
+});

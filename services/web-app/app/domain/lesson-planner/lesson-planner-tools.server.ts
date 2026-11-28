@@ -13,6 +13,7 @@
  *   already has, and every reference comes back with a link the teacher can act
  *   on rather than a description they have to go find.
  */
+import { searchCompanionTexts } from './companion-texts';
 import {
   createLessonPlannerReporterReadOnlyDelegation,
   LESSON_PLANNER_REPORTER_READONLY_TOOL_NAMES,
@@ -79,6 +80,24 @@ export const LESSON_PLANNER_REPORTER_TOOL_NAMES =
 
 /** Catalog tools, served locally rather than through the reporter. */
 export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
+  {
+    name: 'search_companion_texts',
+    description:
+      "Search Yawp!'s companion texts: shorter texts (poems first, and stories, essays, speeches, letters) that treat the same thematic topic as the work being taught, from a different angle, so students can compare what each seems to say and then make their own claim. Search by the work, by its thematic topics, or both. A result with `printable: true` comes with its whole text, exactly as first printed: print it from there, word for word, and never from memory. Anything else is named with `where` to find it, and the lesson leaves a labeled slot for the teacher's copy. `angle` is for the teacher only, never for a slide. Never offer a companion this tool did not return.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        work: { type: 'string', description: 'The work being taught, e.g. "Macbeth" or "The Great Gatsby".' },
+        topics: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Thematic topics in a word or two, e.g. ["power", "ambition"]. The library uses: identity, truth, change, morality, time-memory, meaning, belonging, suffering, ambition, family, responsibility, relationships, power, freedom, justice, loss, fear, love, free-will, faith, fairness.',
+        },
+        kind: { type: 'string', enum: ['poem', 'story', 'essay', 'speech', 'letter'] },
+      },
+    },
+  },
   {
     name: 'search_daily_pages_prompts',
     description:
@@ -308,6 +327,15 @@ async function handleCatalogToolCall(
   dependencies: LessonPlannerToolDependencies
 ): Promise<unknown | undefined> {
   switch (name) {
+    case 'search_companion_texts': {
+      const companions = searchCompanionTexts(input);
+      return {
+        companions,
+        note: companions.length
+          ? 'Offer only these. Print a printable one word for word from its `text`, with its title, author and year; for any other, name it with where to find it and leave a labeled slot for the teacher’s copy. Tell the teacher about any `care` note before they choose. A video clip is never from memory: leave a labeled slot that says exactly what to find and what to watch for.'
+          : 'No companion in the library matches. Search again with other thematic topics of the work. If none fits, say so in one line and do not suggest one from memory.',
+      };
+    }
     case 'search_daily_pages_prompts': {
       const prompts = searchDailyPagesPrompts(input);
       return {

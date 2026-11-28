@@ -84,6 +84,16 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_deck_kit_v4',
   // The Lesson Deck Kit, spec v4.1 (Nov 11): needs spec v4.
   'feature_flag.lesson_planner_deck_kit_v41',
+  // The deck studio (Nov 19): edit on the slide; needs spec v4.
+  'feature_flag.lesson_planner_deck_studio',
+  // Ask Yawp! in the deck studio (Nov 19): needs the deck studio.
+  'feature_flag.lesson_planner_deck_chat',
+  // Timelines and maps for introducing a text (Nov 19): needs spec v4.
+  'feature_flag.lesson_planner_context_tools',
+  // Pictures that belong (Nov 21): needs timelines and maps.
+  'feature_flag.lesson_planner_found_pictures',
+  // Rules by genre (Nov 28).
+  'feature_flag.lesson_planner_genre_rules',
 ] as const;
 
 /**

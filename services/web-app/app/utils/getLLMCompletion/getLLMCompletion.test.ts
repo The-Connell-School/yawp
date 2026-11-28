@@ -95,6 +95,19 @@ describe('getLLMCompletion', () => {
     expect(request).not.toHaveProperty('temperature');
   });
 
+  test('passes an output config through to Anthropic as output_config', async () => {
+    await getLLMCompletion({
+      model: 'claude-haiku-5-5',
+      messages: [{ role: 'user', content: 'Hi' }],
+      attribution: testAttribution,
+      outputConfig: { effort: 'low' },
+    });
+    expect(anthropicCreate.mock.calls[0][0]).toMatchObject({ output_config: { effort: 'low' } });
+    anthropicCreate.mockClear();
+    await getLLMCompletion({ model: 'claude-haiku-5-5', messages: [{ role: 'user', content: 'Hi' }], attribution: testAttribution });
+    expect(anthropicCreate.mock.calls[0][0]).not.toHaveProperty('output_config');
+  });
+
   test('sends default temperature 0.6 for Claude 4.6', async () => {
     await getLLMCompletion({
       model: 'claude-sonnet-4-6',
@@ -322,6 +335,24 @@ describe('getLLMCompletion', () => {
       cacheCreationInputTokens: 500,
       cacheReadInputTokens: 500,
     });
+  });
+
+  test('response-only logs keep the answer and redact the input', async () => {
+    anthropicCreate.mockResolvedValueOnce(anthropicTextResponse('{"pictures": []}'));
+    await getLLMCompletion({
+      model: 'claude-haiku-5-5',
+      system: 'Check these pictures.',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'The slide says: Ada Lovelace.' }] }],
+      logPayload: 'response-only',
+      metadata: { feature: 'lesson-planner-picture-look' },
+      attribution: testAttribution,
+    });
+    const log = llmLogCreate.mock.calls[0][0].data;
+    expect(log.systemPrompt).toBeUndefined();
+    expect(JSON.stringify(log.messages)).not.toContain('Ada');
+    expect(log.messages).toMatchObject({ redacted: true });
+    expect(log.response).toBe('{"pictures": []}');
+    expect(log.metadata).toMatchObject({ payloadLogging: 'response-only' });
   });
 
   test('supports metadata-only audit logs for sensitive prompts and tool results', async () => {

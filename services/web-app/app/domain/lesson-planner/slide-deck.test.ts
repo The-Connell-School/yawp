@@ -9,8 +9,10 @@ import {
   validateSlideDeck,
   classicSlide,
   deckPictureIds,
+  diagramLines,
   SLIDE_DECK_FENCE,
   SLIDE_LAYOUTS,
+  shortPage,
 } from './slide-deck';
 
 function fenced(deck: unknown): string {
@@ -160,6 +162,12 @@ describe('parseSlideDeck', () => {
       if (layout === 'notes') slide.facts = ['One fact.'];
       if (layout === 'read') slide.tasks = [{ verb: 'Circle', text: 'names' }];
       if (layout === 'picture') slide.image = 'cmh0elephant0000abcd';
+      if (layout === 'timeline') slide.events = [{ date: '1899', title: 'One' }, { date: '1956', title: 'Two' }];
+      if (layout === 'world') slide.scenes = [{ label: 'The Acropolis today' }, { label: 'A chorus on a vase' }];
+      if (layout === 'map') slide.places = [{ name: 'Khartoum' }];
+      if (layout === 'define') slide.terms = [{ word: 'aristocracy', definition: 'Families who rule by birth.' }];
+      if (layout === 'person') slide.people = [{ name: 'Garibaldi', role: 'General' }];
+      if (layout === 'diagram') slide.diagram = { kind: 'parts', items: [{ label: 'Octave' }, { label: 'Sestet' }] };
       const parsed = parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }));
       expect(parsed?.deck.slides[0]!.layout).toBe(layout);
     }
@@ -722,3 +730,322 @@ describe('picture slides: the teacher’s own pictures (Nov 1)', () => {
   });
 });
 
+
+describe('a quiz question, however the model writes it (bot test, Nov 19)', () => {
+  const deckOf = (slide: Record<string, unknown>) => parseSlideDeck(fenced({ title: 'Deck', slides: [{ title: 'Check', speakerNotes: 'Ask for hands.', ...slide }] }));
+
+  test('"layout": "quiz" is a discuss slide with its choices and its answer, not a deck that fails', () => {
+    const slide = deckOf({ layout: 'quiz', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'What do the images share?', choices: ['Fragile', 'Decay', 'Nature'], answer: 2 });
+    for (const layout of ['Quiz', 'multiple-choice', 'multiple_choice', 'mcq']) {
+      expect(deckOf({ layout, question: 'Q?', choices: ['A1', 'B1'] })!.deck.slides[0]!.layout).toBe('discuss');
+    }
+  });
+
+  test('a quiz slide with its question only in the title still has a question', () => {
+    const slide = deckOf({ layout: 'quiz', title: 'Which fix is correct?', choices: ['A semicolon', 'A comma'] })!.deck.slides[0]!;
+    expect(slide).toMatchObject({ layout: 'discuss', question: 'Which fix is correct?' });
+  });
+
+  test('options are choices; letters typed in front come off, since the slide draws its own', () => {
+    const slide = deckOf({ layout: 'discuss', question: 'Q?', options: ['A) Fragile', 'b. Decay', '(C) Nature', 'D: Recovered'] })!.deck.slides[0]!;
+    expect(slide.choices).toEqual(['Fragile', 'Decay', 'Nature', 'Recovered']);
+    // A choice that only starts with a capital and a word is left alone.
+    expect(deckOf({ layout: 'discuss', question: 'Q?', choices: ['A semicolon', 'A comma and "and"'] })!.deck.slides[0]!.choices).toEqual(['A semicolon', 'A comma and "and"']);
+  });
+
+  test('the answer as a letter, as the choice’s own words, or as a number in a string', () => {
+    const answer = (value: unknown, key = 'answer') => deckOf({ layout: 'discuss', question: 'Q?', choices: ['Fragile', 'Decay', 'Nature'], [key]: value })!.deck.slides[0]!.answer;
+    expect(answer('B')).toBe(2);
+    expect(answer('c)')).toBe(3);
+    expect(answer('Decay')).toBe(2);
+    expect(answer('2')).toBe(2);
+    expect(answer(3, 'correctAnswer')).toBe(3);
+    expect(answer('B', 'correct')).toBe(2);
+    // An answer that names no choice is left off: the question is still a question.
+    expect(answer('Something else')).toBeUndefined();
+    expect(answer(9)).toBeUndefined();
+  });
+});
+
+describe('the exit slide never says a thing twice (the Leopard deck, Nov 21)', () => {
+  const exitDeck = (slide: Record<string, unknown>) => ({
+    title: 'Sicily and the Risorgimento',
+    slides: [{ layout: 'exit', title: 'Before you go', body: 'Unification cost the Sicilian aristocracy ___.', speakerNotes: 'Close.', ...slide }],
+  });
+
+  test('a button the model wrote out in full keeps only what students open', () => {
+    for (const button of ['Exit ticket: open it in Yawp!', 'Exit ticket: open it in Yawp! before you go', 'Exit ticket — open it in Yawp!', 'Exit ticket: Open it in Yawp! before you go.']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ button })));
+      expect(parsed?.deck?.slides[0]?.button).toBe('Exit ticket');
+    }
+  });
+
+  test('a plain button is left alone', () => {
+    expect(parseSlideDeck(fenced(exitDeck({ button: 'Exit ticket' })))?.deck?.slides[0]?.button).toBe('Exit ticket');
+  });
+
+  test('next lesson drops a "Next time:" or "Tomorrow:" the slide already supplies', () => {
+    for (const nextLesson of ['Tomorrow: the man who wrote the novel', 'Next time: Tomorrow: the man who wrote the novel', 'Next time: the man who wrote the novel']) {
+      const parsed = parseSlideDeck(fenced(exitDeck({ nextLesson })));
+      expect(parsed?.deck?.slides[0]?.nextLesson).toBe('the man who wrote the novel');
+    }
+    expect(parseSlideDeck(fenced(exitDeck({ nextLesson: 'Lampedusa and his palace' })))?.deck?.slides[0]?.nextLesson).toBe('Lampedusa and his palace');
+  });
+});
+
+describe('an excerpt slide without its passage (re-test, Nov 22)', () => {
+  test('becomes a reading slide that says where the lines are; the deck is kept', () => {
+    const json = JSON.stringify({
+      title: 'Dulce',
+      slides: [
+        { layout: 'title', title: 'Dulce et Decorum Est', speakerNotes: 'n' },
+        { layout: 'excerpt', title: 'Stanza 1', work: 'Dulce et Decorum Est', page: 'lines 1–8', bullets: ['Circle every simile.'], speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.deck.slides[1]!.layout).toBe('read');
+  });
+});
+
+describe('a long page note is made short, not a lost deck (re-test, Nov 22)', () => {
+  test.each([
+    ['Act 1, Scene 3, lines 130–142', '1.3.130–142'],
+    ['Chapter 1, pages 1–3', 'ch. 1, pp. 1–3'],
+    ['Book 9, lines 105–566', '9.105–566'],
+  ])('%s → %s', (long, short) => {
+    expect(shortPage(long)).toBe(short);
+  });
+  test('the deck builds', () => {
+    const json = JSON.stringify({ title: 'M', slides: [{ layout: 'title', title: 'Macbeth', speakerNotes: 'n' }, { layout: 'excerpt', title: 'The aside', body: 'Two truths are told', work: 'Macbeth', page: 'Act 1, Scene 3, lines 130–142', speakerNotes: 'n' }] });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('the planner’s own seven-line agenda (re-test, Nov 22: Things Fall Apart lost its deck)', () => {
+  test('is fitted to six lines, every part and minute kept; a numbered part is read as text', () => {
+    const agenda = [5, 3, 15, 2, 12, 8, 5].map((minutes, i) => ({ title: `Part ${i + 1}`, minutes }));
+    const json = JSON.stringify({
+      title: 'TFA',
+      slides: [
+        { layout: 'title', title: 'Things Fall Apart', speakerNotes: 'n' },
+        { layout: 'agenda', title: 'Today', agenda, speakerNotes: 'n' },
+        { layout: 'big_idea', title: 'Idea', body: 'Achebe writes back.', part: 2, speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const lines = result.deck.slides[1]!.agenda!;
+    expect(lines).toHaveLength(6);
+    expect(lines.reduce((sum, line) => sum + (line.minutes ?? 0), 0)).toBe(50);
+    expect(result.deck.slides[2]!.part).toBe('2');
+  });
+});
+
+describe('a diagram of how a text is built (Nov 22)', () => {
+  const n = { speakerNotes: 'n' };
+  const deckOf = (...slides: unknown[]) => validateSlideDeck(JSON.stringify({ title: 'Sonnet 73', slides: [{ layout: 'title', title: 'Sonnet 73', ...n }, ...slides] }));
+  const first = (...slides: unknown[]) => {
+    const result = deckOf(...slides);
+    if (!result.ok) throw new Error(result.reason);
+    return result.deck.slides[1]!;
+  };
+
+  const SONNET = {
+    layout: 'diagram',
+    title: 'How Sonnet 73 is built',
+    body: 'Where does the poem turn?',
+    diagram: {
+      kind: 'parts',
+      items: [
+        { label: 'Quatrain 1', text: 'Autumn: a few yellow leaves', note: 'lines 1–4', weight: 4 },
+        { label: 'Quatrain 2', text: 'Twilight fading into night', note: 'lines 5–8', weight: 4 },
+        { label: 'Quatrain 3', text: 'A fire dying on its ashes', note: 'lines 9–12', weight: 4 },
+        { label: 'Couplet', text: 'So love what you must leave', note: 'lines 13–14', weight: 2 },
+      ],
+    },
+    ...n,
+  };
+  const FRANKENSTEIN = {
+    layout: 'diagram',
+    title: 'A story inside a story',
+    diagram: {
+      kind: 'frames',
+      items: [
+        { label: 'Walton’s letters', text: 'A sea captain writes home to his sister.' },
+        { label: 'Victor’s story', text: 'The man Walton rescues tells how he made a living being.' },
+        { label: 'The creature’s story', text: 'At the centre, the creature tells Victor how he learned to speak.' },
+      ],
+    },
+    ...n,
+  };
+  const YOUNGERS = {
+    layout: 'diagram',
+    title: 'The Youngers and the check',
+    diagram: {
+      kind: 'cast',
+      items: [
+        { label: 'Lena (Mama)', text: 'A house with a garden', note: 'Head of the family' },
+        { label: 'Walter Lee', text: 'A liquor store of his own', note: 'Lena’s son' },
+        { label: 'Beneatha', text: 'Medical school', note: 'Lena’s daughter' },
+        { label: 'Ruth', text: 'A home that is theirs', note: 'Walter’s wife' },
+      ],
+    },
+    ...n,
+  };
+
+  test('parts, frames and a cast are kept as written, weights and notes included', () => {
+    const sonnet = first(SONNET);
+    expect(sonnet.layout).toBe('diagram');
+    expect(sonnet.body).toBe('Where does the poem turn?');
+    expect(sonnet.diagram!.kind).toBe('parts');
+    expect(sonnet.diagram!.items.map((item) => item.weight)).toEqual([4, 4, 4, 2]);
+    expect(sonnet.diagram!.items[3]).toEqual({ label: 'Couplet', text: 'So love what you must leave', note: 'lines 13–14', weight: 2 });
+    expect(first(FRANKENSTEIN).diagram).toMatchObject({ kind: 'frames', items: [{ label: 'Walton’s letters' }, { label: 'Victor’s story' }, { label: 'The creature’s story' }] });
+    expect(first(YOUNGERS).diagram!.items[1]).toEqual({ label: 'Walter Lee', text: 'A liquor store of his own', note: 'Lena’s son' });
+  });
+
+  test('the items under their kind’s name, with the kind read from the name', () => {
+    const cast = first({ layout: 'diagram', title: 'The Youngers', cast: YOUNGERS.diagram.items, ...n });
+    expect(cast.diagram!.kind).toBe('cast');
+    expect(cast.diagram!.items).toHaveLength(4);
+    const frames = first({ layout: 'diagram', title: 'Frankenstein', diagram: { frames: FRANKENSTEIN.diagram.items }, ...n });
+    expect(frames.diagram!.kind).toBe('frames');
+    // Flat on the slide, where `items` would otherwise be taken for bullets.
+    const flat = first({ layout: 'diagram', kind: 'parts', title: 'The speech', items: [{ label: 'To be' }, { label: 'To sleep' }, { label: 'To dream' }], ...n });
+    expect(flat.diagram).toEqual({ kind: 'parts', items: [{ label: 'To be' }, { label: 'To sleep' }, { label: 'To dream' }] });
+    expect(flat.bullets).toBeUndefined();
+  });
+
+  test('items written as "Label: text", a weight as "4 lines", names a model reaches for', () => {
+    const slide = first({
+      layout: 'diagram',
+      title: 'Sonnet 73',
+      parts: ['Quatrain 1: Autumn', '2. Quatrain 2 — Twilight', { name: 'Quatrain 3', description: 'A dying fire', weight: '4 lines' }, { title: 'Couplet', lines: 2 }],
+      ...n,
+    });
+    expect(slide.diagram).toEqual({
+      kind: 'parts',
+      items: [{ label: 'Quatrain 1', text: 'Autumn' }, { label: 'Quatrain 2', text: 'Twilight' }, { label: 'Quatrain 3', text: 'A dying fire', weight: 4 }, { label: 'Couplet', weight: 2 }],
+    });
+  });
+
+  test('a seventh item is cut and overlong words are shortened, never a lost deck', () => {
+    const acts = ['Exposition', 'Rising action', 'Climax', 'Falling action', 'Resolution', 'Epilogue', 'Afterword'];
+    const slide = first({ layout: 'diagram', title: 'The play', diagram: { kind: 'parts', items: [...acts.map((label) => ({ label })), { label: 'x'.repeat(60), text: 'y'.repeat(200) }] }, ...n });
+    expect(slide.diagram!.items.map((item) => item.label)).toEqual(acts.slice(0, 6));
+    const long = first({ layout: 'diagram', title: 'Long', diagram: { kind: 'cast', items: [{ label: 'x'.repeat(60), text: 'y'.repeat(200), note: 'z'.repeat(90) }, { label: 'Ruth' }] }, ...n });
+    expect(long.diagram!.items[0]!.label).toHaveLength(40);
+    expect(long.diagram!.items[0]!.text).toHaveLength(120);
+    expect(long.diagram!.items[0]!.note).toHaveLength(60);
+  });
+
+  test('shares written as percentages keep their proportions', () => {
+    const slide = first({ layout: 'diagram', title: 'The novel', parts: [{ label: 'Part 1', weight: 50 }, { label: 'Part 2', weight: 25 }, { label: 'Part 3', weight: 25 }], ...n });
+    expect(slide.diagram!.items.map((item) => item.weight)).toEqual([40, 20, 20]);
+  });
+
+  test('no kind, or one Yawp! does not draw: parts when they have sizes, else cards', () => {
+    expect(first({ layout: 'diagram', title: 'T', diagram: { kind: 'pyramid', items: [{ label: 'A', weight: 2 }, { label: 'B' }] }, ...n }).diagram!.kind).toBe('parts');
+    expect(first({ layout: 'diagram', title: 'T', diagram: [{ label: 'A' }, { label: 'B' }], ...n }).diagram!.kind).toBe('cast');
+  });
+
+  test('a diagram with no title takes its kind’s', () => {
+    expect(first({ layout: 'diagram', diagram: FRANKENSTEIN.diagram, ...n }).title).toBe('A story inside a story');
+  });
+
+  test('an unusable diagram becomes a list of its lines, and the deck still validates', () => {
+    const one = first({ layout: 'diagram', title: 'The frame', diagram: { kind: 'frames', items: [{ label: 'Walton’s letters', text: 'A captain writes home.' }, { text: 'no name' }, 7] }, ...n });
+    expect(one.layout).toBe('bullets');
+    expect(one.bullets).toEqual(['Walton’s letters: A captain writes home.']);
+    expect(one.diagram).toBeUndefined();
+    // With no title either, the list still has a heading, so the deck is kept.
+    expect(first({ layout: 'diagram', diagram: { kind: 'frames', items: ['Walton’s letters: A captain writes home.'] }, ...n })).toMatchObject({ layout: 'bullets', title: 'How it is built' });
+    // Nothing in it at all: the slide is read by what else it holds.
+    expect(first({ layout: 'diagram', title: 'The frame', diagram: 'frames', body: 'A story inside a story.', ...n }).layout).toBe('statement');
+    expect(first({ layout: 'diagram', title: 'The frame', ...n }).layout).toBe('title');
+    expect(first({ layout: 'diagram', title: 'The frame', diagram: { kind: 'cast', items: [] }, bullets: ['Walton', 'Victor'], ...n })).toMatchObject({ layout: 'bullets', bullets: ['Walton', 'Victor'] });
+  });
+
+  test('a broken diagram on another kind of slide is dropped, and the slide stays', () => {
+    const slide = first({ layout: 'big_idea', title: 'Idea', body: 'Stories hold stories.', diagram: { kind: 'frames', items: 'three' }, ...n });
+    expect(slide.layout).toBe('big_idea');
+    expect(slide.diagram).toBeUndefined();
+  });
+
+  test('"cast" with people is still a person slide; with a cast, it is the diagram', () => {
+    expect(first({ layout: 'cast', title: 'Who', people: [{ name: 'Lena', role: 'Mother' }], ...n }).layout).toBe('person');
+    const cast = first({ layout: 'cast', title: 'Who', cast: [{ name: 'Lena', wants: 'A house', role: 'Mother' }, { name: 'Walter', wants: 'A store', role: 'Her son' }], ...n });
+    expect(cast.layout).toBe('diagram');
+    expect(cast.diagram).toEqual({ kind: 'cast', items: [{ label: 'Lena', text: 'A house', note: 'Mother' }, { label: 'Walter', text: 'A store', note: 'Her son' }] });
+  });
+
+  test('older looks draw it as a list', () => {
+    const classic = classicSlide(first(SONNET));
+    expect(classic.layout).toBe('bullets');
+    expect(classic.bullets).toEqual(['Quatrain 1: Autumn: a few yellow leaves', 'Quatrain 2: Twilight fading into night', 'Quatrain 3: A fire dying on its ashes', 'Couplet: So love what you must leave']);
+    expect(diagramLines(first(FRANKENSTEIN))[0]).toBe('Walton’s letters: A sea captain writes home to his sister.');
+  });
+});
+
+describe('the phrases an excerpt slide marks (Nov 22)', () => {
+  const excerpt = (highlight: unknown) => {
+    const result = validateSlideDeck(
+      JSON.stringify({
+        title: 'Sonnet 73',
+        slides: [{ layout: 'excerpt', title: 'Annotate', body: 'That time of year thou mayst in me behold\nWhen yellow leaves, or none, or few, do hang', highlight, speakerNotes: 'n' }],
+      })
+    );
+    if (!result.ok) throw new Error(result.reason);
+    return result.deck.slides[0]!;
+  };
+
+  test('a list of phrases is kept in order', () => {
+    expect(excerpt(['That time of year', 'yellow leaves']).highlight).toEqual(['That time of year', 'yellow leaves']);
+  });
+
+  test('one phrase written alone is a list of one; empties are dropped', () => {
+    expect(excerpt('yellow leaves').highlight).toEqual(['yellow leaves']);
+    expect(excerpt(['', '  ', 'yellow leaves', 'x', null]).highlight).toEqual(['yellow leaves']);
+    expect(excerpt([]).highlight).toBeUndefined();
+    expect(excerpt('').highlight).toBeUndefined();
+  });
+
+  test('a fifth phrase is cut and a very long one shortened at a word, never a lost deck', () => {
+    expect(excerpt(['aa', 'bb', 'cc', 'dd', 'ee']).highlight).toEqual(['aa', 'bb', 'cc', 'dd']);
+    const long = excerpt([Array(30).fill('leaves').join(' ')]).highlight![0]!;
+    expect(long.length).toBeLessThanOrEqual(80);
+    expect(long.endsWith('leaves')).toBe(true);
+  });
+
+  test('`highlights` is read as `highlight`', () => {
+    const result = validateSlideDeck(JSON.stringify({ title: 'S', slides: [{ layout: 'excerpt', title: 'A', body: 'Bare ruined choirs', highlights: ['ruined choirs'], speakerNotes: 'n' }] }));
+    expect(result.ok && result.deck.slides[0]!.highlight).toEqual(['ruined choirs']);
+  });
+});
+
+describe('too much is not a reason to lose a deck (Nov 22)', () => {
+  test('a sixth timeline entry, a fifth task and an over-long subtitle are cut, and the deck is kept', () => {
+    const json = JSON.stringify({
+      title: 'Dulce',
+      slides: [
+        { layout: 'title', title: 'Dulce et Decorum Est', subtitle: 'word '.repeat(60), speakerNotes: 'n' },
+        { layout: 'notes', title: 'Owen', timeline: [1893, 1915, 1916, 1917, 1918, 1920].map((year) => ({ year: String(year), caption: 'An event' })), speakerNotes: 'n' },
+        { layout: 'read', title: 'Read', tasks: [1, 2, 3, 4, 5].map((n) => ({ verb: 'Mark', text: `thing ${n}` })), speakerNotes: 'n' },
+      ],
+    });
+    const result = validateSlideDeck(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deck.slides[1]!.timeline).toHaveLength(5);
+    expect(result.deck.slides[2]!.tasks).toHaveLength(4);
+    expect(result.deck.slides[0]!.subtitle!.endsWith('…')).toBe(true);
+  });
+
+  test('a deck that is wrong in another way is still refused', () => {
+    expect(validateSlideDeck(JSON.stringify({ title: 'x', slides: [{ layout: 'title', speakerNotes: 'n' }] })).ok).toBe(false);
+  });
+});

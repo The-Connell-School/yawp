@@ -1,0 +1,221 @@
+/**
+ * The source texts quotations are checked against (Nov 22, lesson review
+ * pattern 2): the registry, the work a lesson is about, and the Gutenberg
+ * text fetched, stripped and kept.
+ */
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  SOURCE_TEXT_WORKS,
+  clearSourceTextCache,
+  fetchWorkText,
+  gutenbergTextUrl,
+  sourceTextFailure,
+  warmSourceTexts,
+  resetWarming,
+  registeredWork,
+  stripGutenberg,
+  workForText,
+} from './source-texts.server';
+
+const fixture = (name: string) =>
+  readFileSync(join(import.meta.dir, 'fixtures', 'accuracy', name), 'utf8');
+
+const OWEN = fixture('source-owen-poems.txt');
+
+describe('the registry', () => {
+  test('holds the works high school English teaches most, each once', () => {
+    const ids = SOURCE_TEXT_WORKS.map((work) => work.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of [
+      'macbeth',
+      'hamlet',
+      'romeo-and-juliet',
+      'othello',
+      'julius-caesar',
+      'midsummer',
+      'king-lear',
+      'the-tempest',
+      'odyssey',
+      'iliad',
+      'frankenstein',
+      'great-gatsby',
+      'wilfred-owen',
+      'scarlet-letter',
+      'pride-and-prejudice',
+      'jane-eyre',
+      'huckleberry-finn',
+      'the-raven',
+      'dickinson',
+      'whitman',
+      'frost-north-of-boston',
+      'heart-of-darkness',
+      'christmas-carol',
+      'dracula',
+      'dorian-gray',
+    ])
+      expect(registeredWork(id)).not.toBeNull();
+    const numbers = SOURCE_TEXT_WORKS.map((work) => work.gutenbergId);
+    expect(new Set(numbers).size).toBe(numbers.length);
+  });
+
+  test('translations, and Dickinson’s altered first editions, are checked but never corrected against', () => {
+    expect(registeredWork('odyssey')?.verifyOnly).toBe(true);
+    expect(registeredWork('odyssey')?.edition).toContain('Butler');
+    expect(registeredWork('odyssey')?.note).toContain('Fagles');
+    expect(registeredWork('iliad')?.verifyOnly).toBe(true);
+    expect(registeredWork('dickinson')?.verifyOnly).toBe(true);
+    expect(registeredWork('macbeth')?.verifyOnly).toBeUndefined();
+  });
+
+  test('a Gutenberg plain-text address', () => {
+    expect(gutenbergTextUrl(1533)).toBe(
+      'https://www.gutenberg.org/cache/epub/1533/pg1533.txt'
+    );
+  });
+});
+
+describe('the work a lesson is about', () => {
+  test('read off the real replies', () => {
+    expect(workForText(fixture('reply-dulce.md'))?.id).toBe('wilfred-owen');
+    expect(workForText(fixture('reply-gatsby-1.md'))?.id).toBe('great-gatsby');
+    expect(workForText(fixture('reply-macbeth-1.md'))?.id).toBe('macbeth');
+    expect(workForText(fixture('reply-macbeth-2.md'))?.id).toBe('macbeth');
+    expect(workForText(fixture('reply-odyssey-1.md'))?.id).toBe('odyssey');
+  });
+
+  test('a work not registered is not mistaken for one it mentions', () => {
+    expect(workForText(fixture('reply-their-eyes-1.md'))).toBeNull();
+    expect(
+      workForText('A lesson on 1984. Winston, like Macbeth, is undone.')
+    ).toBeNull();
+    expect(workForText('')).toBeNull();
+  });
+
+  test('a name in the heading is enough; a common word as a word is not a title', () => {
+    expect(workForText('# Hamlet, Act 3: the soliloquy\nRead it.')?.id).toBe(
+      'hamlet'
+    );
+    expect(
+      workForText('# Close reading\nThe futility of birches and mowing.')
+    ).toBeNull();
+    expect(workForText('# Reading "The Road Not Taken"')?.id).toBe(
+      'frost-mountain-interval'
+    );
+  });
+});
+
+describe('the text', () => {
+  beforeEach(() => clearSourceTextCache());
+
+  test('Gutenberg’s header and footer are taken off', () => {
+    const text = stripGutenberg(OWEN);
+    expect(text.startsWith('POEMS')).toBe(true);
+    expect(text).not.toContain('PROJECT GUTENBERG');
+    expect(text).toContain('Pro patria mori_.');
+  });
+
+  test('fetched once, from Gutenberg, and kept', async () => {
+    const asked: string[] = [];
+    const fetch = async (url: string) => {
+      asked.push(url);
+      return new Response(OWEN);
+    };
+    const work = registeredWork('wilfred-owen')!;
+    const text = await fetchWorkText(work, { fetch });
+    expect(text).toContain('My friend, you would not tell with such high zest');
+    expect(await fetchWorkText(work, { fetch })).toBe(text);
+    expect(asked).toEqual([gutenbergTextUrl(work.gutenbergId)]);
+  });
+
+  test('when gutenberg.org will not answer, its mirror is asked; the reason is kept when none does', async () => {
+    const asked: string[] = [];
+    const work = registeredWork('wilfred-owen')!;
+    clearSourceTextCache();
+    const text = await fetchWorkText(work, {
+      fetch: async (url: string) => {
+        asked.push(url);
+        return url.includes('www.gutenberg.org') ? new Response('', { status: 403 }) : new Response(OWEN);
+      },
+    });
+    expect(text).toContain('My friend, you would not tell with such high zest');
+    expect(asked.length).toBe(3); // both gutenberg.org addresses, then the first mirror
+    clearSourceTextCache();
+    expect(await fetchWorkText(work, { fetch: async () => new Response('', { status: 403 }) })).toBeNull();
+    expect(sourceTextFailure(work)).toBe('www.gutenberg.org 403, www.gutenberg.org 403, gutenberg.pglaf.org 403, aleph.pglaf.org 403');
+  });
+
+  test('a text that is not the work (a wrong ebook number) is no text', async () => {
+    const fetch = async () => new Response(OWEN);
+    expect(
+      await fetchWorkText(registeredWork('macbeth')!, { fetch })
+    ).toBeNull();
+  });
+
+  test('no answer, a refusal or a timeout gives null, and is asked again next time', async () => {
+    const work = registeredWork('wilfred-owen')!;
+    let calls = 0;
+    const failing = async () => {
+      calls += 1;
+      throw new Error('offline');
+    };
+    expect(await fetchWorkText(work, { fetch: failing })).toBeNull();
+    expect(
+      await fetchWorkText(work, {
+        fetch: async () => new Response('Not found', { status: 404 }),
+      })
+    ).toBeNull();
+    const slow = (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) =>
+        init?.signal?.addEventListener('abort', () =>
+          reject(new Error('aborted'))
+        )
+      );
+    expect(
+      await fetchWorkText(work, { fetch: slow, timeoutMs: 20 })
+    ).toBeNull();
+    expect(
+      await fetchWorkText(work, { fetch: async () => new Response(OWEN) })
+    ).toContain('Bent double');
+    expect(calls).toBe(4); // gutenberg.org's two addresses and its two mirrors
+  });
+});
+
+describe('the work a teacher names once (re-test, Nov 22)', () => {
+  test.each([
+    ["Teach a 50-minute lesson for 12th grade on Hamlet's 'To be, or not to be' soliloquy (Act 3, Scene 1).", 'hamlet'],
+    ['Teach a 50-minute lesson for 9th grade on the Prologue of Romeo and Juliet: how the sonnet tells us the ending.', 'romeo-and-juliet'],
+  ])('%s', (request, id) => {
+    expect(workForText(request)).toBeNull();
+    expect(workForText(request, { mentions: 1 })?.id).toBe(id);
+  });
+  test('a request about a work that is not registered names none', () => {
+    expect(workForText('Build day 1 of a unit on Things Fall Apart for 10th grade: who Chinua Achebe was writing back to.', { mentions: 1 })).toBeNull();
+  });
+});
+
+describe('warmSourceTexts (round 4, Nov 22)', () => {
+  test('every registered work is fetched once, one at a time, and kept', async () => {
+    clearSourceTextCache();
+    resetWarming();
+    let open = 0;
+    let most = 0;
+    const asked: string[] = [];
+    const fetch = async (url: string) => {
+      open += 1;
+      most = Math.max(most, open);
+      asked.push(url);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      open -= 1;
+      return new Response('', { status: 404 });
+    };
+    await warmSourceTexts({ fetch, gapMs: 0 });
+    expect(most).toBe(1);
+    expect(asked.length).toBeGreaterThanOrEqual(SOURCE_TEXT_WORKS.length);
+    // Once per server.
+    await warmSourceTexts({ fetch, gapMs: 0 });
+    expect(asked.length).toBeLessThan(SOURCE_TEXT_WORKS.length * 5);
+    resetWarming();
+  });
+});

@@ -120,7 +120,7 @@ import { FULL_LESSON_FRAMING, stripPlanPreamble } from '~/domain/lesson-planner/
 import { announceStackChange, useStackChanges } from '~/components/lesson-planner/stack-channel';
 import { DayLessonsCard } from '~/components/lesson-planner/day-lessons-card';
 import { readPlanDays, readWeekFramework } from '~/domain/lesson-planner/plan-days';
-import { pieceKeysInReply, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
+import { keepAllPlan, segmentInStack, stepBlockKeys, stepSegments, stepsOfferingChoice } from '~/domain/lesson-planner/reply-pieces';
 import {
   asksToSwapStarter,
   BUILD_FROM_STACK_REQUESTS,
@@ -147,6 +147,15 @@ type PacketAudience = 'teacher' | 'student';
 /** Shown when the turn never made it back — distinct from one the server refused. */
 const PLANNER_UNREACHABLE =
   'That lesson did not come back. Please check your connection and try again.';
+/** The planner answered, then stopped before the lesson was done. */
+const PLANNER_UNFINISHED =
+  'This lesson stopped before it reached you. It may still appear in your lessons in a minute; if not, please try again.';
+/**
+ * The planner answers at once (round 3, Nov 22): a request that has heard
+ * nothing in this long never reached it, and is sent once more, with the same
+ * request id, so it is never counted or built twice.
+ */
+const FIRST_LINE_MS = 30_000;
 
 type ChatMessage = {
   /** 'stack': asked on the stack page, shown here as one compact line (run 3). */
@@ -1042,11 +1051,12 @@ export default function LessonPlannerRoute() {
     message: string,
     unitDay?: { day: number; title: string; display?: string }
   ) {
+    const requestId = crypto.randomUUID();
     const body = new URLSearchParams({
       intent: 'chat',
       message,
       stream: '1',
-      requestId: crypto.randomUUID(),
+      requestId,
       ...(conversationId ? { conversationId } : {}),
       ...(!conversationId && seed
         ? { originClassAssignmentId: seed.classAssignmentId }
@@ -1063,13 +1073,47 @@ export default function LessonPlannerRoute() {
 
     setProgress(PLANNING_PROGRESS_START);
     let landed: LessonPlannerActionData | null = null;
+    let heard = false;
     try {
-      const response = await fetch('/api/domain/lesson-planner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      });
-      if (!response.body) throw new Error('no stream');
+      let response: Response | null = null;
+      for (let attempt = 1; attempt <= 2 && !response; attempt += 1) {
+        const controller = new AbortController();
+        const silence = setTimeout(() => controller.abort(), FIRST_LINE_MS);
+        try {
+          const sent = await fetch('/api/domain/lesson-planner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            signal: controller.signal,
+          });
+          if (!sent.body) throw new Error('no stream');
+          // The first line, or nothing: only then is the wait handed to the stream.
+          const reader = sent.body.getReader();
+          const first = await reader.read();
+          clearTimeout(silence);
+          heard = true;
+          response = new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                if (first.value) c.enqueue(first.value);
+                if (first.done) c.close();
+              },
+              async pull(c) {
+                const next = await reader.read();
+                if (next.done) c.close();
+                else c.enqueue(next.value);
+              },
+            })
+          );
+        } catch (error) {
+          clearTimeout(silence);
+          // Nothing heard: the request never reached the planner (it answers
+          // at once), so sending it again cannot build the lesson twice.
+          if (attempt === 2) throw error;
+          setProgress({ label: 'Reaching the planner again…', fraction: PLANNING_PROGRESS_START.fraction });
+        }
+      }
+      if (!response?.body) throw new Error('no stream');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -1105,7 +1149,8 @@ export default function LessonPlannerRoute() {
       setProgress(null);
     }
 
-    setStreamed(landed ?? { error: PLANNER_UNREACHABLE });
+    // Heard from, then no lesson: the planner stopped, not the connection.
+    setStreamed(landed ?? { error: heard ? PLANNER_UNFINISHED : PLANNER_UNREACHABLE });
     // The loader owns the lesson list and which unit days are built, and the
     // fetcher would have refreshed both for us.
     if (landed?.reply || landed?.conversationId) revalidator.revalidate();
@@ -1883,8 +1928,18 @@ function MessageBubble({
   // A unit map is a board with a way into every day, not a table of prose.
   // Like a deck, a map that failed the schema still gets its JSON stripped.
   const unitOutcome = readUnitPlan(withoutDeck);
+  // The map where the reply put it (rules test, Nov 23: the reply led with the
+  // map, and the page still drew it under every paragraph). A short lead-in,
+  // then the map, then the rest; a reply with its prose first keeps that order.
+  const unitAt = unitOutcome.kind === 'unit' ? withoutDeck.indexOf(unitOutcome.block) : -1;
+  const unitLead = unitAt > 0 ? withoutDeck.slice(0, unitAt) : '';
+  const unitFirst =
+    unitOutcome.kind === 'unit' &&
+    unitAt >= 0 &&
+    unitLead.trim().length <= 400 &&
+    unitOutcome.body.startsWith(unitLead);
   const withMaterials =
-    unitOutcome.kind === 'none' ? withoutDeck : unitOutcome.body;
+    unitOutcome.kind === 'none' ? withoutDeck : unitFirst ? unitOutcome.body.slice(unitLead.length).trim() : unitOutcome.body;
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
   const { asks: requestedAsks, body: withParts } =
@@ -1941,7 +1996,8 @@ function MessageBubble({
   let stepCursor = 0;
   const framePlan = stackV2 && deliveredPlan && Boolean(message.id);
   const replyPieceKeys =
-    stackV2 && deliveredPlan && !multiDay ? pieceKeysInReply(message.content) : [];
+    // What "Add everything" files: one option per choice, one exit ticket (Nov 22).
+    stackV2 && deliveredPlan && !multiDay ? keepAllPlan(message.content).keys : [];
   const everythingIn =
     Boolean(message.id) &&
     replyPieceKeys.length > 0 &&
@@ -1968,6 +2024,29 @@ function MessageBubble({
     stackHasPieces: stackV2 && stackHasPieces,
     offerStarterSwap: stackV2 && offersStarter && !isSwapReply,
   });
+
+  const unitCard =
+    unitOutcome.kind === 'unit' ? (
+      <div className="mt-3">
+              <UnitPlanCard
+                unit={unitOutcome.unit}
+                onBuildDay={onSuggestion}
+                builtDays={builtDays}
+                disabled={disabled}
+              />
+              {savedUnit ? (
+                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                  <span>
+                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
+                    whenever you're ready.
+                  </span>
+                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
+                    Open the unit
+                  </Link>
+                </p>
+              ) : null}
+            </div>
+    ) : null;
 
   const renderPart = (
     part: ReplyPart,
@@ -2166,15 +2245,23 @@ function MessageBubble({
               hands over, then the next step. Everything used to be lifted out
               and stacked below the plan, so the button to assign a warm-up sat
               inches away from the warm-up. */}
+          {unitFirst ? (
+            <>
+              {unitLead.trim() ? (
+                <MarkdownContent content={teacherFacingMarkdown(unitLead.trim())} codeAsText markdownClassName={LESSON_PLANNER_MARKDOWN_CLASS} />
+              ) : null}
+              {unitCard}
+            </>
+          ) : null}
           {groupOptionParts(parts).map((group) =>
             group.kind === 'single' ? (
               renderPart(parts[group.index]!, group.index)
             ) : (
-              // Options side by side, paged with arrows (Kevin's notes).
+              // Options in a row, one mostly in view, paged with arrows (Kevin's notes; Nov 21)
               <OptionRow
                 key={`${message.id ?? 'pending'}:options:${group.indexes[0]}`}
                 label={group.label}
-                layout="grid"
+                layout="carousel"
               >
                 {group.indexes.map((index) =>
                   renderPart(parts[index]!, index, { optionCard: true })
@@ -2194,27 +2281,7 @@ function MessageBubble({
               disabled={disabled}
             />
           ) : null}
-          {unitOutcome.kind === 'unit' ? (
-            <div className="mt-3">
-              <UnitPlanCard
-                unit={unitOutcome.unit}
-                onBuildDay={onSuggestion}
-                builtDays={builtDays}
-                disabled={disabled}
-              />
-              {savedUnit ? (
-                <p data-testid="unit-saved" className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                  <span>
-                    Saved to your library as <strong className="font-semibold text-foreground">{savedUnit.title}</strong>. Build the days
-                    whenever you're ready.
-                  </span>
-                  <Link to={`/app/lesson-planner/library/unit/${savedUnit.id}`} className="font-medium text-link underline underline-offset-2">
-                    Open the unit
-                  </Link>
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {unitOutcome.kind === 'unit' && !unitFirst ? unitCard : null}
           {unitOutcome.kind === 'unreadable' ? (
             <p
               className={cn('text-sm text-muted-foreground', body && 'mt-3')}

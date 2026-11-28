@@ -30,17 +30,23 @@ const MAX_TITLE_CHARS = 120;
  * table.
  */
 const MAX_CELL_CHARS = 220;
+/**
+ * What students do: the line the day's activity icons are read from, shown
+ * whole under Details (Nov 23), so it may run longer than the other cells.
+ */
+const MAX_STUDENTS_CHARS = 600;
 
 /**
- * A cell a little over the limit is trimmed at a word rather than costing
- * the teacher the whole map (Oct 21: the first map "glitched"); a paragraph
- * pretending to be a cell, past twice the limit, still fails.
+ * A cell over the limit is trimmed at a word rather than costing the teacher
+ * the whole map (Oct 21: the first map "glitched"; types test, Nov 24: the
+ * Douglass unit, every day's activities 300 to 470 characters, did not build
+ * at all). Its full words are still in the day's request when it is built.
  */
 function trimmed(limit: number) {
   return (value: unknown) => {
     if (typeof value !== 'string') return value;
     const text = value.trim();
-    if (text.length <= limit || text.length > limit * 2) return text;
+    if (text.length <= limit) return text;
     const cut = text.slice(0, limit - 1);
     const at = cut.lastIndexOf(' ');
     return `${(at > limit / 2 ? cut.slice(0, at) : cut).replace(/[\s,;:–—-]+$/, '')}…`;
@@ -61,13 +67,19 @@ const daySchema = z
     /** What students will be able to do by the end of this period. */
     objective: cell,
     /** What they actually do — the activity, not the pedagogy. */
-    students: cell,
+    students: z.preprocess(trimmed(MAX_STUDENTS_CHARS), z.string().trim().min(1).max(MAX_STUDENTS_CHARS)),
     /** What students read for this day, and whether in class or at home (Oct 21). */
     reading: cell.optional(),
     /** What this day hands to the next one. The arc, made checkable. */
     buildsTo: cell.optional(),
     /** How this day finds out whether it worked. */
     check: cell.optional(),
+    /**
+     * The class starter's own words, shown on the day's row (Kevin, Nov 25:
+     * the starters were a list under the map, a wall of text apart from the
+     * days they open).
+     */
+    starter: cell.optional(),
     minutes: z.number().int().min(5).max(240).optional(),
   })
   .strip();
@@ -81,6 +93,12 @@ const unitPlanSchema = z
      * lessons that happen to be adjacent.
      */
     endsWith: cell.optional(),
+    /**
+     * What the unit is for, in one line (Kevin, Nov 26: "if they got one thing
+     * out of this what would it be"): the one thing, what students do most,
+     * the companion texts. Shown on the board and carried into every day.
+     */
+    builtFor: cell.optional(),
     days: z.array(daySchema).min(1).max(MAX_DAYS),
   })
   .strip();
@@ -110,10 +128,15 @@ const DAY_ALIASES: Record<string, keyof UnitPlanDay> = {
   assignedReading: 'reading',
   readingAssignment: 'reading',
   text: 'reading',
+  classStarter: 'starter',
+  warmUp: 'starter',
+  dailyPages: 'starter',
 };
 
 const UNIT_ALIASES: Record<string, string> = {
   name: 'title',
+  purpose: 'builtFor',
+  goal: 'builtFor',
   finalAssignment: 'endsWith',
   summative: 'endsWith',
   endsIn: 'endsWith',
@@ -293,7 +316,10 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
   const lines = [`Build day ${day.day} of "${unit.title}" in full: ${day.title}.`, `Objective: ${day.objective}`];
   if (day.students) lines.push(`Students: ${day.students}`);
   if (day.reading) lines.push(`Reading: ${day.reading}`);
+  if (day.starter) lines.push(`Class starter: "${day.starter.replace(/^[“"']+|[”"']+$/g, '')}"`);
   if (day.minutes) lines.push(`I have ${day.minutes} minutes.`);
+  // What the unit is for travels with every day, so a day is never asked again (I3).
+  if (unit.builtFor) lines.push(`The unit is built for: ${unit.builtFor}`);
   lines.push(
     `Keep it inside the arc of the unit: this day comes after day ${day.day - 1} and has to set up what follows.`
   );

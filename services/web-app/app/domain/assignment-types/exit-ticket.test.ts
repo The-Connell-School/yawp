@@ -17,6 +17,9 @@ import {
   defaultExitTicketLessonNotesEnabled,
   exitTicketTargetingHint,
   exitTicketFocusOption,
+  exitTicketFocusSentence,
+  exitTicketV3DraftFromConfig,
+  isClauseTopic,
   isExitTicketAssignmentType,
   parseExitTicketConfigInput,
   parseStoredExitTicketConfig,
@@ -570,5 +573,84 @@ describe('exitTicketTargetingHint', () => {
     expect(exitTicketTargetingHint({ ...none, mainPoints: '   ' })).toBe(
       exitTicketTargetingHint(none)
     );
+  });
+});
+
+describe('a topic lands in a sentence that reads (Nov 22 review: "What is what Macbeth’s first aside reveals … actually saying?")', () => {
+  const understand = (topic: string) =>
+    composeExitTicketPrompt({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'understand-text',
+      topic,
+      answerType: 'subjective',
+    });
+  const firstSentence = (prompt: string) => prompt.split('\n\n')[0]!;
+
+  test('a clause topic is never pasted after "What is"', () => {
+    for (const topic of [
+      'what the frame narrative does in Chapter 1',
+      "what Macbeth's first aside reveals about his state of mind",
+      'how Gatsby’s parties change in Chapter 3',
+      'why Odysseus shouts his name',
+      'whether Nick can be trusted',
+    ]) {
+      const sentence = firstSentence(understand(topic));
+      expect(sentence).not.toMatch(/^What is (?:what|how|why|whether)\b/i);
+      expect(sentence).toInclude(topic);
+      expect(sentence).toStartWith('In your own words, explain ');
+      expect(sentence).not.toInclude('actually saying');
+    }
+    expect(firstSentence(understand('what the frame narrative does in Chapter 1'))).toBe(
+      'In your own words, explain what the frame narrative does in Chapter 1. Then point to what in the text made you read it that way.'
+    );
+  });
+
+  test('a noun topic keeps the "What is … actually saying?" question', () => {
+    expect(firstSentence(understand('the poem'))).toBe(
+      'What is the poem actually saying? Put it in your own words, then point to what in it made you read it that way.'
+    );
+    expect(firstSentence(understand('the second stanza of the poem'))).toStartWith(
+      'What is the second stanza of the poem actually saying?'
+    );
+  });
+
+  test('the shared helper reads the same for every focus', () => {
+    const option = exitTicketFocusOption('understand-text')!;
+    expect(exitTicketFocusSentence(option, 'the poem')).toStartWith('What is the poem actually saying?');
+    expect(exitTicketFocusSentence(option, 'what the frame narrative does in Chapter 1')).toStartWith(
+      'In your own words, explain what the frame narrative does'
+    );
+    const explain = exitTicketFocusOption('explain-concept')!;
+    expect(exitTicketFocusSentence(explain, 'what a thesis does')).toBe('In your own words, explain what a thesis does.');
+    expect(exitTicketFocusSentence(explain, 'the poem')).toBe('In your own words, explain the poem.');
+  });
+
+  test('a clause topic is a clause; a noun phrase is not', () => {
+    expect(isClauseTopic('what the frame narrative does in Chapter 1')).toBe(true);
+    expect(isClauseTopic('How Edwards persuades')).toBe(true);
+    expect(isClauseTopic('the poem')).toBe(false);
+    expect(isClauseTopic('Whitman’s catalogs')).toBe(false);
+    expect(isClauseTopic('whatever')).toBe(false);
+  });
+
+  test('the v3 draft made from a stored config reads too', () => {
+    const draft = exitTicketV3DraftFromConfig({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'understand-text',
+      topic: 'what the frame narrative does in Chapter 1',
+      answerType: 'subjective',
+    });
+    expect(draft.promptText).not.toMatch(/^What is what/);
+    expect(draft.promptText).toInclude('what the frame narrative does in Chapter 1');
+    const noun = exitTicketV3DraftFromConfig({
+      schemaVersion: EXIT_TICKET_CONFIG_SCHEMA_VERSION,
+      mode: 'specific',
+      focus: 'understand-text',
+      topic: 'the poem',
+      answerType: 'subjective',
+    });
+    expect(noun.promptText).toBe('What is the poem saying? Point to the part that shows it.');
   });
 });

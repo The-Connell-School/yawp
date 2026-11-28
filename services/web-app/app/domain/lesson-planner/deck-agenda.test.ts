@@ -96,3 +96,18 @@ describe("the agenda slide keeps the stack's times (Brian's round 3, 1.4)", () =
     expect(synced.slides[1]!.agenda!.map((item) => item.minutes)).toEqual([6, 18]);
   });
 });
+
+describe('a line that stands for two steps (Nov 22)', () => {
+  test('keeps both steps’ minutes when the agenda already adds up to the stack', () => {
+    const deck = {
+      title: 'Gatsby',
+      slides: [{ layout: 'agenda', title: 'Today', speakerNotes: 'n', agenda: [{ title: 'Class starter, what students already know', minutes: 8 }, { title: 'Close reading', minutes: 42 }] }],
+    } as never;
+    const steps = [
+      { title: 'Class starter', type: 'class_starter', minutes: 5 },
+      { title: 'What students already know', type: 'context', minutes: 3 },
+      { title: 'Close reading', type: 'activity', minutes: 42 },
+    ] as never;
+    expect(syncAgendaToStack(deck, steps)).toBe(deck);
+  });
+});

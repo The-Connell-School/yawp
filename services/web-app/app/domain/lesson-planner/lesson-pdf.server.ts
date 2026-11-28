@@ -21,11 +21,14 @@ import { deckColors, withoutColorMarks } from './deck-colors';
 import { GALLERY_COLORS, galleryAccent, galleryRunningHead, planGalleryDeck, type GallerySlidePlan } from './deck-gallery';
 import { deckArt } from './deck-art';
 import { KIT_V4_HOUSE_PALETTE, KIT_V4_WIDTH, isKitV4, layoutKitV4Slide, withDeckKit, type KitV4Run } from './deck-kit-v4';
-import { PICTURE_PLACEHOLDER } from './deck-pictures';
+import { containBox, PICTURE_PLACEHOLDER } from './deck-pictures';
 import type { DeckPictureFiles } from './deck-pictures.server';
+import { buildMapDrawing } from '~/domain/geo/map-drawing.server';
+import type { MapSpec } from '~/domain/geo/map-view';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { registerKitDisplayFont, registerKitFonts } from './kit-fonts.server';
+import { guardPdfText } from './pdf-text.server';
 
 /** The kit's ink and stone (lesson plan spec v1, "Type and color"). */
 const KIT_PLAN_COLORS_HEX = { ink: '#1B1B1B', stone: '#6F6A63' } as const;
@@ -42,6 +45,8 @@ const LINE_GAP = 2.5;
 const INDENT_STEP = 16;
 /** Room for the quote's rule plus a breath of space. */
 const QUOTE_INDENT = 14;
+/** Room in the margin for a verse line's number. */
+const VERSE_GUTTER = 30;
 
 type Font = 'body' | 'bold' | 'italic' | 'boldItalic' | 'mono' | 'monoBold';
 
@@ -167,6 +172,8 @@ function ensureRoom(doc: Doc, needed: number): void {
  * handout arrives with no room to answer in.
  */
 const MIN_WRITABLE_ROW = 26;
+/** The height of one ruled line to write on. */
+const WRITING_LINE_GAP = 22;
 
 /**
  * Where a table row's bottom edge goes: below its text, or far enough down to
@@ -203,9 +210,66 @@ function drawBlock(doc: Doc, block: Block, previous?: Block): void {
     }
 
     case 'paragraph':
+      // A line left blank ("&nbsp;", the planner's way of saying "room to
+      // write here") is a line to write on, not a sliver of nothing (round 4,
+      // Nov 22: handout after handout printed its questions with no room).
+      if (!block.runs.map((run) => run.text).join('').trim()) {
+        // One ruled line for each line the planner left blank.
+        const count = Math.min(12, block.runs.map((run) => run.text).join('').split('\n').length);
+        for (let i = 0; i < count; i += 1) {
+          ensureRoom(doc, WRITING_LINE_GAP + 4);
+          const y = doc.y + WRITING_LINE_GAP;
+          doc.save().lineWidth(0.6).strokeColor('#BDBDBD').moveTo(left, y).lineTo(left + contentWidth, y).stroke().restore();
+          doc.x = left;
+          doc.y = y + 2;
+        }
+        break;
+      }
       doc.moveDown(0.35);
       writeRuns(doc, block.runs, { size: BODY_SIZE });
       break;
+
+    case 'verse': {
+      // A line to a line, every fifth numbered in the margin (plan item 2, Nov 22).
+      doc.moveDown(block.quoted ? 0.5 : 0.35);
+      const top = doc.y;
+      const topPage = doc.page;
+      block.lines.forEach((line, i) => {
+        ensureRoom(doc, BODY_SIZE * 1.6);
+        const n = block.start + i;
+        const y = doc.y;
+        if (n % 5 === 0) {
+          doc
+            .save()
+            .font(styleOf(doc).fonts.body)
+            .fontSize(BODY_SIZE - 2.5)
+            .fillColor(styleOf(doc).muted)
+            .text(String(n), left, y + 1.5, { width: VERSE_GUTTER - 8, align: 'right', lineBreak: false })
+            .restore();
+          doc.y = y;
+        }
+        writeRuns(doc, line.length ? line : [{ text: ' ' }], {
+          size: BODY_SIZE,
+          x: left + VERSE_GUTTER,
+          width: contentWidth - VERSE_GUTTER,
+          ...(block.quoted ? { color: '#4b5563' } : {}),
+        });
+      });
+      // A quoted passage keeps the quote's rule, beside the lines, on the page it began.
+      if (block.quoted && doc.page === topPage && doc.y > top) {
+        doc
+          .save()
+          .lineWidth(2)
+          .strokeColor(styleOf(doc).serif ? '#D8D0C1' : `${styleOf(doc).brand}66`)
+          .moveTo(left + VERSE_GUTTER - 6, top)
+          .lineTo(left + VERSE_GUTTER - 6, doc.y)
+          .stroke()
+          .restore();
+      }
+      doc.x = left;
+      doc.moveDown(0.35);
+      break;
+    }
 
     case 'quote': {
       doc.moveDown(0.5);
@@ -402,6 +466,7 @@ function drawSlideFace(
     if (file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')) {
       try {
         doc.image(file.data, frame.x, frame.y, { fit: [frame.w, frame.h], align: 'center', valign: 'center' });
+        drawPictureCredit(doc, file, frame, sans, 'center');
         printed = true;
       } catch {
         printed = false;
@@ -486,6 +551,29 @@ function drawSlideFace(
  * bands, the painting plain, and every word in the serif or the sans, never
  * italic. Vector, so it prints sharp and its words stay searchable.
  */
+/** A map slide's map (Nov 19): the same paths Present shows, drawn into the slide's box. */
+function drawMapFace(doc: PDFKit.PDFDocument, spec: MapSpec, box: { x: number; y: number; w: number; h: number }) {
+  try {
+    const drawing = buildMapDrawing(spec);
+    doc.save();
+    doc.rect(box.x, box.y, box.w, box.h).clip();
+    doc.rect(box.x, box.y, box.w, box.h).fill(drawing.background);
+    doc.translate(box.x, box.y).scale(box.w / drawing.width, box.h / drawing.height);
+    for (const layer of drawing.layers) {
+      doc.path(layer.d).lineWidth(layer.width ?? 1).lineJoin('round');
+      if (layer.dash) doc.dash(layer.dash[0], { space: layer.dash[1] });
+      else doc.undash();
+      if (layer.fill && layer.stroke) doc.fillAndStroke(layer.fill, layer.stroke, layer.evenOdd ? 'even-odd' : 'non-zero');
+      else if (layer.fill) doc.fill(layer.fill, layer.evenOdd ? 'even-odd' : 'non-zero');
+      else if (layer.stroke) doc.stroke(layer.stroke);
+    }
+    doc.restore();
+  } catch {
+    // Map data that cannot be read: the slide is drawn without its map.
+    doc.restore();
+  }
+}
+
 function drawKitV4Face(
   doc: Doc,
   deck: SlideDeck,
@@ -541,6 +629,7 @@ function drawKitV4Face(
         try {
           doc.image(file.data, r.x, r.y, { fit: [r.w, r.h], valign: 'center' });
           printed = true;
+          drawPictureCredit(doc, file, r, sans, 'left');
         } catch {
           printed = false;
         }
@@ -549,6 +638,11 @@ function drawKitV4Face(
         doc.save().lineWidth(0.6).dash(3, { space: 2 }).strokeColor('#5A5A5A').rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
         doc.font(sans).fontSize(7).fillColor('#5A5A5A').text(PICTURE_PLACEHOLDER, r.x + 6, r.y + r.h / 2 - 10, { width: r.w - 12, align: 'center' });
       }
+      continue;
+    }
+
+    if (element.kind === 'map') {
+      drawMapFace(doc, element.spec, r);
       continue;
     }
 
@@ -700,6 +794,8 @@ function newDocument(title: string, kit?: HandoutKit | null): Doc {
     info: { Title: title, Creator: 'Yawp! Lesson Planner' },
     autoFirstPage: true,
   });
+  // Any character prints as itself ("mētis", not "m7F—2…"; Nov 22 review).
+  guardPdfText(doc);
   if (kit) {
     const fonts = registerKitFonts(doc);
     STYLES.set(doc, {
@@ -761,6 +857,27 @@ export async function renderPacketPdf(
  * The slide deck on its own (Oct 24 handoff, task 4: the slide deck's PDF):
  * each slide, what is on it, and its notes, as the packet prints it.
  */
+/**
+ * A found picture's credit and license (Nov 21), on a dark band along the
+ * foot of the picture as printed: `fit` inside `frame`, centered or from the
+ * left as the picture was placed. The teacher's own pictures have none.
+ */
+function drawPictureCredit(
+  doc: PDFKit.PDFDocument,
+  file: { credit?: string | null; width: number | null; height: number | null },
+  frame: { x: number; y: number; w: number; h: number },
+  font: string,
+  align: 'left' | 'center'
+): void {
+  if (!file.credit) return;
+  const shown = containBox(frame, file);
+  const left = align === 'center' ? shown.x : frame.x;
+  const top = frame.y + (frame.h - shown.h) / 2;
+  const band = Math.min(9, shown.h / 4);
+  doc.save().fillColor('#1B1B1B').fillOpacity(0.6).rect(left, top + shown.h - band, shown.w, band).fill().restore();
+  doc.font(font).fontSize(4.5).fillColor('#FFFFFF').text(file.credit, left + 3, top + shown.h - band + 2.2, { width: shown.w - 6, height: band, lineBreak: false, ellipsis: true });
+}
+
 export async function renderSlidesPdf({
   lessonTitle,
   deck,
@@ -913,6 +1030,15 @@ export async function renderStepHandoutPdf({
   /** The Lesson Deck Kit's handout style (handoutKit), or null. */
   kit?: HandoutKit | null;
 }): Promise<Uint8Array> {
+  // "&nbsp;" (the planner's blank answer space) became a no-break space that
+  // the kit's font cannot measure, and the whole handout failed (HTTP 500 on
+  // the preview, Nov 22): a plain space leaves the same blank line.
+  parts = parts.map((part) => ({ ...part, content: part.content
+      // A line of nothing but a non-breaking space is room to write: kept as
+      // the entity, which reads as a ruled line; any other is a plain space
+      // (round 4: turned into a blank line, the room to write vanished).
+      .replace(/^[ \t]*(?:&nbsp;|\u00a0)[ \t\u00a0]*$/gm, '&nbsp;\n')
+      .replace(/\u00a0/g, ' ') }));
   const single = parts.length === 1;
   const heading = single ? parts[0]!.title : title;
   const doc = newDocument(heading, kit);

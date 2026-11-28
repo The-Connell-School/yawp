@@ -142,14 +142,14 @@ describe('readUnitPlan — a map that will not render', () => {
   test('a cell a little over the limit is trimmed at a word, not the whole map lost (Oct 21)', () => {
     const wordy = `${'Students reread the opening and mark every weight '.repeat(5)}then share.`;
     const result = validateUnitPlan(
-      JSON.stringify({ title: 'T', days: [{ day: 1, title: 'D', objective: 'Find weights', students: wordy }] })
+      JSON.stringify({ title: 'T', days: [{ day: 1, title: 'D', objective: wordy, students: 'Read' }] })
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const students = result.unit.days[0]!.students;
-    expect(students.length).toBeLessThanOrEqual(220);
-    expect(students.endsWith('…')).toBe(true);
-    expect(students).not.toMatch(/\s…$/);
+    const objective = result.unit.days[0]!.objective;
+    expect(objective.length).toBeLessThanOrEqual(220);
+    expect(objective.endsWith('…')).toBe(true);
+    expect(objective).not.toMatch(/\s…$/);
   });
 
   test('each day says what students read, and where', () => {
@@ -163,18 +163,19 @@ describe('readUnitPlan — a map that will not render', () => {
     expect(buildDayRequest(result.unit, result.unit.days[0]!)).toContain('Reading: pp. 1–12, in class');
   });
 
-  test('catches a paragraph pretending to be a cell', () => {
-    const long = 'x'.repeat(600);
+  test('a long cell is trimmed, never the whole map lost (types test, Nov 24: the Douglass unit, every day 300 to 470 characters)', () => {
+    const long = 'Students read the chapter and mark every claim Douglass makes about reading. '.repeat(8);
     const result = validateUnitPlan(
-      JSON.stringify({
-        title: 'T',
-        days: [{ day: 1, title: 'D', objective: long, students: 'Write' }],
-      })
+      JSON.stringify({ title: 'T', days: [{ day: 1, title: 'D', objective: long, students: long }] })
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toContain('objective');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.unit.days[0]!.objective.length).toBeLessThanOrEqual(220);
+    // What students do is read for the day's icons and shown whole under Details: it may run to 600.
+    expect(result.unit.days[0]!.students.length).toBeLessThanOrEqual(600);
+    expect(result.unit.days[0]!.students.length).toBeGreaterThan(400);
   });
+
 
   test('says so rather than throwing on malformed JSON', () => {
     const result = validateUnitPlan('{"days": [oops]}');
@@ -284,4 +285,12 @@ describe('buildUnitContext', () => {
   test('a day outside the unit gets no context rather than a guess', () => {
     expect(buildUnitContext(unit, 9)).toBeNull();
   });
+});
+
+test('a unit says what it is built for, and every day built from it carries it (Nov 26)', () => {
+  const outcome = readUnitPlan('```yawp-unit\n' + JSON.stringify({ title: 'Antigone', purpose: 'Leave with: a claim about when the law should be defied · mostly writing', days: [{ day: 1, title: 'Thebes', objective: 'o', students: 's' }] }) + '\n```');
+  expect(outcome.kind).toBe('unit');
+  if (outcome.kind !== 'unit') return;
+  expect(outcome.unit.builtFor).toBe('Leave with: a claim about when the law should be defied · mostly writing');
+  expect(buildDayRequest(outcome.unit, outcome.unit.days[0]!)).toContain('The unit is built for: Leave with: a claim about when the law should be defied');
 });

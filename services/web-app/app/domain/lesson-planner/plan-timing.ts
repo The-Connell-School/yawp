@@ -6,6 +6,8 @@
  * runs long now says so where the teacher can see it.
  */
 
+import { isPlanSubtitle } from './plan-steps';
+
 /** The upper end of "8 min", "10–12 min", "8 minutes". */
 function minutesIn(text: string): number | null {
   const match = text.match(/(\d{1,3})\s*(?:[–—-]\s*(\d{1,3})\s*)?(?:min|minutes?)\b/i);
@@ -24,6 +26,10 @@ const BOLD_STEP = /^\s{0,3}(?:(?:[-*+]|\d+[.)])\s+)?\*\*([^*\n]{1,80})\*\*([^\n]
 export function planMinutes(body: string): number | null {
   const byLevel = new Map<number, number[]>();
   for (const match of body.matchAll(HEADING)) {
+    // "## Book 9, *The Odyssey* · 9th Grade · 50 min" is the plan's subtitle,
+    // not a step: counted, it made a 50-minute plan "run 100 minutes" (re-test,
+    // Nov 22). The same rule as readPlanSteps.
+    if (isPlanSubtitle(match[2]!)) continue;
     const minutes = minutesIn(match[2]!);
     if (minutes === null) continue;
     const level = match[1]!.length;

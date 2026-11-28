@@ -25,6 +25,108 @@ export function pieceKeysInReply(content: string): string[] {
 }
 
 /**
+ * What "Add everything to the lesson" files: one lesson, not every option
+ * (13-lesson review, Nov 22: stacks of 70 to 141 minutes for 50-minute
+ * lessons, three class starters in a row, two Short Responses, and the
+ * "wondering" exit ticket in place of the one that checks the objective).
+ *
+ * - A step offering a choice files its first option of each kind; the others
+ *   stay one click away in the chat.
+ * - One exit ticket: the first, which checks the lesson's objective.
+ * - A step's minutes are spent once. A step with its own directions keeps
+ *   its minutes, and what it holds (its prompt, its exit ticket, its lecture
+ *   frames) is filed at 0 minutes, inside it. A step that is nothing but its
+ *   blocks hands its minutes to them, shared out.
+ */
+export function keepAllPlan(content: string): { keys: string[]; minutes: Record<string, number> } {
+  const pieces = placedPieces(content);
+  const choices = stepsOfferingChoice(content);
+  const skip = new Set<string>();
+  const minutes: Record<string, number> = {};
+  pieces.forEach((piece, index) => {
+    if (!piece.step) return;
+    const under = blocksUnder(pieces, index).map((key) => pieces.find((other) => other.key === key)!);
+    // Of several Short Responses offered, the one written for this lesson
+    // comes first: a general library prompt ("What ambition costs") is not
+    // the lesson's writing (round 3, Nov 22: Macbeth's aside went unwritten).
+    const held = choices.has(piece.key) ? [...under.filter((block) => block.ownPrompt), ...under.filter((block) => !block.ownPrompt)] : under;
+    const kept: Placed[] = [];
+    const seen = new Set<string>();
+    for (const block of held) {
+      const option = Boolean(block.block && OPTION_BLOCKS.has(block.block));
+      if (choices.has(piece.key) && option && seen.has(block.block!)) skip.add(block.key);
+      else {
+        if (option) seen.add(block.block!);
+        kept.push(block);
+      }
+    }
+    if (!kept.length) return;
+    if (piece.minutes == null) {
+      // An untimed step ("## Passage handout") holding a printable: the page
+      // is used in the timed steps, and takes none of the class's minutes
+      // (re-test, Nov 22: Macbeth's passage handout added 20 minutes, filed
+      // as its step and as itself). With nothing else to say, the step is
+      // the printable.
+      for (const block of kept) if (block.block === 'yawp-material') minutes[block.key] = 0;
+      if (!piece.emptyStep && kept.length === 1 && kept[0]!.block === 'yawp-material') skip.add(piece.key);
+      return;
+    }
+    // A step that is one writing assignment and its directions ("Quick write:
+    // pick one of the three…") is that assignment: filing both reads as the
+    // starter twice, once at 0 minutes (re-test, Nov 22). The assignment
+    // stands for the step and takes its minutes.
+    // A handout under the step is a page, not the step's work: it does not
+    // keep the step from being its one assignment.
+    const work = kept.filter((block) => !block.printable);
+    for (const block of kept) if (block.printable) minutes[block.key] = 0;
+    const sole = work.length === 1 ? work[0]! : null;
+    if (!piece.emptyStep && sole && (sole.block === 'yawp-daily-pages' || sole.key === EXIT_TICKET_BLOCK_KEY)) {
+      skip.add(piece.key);
+      minutes[sole.key] = piece.minutes;
+      return;
+    }
+    if (!piece.emptyStep) for (const block of kept) minutes[block.key] = 0;
+    else if (work.length < kept.length) {
+      for (const block of work) minutes[block.key] = work.length === 1 ? piece.minutes : 0;
+    } else {
+      const share = Math.max(1, Math.floor(piece.minutes / kept.length));
+      kept.forEach((block, i) => {
+        minutes[block.key] = i === kept.length - 1 ? Math.max(1, piece.minutes! - share * (kept.length - 1)) : share;
+      });
+    }
+  });
+  let ticketKept = false;
+  const keys = pieces
+    .filter((piece) => !piece.emptyStep && !skip.has(piece.key))
+    .filter((piece) => {
+      if (piece.block !== 'yawp-exit-ticket') return true;
+      if (ticketKept) return false;
+      ticketKept = true;
+      return true;
+    })
+    .map((piece) => piece.key);
+  return { keys: withHandoutsWhereRead(keys, pieces), minutes };
+}
+
+const READS = /\b(read|reading|annotat|close|passage|aside|soliloquy|stanza|sonnet|poem|prologue|excerpt|model)/i;
+
+/**
+ * A handout filed with the step that reads it, not at the end of the lesson
+ * because the reply printed it last (round 3, Nov 22: Hamlet's soliloquy and
+ * Macbeth's passage came after the exit ticket, at 0 minutes).
+ */
+function withHandoutsWhereRead(keys: string[], pieces: Placed[]): string[] {
+  const byKey = new Map(pieces.map((piece) => [piece.key, piece]));
+  const reading = keys.find((key) => byKey.get(key)?.step && READS.test(byKey.get(key)!.title ?? ''));
+  if (!reading) return keys;
+  const moving = keys.filter((key, i) => byKey.get(key)?.printable && i > keys.indexOf(reading));
+  if (!moving.length) return keys;
+  const rest = keys.filter((key) => !moving.includes(key));
+  const at = rest.indexOf(reading) + 1;
+  return [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+}
+
+/**
  * Minutes for the blocks that stand for their step: under "## Exit ticket
  * (10 min)" with nothing but the ticket, the ticket is the step, and its 10
  * minutes should not be lost when it is filed (Brian's run 2, B2).
@@ -166,6 +268,12 @@ type Placed = {
   step?: boolean;
   emptyStep?: boolean;
   minutes?: number | null;
+  /** A step's heading. */
+  title?: string;
+  /** A handout: a page students hold, used in whichever step reads it. */
+  printable?: boolean;
+  /** A Short Response written for this lesson (no library id). */
+  ownPrompt?: boolean;
 };
 
 function placedPieces(content: string): Placed[] {
@@ -180,6 +288,7 @@ function placedPieces(content: string): Placed[] {
       step: true,
       emptyStep: !step.content.trim(),
       minutes: step.minutes,
+      title: step.title,
     });
   }
 
@@ -193,11 +302,16 @@ function placedPieces(content: string): Placed[] {
     const block = match[0];
     const push = (key: string, order: number) => placed.push({ at, order, key, block: match[1] });
     if (match[1] === 'yawp-material') {
-      if (readLessonMaterials(block).materials.length) push(String(materials++), 1);
+      const read = readLessonMaterials(block).materials;
+      if (read.length) {
+        push(String(materials++), 1);
+        if (read[0]!.kind === 'handout') placed[placed.length - 1]!.printable = true;
+      }
     } else if (match[1] === 'yawp-daily-pages') {
-      readDailyPagesExercises(block).exercises.forEach((_, index) =>
-        push(dailyPagesBlockKey(exercises++), 1 + index / 100)
-      );
+      readDailyPagesExercises(block).exercises.forEach((exercise, index) => {
+        push(dailyPagesBlockKey(exercises++), 1 + index / 100);
+        if (exercise.kind === 'daily-pages' && !exercise.promptId) placed[placed.length - 1]!.ownPrompt = true;
+      });
     } else if (match[1] === 'yawp-exit-ticket') {
       if (readPlannedExitTickets(block).tickets.length) {
         push(tickets === 0 ? EXIT_TICKET_BLOCK_KEY : `${EXIT_TICKET_BLOCK_KEY}:${tickets}`, 1);

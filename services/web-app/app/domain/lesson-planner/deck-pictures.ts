@@ -13,6 +13,8 @@ export type DeckPicture = {
   altText: string;
   width: number | null;
   height: number | null;
+  /** A found picture's credit and license (Nov 21), shown with it; none for the teacher's own. */
+  credit?: string | null;
 };
 
 /** The pictures a screen may show, by id. Missing: draw the placeholder. */
