@@ -8,15 +8,22 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
   test('carries every section of the canonical Universal Yawp! Tutor Instructions', () => {
     for (const heading of [
       'WHO YOU ARE.',
-      "THE ONE RULE — NEVER WRITE THE STUDENT'S WORK, BUT ALWAYS SCAFFOLD.",
+      "THE ONE RULE: NEVER WRITE THE STUDENT'S WORK, BUT ALWAYS SCAFFOLD.",
       'OFF-TOPIC / PERSONAL QUESTIONS.',
-      'KEEP IT SHORT — ONE THING AT A TIME.',
+      'KEEP IT SHORT: ONE THING AT A TIME.',
+      'CONTINUITY: ONE CONVERSATION.',
+      'MEET EVERY STUDENT WHERE THEY ARE: THE POSTURE IS ALWAYS ENCOURAGEMENT.',
+      'WELCOME IS NOT A VERDICT.',
       'PAIR VIVID LANGUAGE WITH CONCRETE HELP.',
-      'HONOR VOICE — AND MATCH THE STAGE.',
+      'HONOR VOICE AND MATCH THE STAGE.',
       'REGISTER MODE',
       "BLESS GOOD WORK; DON'T BLESS WEAK WORK.",
+      'CELEBRATE BREAKTHROUGHS: THIS IS WHERE THE ENERGY GOES.',
+      'HOW YOU SOUND.',
+      'NEVER NARRATE YOUR OWN RULES.',
       'MULTILINGUAL.',
-      'TONE.',
+      'WHEN A STUDENT SHARES SOMETHING HEAVY.',
+      'NO AI TELLS.',
     ]) {
       expect(UNIVERSAL_TUTOR_BLOCK).toContain(heading);
     }
@@ -58,8 +65,39 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
     expect(UNIVERSAL_TUTOR_BLOCK).toContain('DRAFTING');
     expect(UNIVERSAL_TUTOR_BLOCK).toContain('POLISHED');
     expect(UNIVERSAL_TUTOR_BLOCK).toContain(
-      'never flag mechanics; stay entirely on ideas'
+      'Never flag mechanics; stay entirely on ideas'
     );
+  });
+
+  test('bans the four AI-tell patterns, with an example of each', () => {
+    for (const example of [
+      "Here's what most people miss",
+      "That's the whole point.",
+      'The best part?',
+      "It's not X, it's Y",
+    ]) {
+      expect(UNIVERSAL_TUTOR_BLOCK).toContain(example);
+    }
+  });
+
+  test('contains no em dashes, which the Tutor would copy into its replies', () => {
+    expect(UNIVERSAL_TUTOR_BLOCK).not.toContain('\u2014');
+    expect(formatRegisterModeDirective('drafting')).not.toContain('\u2014');
+    expect(formatRegisterModeDirective('polished')).not.toContain('\u2014');
+  });
+
+  test('describes how the Tutor sounds as moves, with examples it must not reuse word for word', () => {
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('Writing is an act of vulnerability.');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('Never talk down to a student.');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('never the same one twice in a conversation');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain("Match the voice; don't reuse the words.");
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('then one concrete note, never a full checklist');
+  });
+
+  test('keeps the safety rules for a student who shares something heavy', () => {
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('tell the TOPIC apart from the STUDENT');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain('they should tell an adult today');
+    expect(UNIVERSAL_TUTOR_BLOCK).toContain("Never promise confidentiality you don't have");
   });
 
   test('is assignment-agnostic: no course-specific vocabulary leaks in', () => {
@@ -74,7 +112,7 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
 describe('formatRegisterModeDirective', () => {
   test('renders the module-selected mode as an explicit directive', () => {
     expect(formatRegisterModeDirective('drafting')).toBe(
-      'REGISTER MODE FOR THIS MODULE: DRAFTING — messiness, typos, and rambling are fine; give zero mechanics/formality feedback; ideas only.'
+      'REGISTER MODE FOR THIS MODULE: DRAFTING: messiness, typos, and rambling are fine; give zero mechanics/formality feedback; ideas only.'
     );
     expect(formatRegisterModeDirective('polished')).toContain(
       'REGISTER MODE FOR THIS MODULE: POLISHED'
