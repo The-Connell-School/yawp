@@ -10,6 +10,7 @@ Research summary for Brian and Kevin · November 2026
 - **On the teacher side, start with writing specialists.** Their content lines up with YAWP!'s builders, and none showed ties to Brisk or MagicSchool. Big TikTok accounts are mostly comedy. Several big edtech trainers already work with competitors.
 - **Talk to the skeptics.** Ask for feedback, not promotion. If YAWP! holds up with them, that counts for a lot.
 - **Use Kevin's podcast network.** EdUp shows are a ready source of guest spots for Brian, through Kevin.
+- **Let current users help write our material.** Their quotes and stories go on the website, in emails and in Brian's posts.
 - **A teacher partner opens doors.** These networks want examples led by practitioners. A teacher who uses YAWP! and will co-present or co-write unlocks the Marshall Memo, NCTE's leadership conference, SAIS and the regional cohorts.
 - **Going viral is too big a mountain right now.** Get our own presence solid first.
 
@@ -93,6 +94,35 @@ Going viral is too big a mountain to climb right now. When a teacher or principa
 - **Facebook.** Set up a YAWP! Facebook page. Teachers spend time there, and we're planning to show up in Facebook teacher groups, so they need a page to land on.
 - **Website.** Review the website, and update it if needed, so we feel good about it as the place people land. Check that it's clear in a few seconds what YAWP! is and who it's for, that signing up for the free tier is easy, and that it matches what we say in posts and outreach.
 - **Do this before outreach starts**, so partners and their audiences find an active, real presence.
+
+## Let current users help write our material
+
+Teachers already using YAWP! are our most believable voice. Ask a few of them to help write material in their own words. It reads as real because it is, which matters for a writing product.
+
+**What to ask for**
+
+- A short quote about what changed in their class
+- A 3–4 sentence "how I used it" story (a first exit ticket, a CER assignment, a round of feedback)
+- A before-and-after of an assignment, using sample or permissioned, anonymized student work
+- A one-minute phone video, if they're comfortable on camera
+- Co-writing a short classroom article. This is also the route into the Marshall Memo
+
+**Where it goes**
+
+| Where | How it's used |
+|---|---|
+| Website | Teacher quotes on the landing page, plus a "how teachers use YAWP!" page |
+| Milestone emails | Pair each email with a real example, e.g. how one teacher ran her first exit ticket |
+| Brian's LinkedIn and the Facebook page | A teacher story with a short feature clip |
+| Outreach notes and PD sessions | A real classroom example to share with Justin, Kim, Glenn and the associations |
+
+**How**
+
+- Brian and Kevin pick 5–10 active users across the free tier and the main site.
+- A short form or a 15-minute call. Muse turns the notes into a draft; the teacher edits and approves it before anything is published.
+- Get written permission to use their name and school. If they get anything in return (free Premium, for example), say so where it's published.
+- No real student names or work without the school's permission. Keep their words; don't polish them into marketing copy.
+- The same teachers are the best candidates for the teacher council and for co-presenting with Brian.
 
 ## How Brian gets in touch
 
@@ -440,7 +470,8 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 |---|---|---|---|
 | Weeks 1–2 | Add the YAWP! logo to Brian's LinkedIn and start posting twice a week. Set up the Facebook page. Review the website and fix anything that doesn't work as a landing page. Have Muse confirm titles, handles and contact routes for both top 15 lists. Make: a one-page "what YAWP! will and won't do," a disclosure sheet, the demo class, and referral codes | 4–6 hrs total | $0 |
 | Weeks 2–6 | Kevin introduces Brian to Justin, Kim Marshall and Glenn Whitman, and to 2–3 EdUp hosts. Comment on the NCTE AI framework (open through December). Personal notes to the Part 2 writing teachers (#1–7). Podcast pitches to Tucker, Brave New Teaching and Davis. Feedback requests to the skeptics. Reply to Matt Miller's post | ~3 hrs/week | $0 |
-| Weeks 4–8 | Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
+| Weeks 2–6 | Ask 5–10 current users for quotes and short stories. Muse drafts, teachers approve | ~1 hr/week | $0 |
+| Weeks 4–8 | Put the first teacher stories on the website and in the milestone emails. Start the teacher council. First call. Co-create one CER and one thesis resource | 1–2 hrs/week | Free seats |
 | Weeks 6–12 | Use first-wave connections to get guest spots with #9–12. Run the paid creator pilot only if free routes stall. Ask the anchors for introductions. Offer free PD sessions to the associations (SAIS, NCAIS, VAIS, Association for Academic Leaders). Plan a 2027 NCTE or CEL session with a teacher | ~3 hrs/week | $500–2,500+ |
 | Ongoing | LinkedIn twice a week, Facebook page, monthly video, track sign-ups by referral code. Muse keeps the list current and drafts notes for Brian to edit | ~2 hrs/week | — |
 
@@ -451,6 +482,7 @@ Aim: about 3–4 hours a week of Brian's time. These hour estimates are guesses,
 - Which EdUp hosts does Kevin know best?
 - What does Kevin know about Justin's monthly group? Who's in it, does it take guests, and is it tied to an association?
 - How do we talk about Flint with Justin, given Episcopal already uses it?
+- Which current users should we ask first for quotes and stories?
 - Is there a teacher using YAWP! who would co-present or co-write? Several routes depend on one.
 - Independent schools first, or districts? Part 1 leans independent.
 - Is there budget for the Marshall Memo ($50), the CTTL Academy, one or two 2027 conferences, and the paid pilot if it's needed?
