@@ -200,8 +200,8 @@ describe('free-tier approval flow', () => {
           expect(delivery.text.includes('HISTORICAL INTRO')).toBe(false);
           expect(delivery.text).toContain('/free/admin/approve?t=');
           expect(delivery.text).toContain('/free/admin/not-right-person?t=');
-          expect(delivery.text).toContain('Review and approve:');
-          expect(delivery.html).toContain('Review and approve</a>');
+          expect(delivery.text).toContain('Review:');
+          expect(delivery.html).toContain('Review</a>');
           expect(delivery.subject).not.toBe(`Approve Yawp! for ${app.schoolName}`);
           if (options.expectSubject) {
             expect(delivery.subject).toBe(options.expectSubject);

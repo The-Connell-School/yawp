@@ -10,6 +10,7 @@ import {
   adminApprovalTeacherRerouteLead,
   adminApprovalPass1ForwardBanner,
   adminApprovalFooterWhy,
+  ADMIN_APPROVAL_EMAIL_CTA_LABEL,
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   teacherAtSchool,
 } from '~/domain/free-tier/admin-approval-copy';
@@ -365,7 +366,7 @@ export function AdminApprovalEmail(props: {
         ]}
       />
       <AboutYawpList label="About Yawp!" items={ABOUT_YAWP_ITEMS} />
-      <PillButton label="Review and approve" href={props.approveUrl} />
+      <PillButton label={ADMIN_APPROVAL_EMAIL_CTA_LABEL} href={props.approveUrl} />
       <SecondaryLink
         before="Not the right person?"
         linkLabel="Forward this request"
