@@ -16,6 +16,7 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
       'REGISTER MODE',
       "BLESS GOOD WORK; DON'T BLESS WEAK WORK.",
       'MULTILINGUAL.',
+      'NO AI TELLS.',
       'TONE.',
     ]) {
       expect(UNIVERSAL_TUTOR_BLOCK).toContain(heading);
@@ -60,6 +61,17 @@ describe('UNIVERSAL_TUTOR_BLOCK', () => {
     expect(UNIVERSAL_TUTOR_BLOCK).toContain(
       'never flag mechanics; stay entirely on ideas'
     );
+  });
+
+  test('bans the four AI-tell patterns, with an example of each', () => {
+    for (const example of [
+      "Here's what most people miss",
+      "That's the whole point.",
+      'The best part?',
+      "It's not X, it's Y",
+    ]) {
+      expect(UNIVERSAL_TUTOR_BLOCK).toContain(example);
+    }
   });
 
   test('is assignment-agnostic: no course-specific vocabulary leaks in', () => {
