@@ -127,6 +127,8 @@ export const LESSON_PLANNER_DECK_CHAT_FLAG = 'lesson_planner_deck_chat' as const
 export const LESSON_PLANNER_CONTEXT_TOOLS_FLAG = 'lesson_planner_context_tools' as const;
 /** Pictures that belong (Nov 21): the planner finds openly licensed pictures for a text's background. Needs timelines and maps. */
 export const LESSON_PLANNER_FOUND_PICTURES_FLAG = 'lesson_planner_found_pictures' as const;
+/** Rules by genre (Nov 28): the planner gets the rules for every lesson, plus its genre's own set. */
+export const LESSON_PLANNER_GENRE_RULES_FLAG = 'lesson_planner_genre_rules' as const;
 
 /**
  * The teacher's own deck flags as they apply (Nov 1): keeping the deck needs
@@ -410,6 +412,11 @@ export const FEATURE_FLAGS = {
     label: 'Lesson Planner: pictures that belong',
     description:
       'Slides that teach, phase 2 (Nov 21): the planner can search open collections (Wikimedia Commons) for public-domain and openly licensed pictures of the real places, people and times a lesson introduces, and put them on its slides. Yawp! checks each license, keeps a copy with the lesson, and shows its credit on every slide, PowerPoint and PDF; the model never writes a picture address. Film stills and other copyrighted pictures are never fetched: the planner asks the teacher for them. Needs timelines and maps. Off: the planner has no picture search.',
+  },
+  [LESSON_PLANNER_GENRE_RULES_FLAG]: {
+    label: 'Lesson Planner: rules by genre',
+    description:
+      'Rules for every lesson, plus a set for each genre (Kevin, Nov 28). Yawp! reads which kind of lesson a request is (novel, play, poem, short story, speech or essay, memoir, writing, grammar, research, seminar, unit) and gives the planner that genre’s own rules, and tells it which general rules do not apply to it (a world slide in a grammar lesson, pictures in a seminar). Off: every lesson gets the same rules, as before.',
   },
   [CLASS_CODE_UNIQUE_FLAG]: {
     label: 'Unique class codes',

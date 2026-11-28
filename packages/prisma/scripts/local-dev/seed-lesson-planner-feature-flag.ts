@@ -92,6 +92,8 @@ export const LESSON_PLANNER_REVIEW_FLAG_SETTINGS = [
   'feature_flag.lesson_planner_context_tools',
   // Pictures that belong (Nov 21): needs timelines and maps.
   'feature_flag.lesson_planner_found_pictures',
+  // Rules by genre (Nov 28).
+  'feature_flag.lesson_planner_genre_rules',
 ] as const;
 
 /**

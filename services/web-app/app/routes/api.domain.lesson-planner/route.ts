@@ -65,6 +65,7 @@ import { pictureModelCalls } from '~/domain/lesson-planner/picture-model.server'
 import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-filed';
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
+import { readGenre } from '~/domain/lesson-planner/genre-rules';
 import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { passageWithoutGlosses } from '~/domain/lesson-planner/passage-glosses';
 import { checkDuringProblems, modelFirstProblems } from '~/domain/lesson-planner/shape-checks';
@@ -622,6 +623,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
       deckKitV41,
       contextTools,
       foundPictures,
+      genreRules,
       uploads: uploadsOn,
       teachMySlides,
       refreshMyDeck,
@@ -757,8 +759,13 @@ async function turnAction({ request }: ActionFunctionArgs) {
 
     // A unit, or a paired lesson, asks what it is for before it is built (Nov 26).
     const askPurpose = intakeV2 && !dayTarget ? purposeToAsk(turn.message, { firstTurn: priorMessages.length === 0 }) : null;
+    // Rules by genre (Nov 28): the latest message that says, else an earlier one.
+    const genre = genreRules
+      ? readGenre([turn.message, ...[...priorMessages].reverse().filter((message) => message.role === AgentType.User).map((message) => String(message.content))])
+      : null;
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
+      genre,
       lessonLength,
       askPurpose,
       // A companion is the teacher's choice (Nov 26): not chosen, only offered.

@@ -2534,3 +2534,18 @@ describe('planner prompt — a request to plan is built, never answered with onl
     });
   }
 });
+
+describe('planner prompt — rules by genre (Nov 28, behind lesson_planner_genre_rules)', () => {
+  test('a lesson whose genre is known gets its genre\'s own set after the rules for every lesson', () => {
+    const blocks = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School', genre: 'poem' });
+    const text = blocks.map((block) => block.text).join('\n');
+    expect(text).toContain('THIS LESSON IS A POEM');
+    expect(text).toContain('heard at least twice');
+    // After the cache breakpoint: the cached instructions are the same for every genre.
+    expect(blocks[0]!.text).not.toContain('THIS LESSON IS');
+  });
+  test('no genre (the flag off, or a request whose genre cannot be told): no genre section, as before', () => {
+    const text = buildLessonPlannerSystemPromptBlocks({ teacherName: null, organizationName: 'School' }).map((block) => block.text).join('\n');
+    expect(text).not.toContain('THIS LESSON IS');
+  });
+});

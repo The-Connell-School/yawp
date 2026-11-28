@@ -160,6 +160,7 @@ export type LessonPlannerReviewFlag = Extract<
   | 'lesson_planner_deck_chat'
   | 'lesson_planner_context_tools'
   | 'lesson_planner_found_pictures'
+  | 'lesson_planner_genre_rules'
 >;
 
 export async function setLessonPlannerReviewFlag(

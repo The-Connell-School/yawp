@@ -24,6 +24,7 @@ import {
   LESSON_PLANNER_DECK_CHAT_FLAG,
   LESSON_PLANNER_CONTEXT_TOOLS_FLAG,
   LESSON_PLANNER_FOUND_PICTURES_FLAG,
+  LESSON_PLANNER_GENRE_RULES_FLAG,
   deckUploadFlags,
   LESSON_PLANNER_TEACH_NOTES_FLAG,
   LESSON_PLANNER_LIBRARY_V2_FLAG,
@@ -327,6 +328,7 @@ export async function getLessonPlannerReviewFlags(
     deckChat,
     contextTools,
     foundPictures,
+    genreRules,
   ] = await Promise.all([
     isFeatureFlagEnabled(LESSON_PLANNER_INTAKE_V2_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_STACK_V2_FLAG, orgId),
@@ -352,6 +354,7 @@ export async function getLessonPlannerReviewFlags(
     isFeatureFlagEnabled(LESSON_PLANNER_DECK_CHAT_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_CONTEXT_TOOLS_FLAG, orgId),
     isFeatureFlagEnabled(LESSON_PLANNER_FOUND_PICTURES_FLAG, orgId),
+    isFeatureFlagEnabled(LESSON_PLANNER_GENRE_RULES_FLAG, orgId),
   ]);
   const deckFlags = deckUploadFlags({ uploads, uploadPictures, teachMySlides, refreshMyDeck });
   // The panel shows the stack v2 list; without stack v2 it has nothing to show.
@@ -386,6 +389,8 @@ export async function getLessonPlannerReviewFlags(
     contextTools: contextTools && deckKitV4 && deckGallery && deckV2,
     // Pictures go on the context slides.
     foundPictures: foundPictures && contextTools && deckKitV4 && deckGallery && deckV2,
+    // Rules by genre (Nov 28): needs nothing else.
+    genreRules,
   };
 }
 
@@ -435,6 +440,8 @@ export type LessonPlannerReviewFlags = {
   contextTools: boolean;
   /** Pictures that belong (Nov 21); needs contextTools. */
   foundPictures: boolean;
+  /** Rules for every lesson, plus its genre's own set (Nov 28). */
+  genreRules: boolean;
 };
 
 /** Yawp! Lesson Planner for teachers at the given school. */

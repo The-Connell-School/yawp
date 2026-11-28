@@ -38,8 +38,8 @@ describe('production is dark by default (no Setting rows)', () => {
     }
   });
 
-  test('there are 25 lesson_planner* flags registered', () => {
-    expect(lpKeys.length).toBe(25);
+  test('there are 26 lesson_planner* flags registered', () => {
+    expect(lpKeys.length).toBe(26);
   });
 
   test('every lesson_planner* flag is off for every org', async () => {

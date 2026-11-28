@@ -9,6 +9,7 @@ import {
   type UploadPictureRef,
 } from '~/domain/lesson-planner/lesson-uploads';
 import { selectableDeckArt } from '~/domain/lesson-planner/deck-art';
+import { genreRulesSection, type Genre } from '~/domain/lesson-planner/genre-rules';
 import { rubricCategories } from '~/domain/grading/rubric';
 import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
@@ -1152,6 +1153,7 @@ export function buildLessonPlannerSystemPromptBlocks({
   recentArt = [],
   weekContext = [],
   onStack = false,
+  genre = null,
 }: {
   teacherName: string | null;
   organizationName: string;
@@ -1195,6 +1197,8 @@ export function buildLessonPlannerSystemPromptBlocks({
   deckChoices?: DeckChoices;
   /** Paintings on this teacher's recent decks, with the gallery deck on. */
   recentArt?: RecentArt[];
+  /** Rules by genre (Nov 28; behind lesson_planner_genre_rules): the genre's own set. */
+  genre?: Genre | null;
 }): CacheableSystemBlock[] {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   const intro = `You are the Yawp! Lesson Planner, an instructional design partner for ${who} at ${organizationName}.`;
@@ -1220,6 +1224,7 @@ export function buildLessonPlannerSystemPromptBlocks({
     ...(contextTools ? buildThemeSection() : []),
     ...buildCompanionSection(),
     ...(contextTools ? buildTeachingStandardsSection() : []),
+    ...(genre ? genreRulesSection(genre) : []),
     ...(deckGallery && deckKitV4 && contextTools ? buildContextToolsSection({ foundPictures }) : []),
     ...(deckGallery && deckKitV4 && contextTools ? buildTextStructureSection() : []),
     ...buildSourcesSection(sources, deckChoices, { onStack }),
