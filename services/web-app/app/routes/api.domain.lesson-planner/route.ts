@@ -66,6 +66,7 @@ import { withWriteSlidesAsFiled } from '~/domain/lesson-planner/write-slides-fil
 import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes';
 import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
 import { readGenre } from '~/domain/lesson-planner/genre-rules';
+import { isLiterature, meaningProblems } from '~/domain/lesson-planner/meaning-check.server';
 import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { passageWithoutGlosses } from '~/domain/lesson-planner/passage-glosses';
 import { checkDuringProblems, modelFirstProblems } from '~/domain/lesson-planner/shape-checks';
@@ -759,10 +760,10 @@ async function turnAction({ request }: ActionFunctionArgs) {
 
     // A unit, or a paired lesson, asks what it is for before it is built (Nov 26).
     const askPurpose = intakeV2 && !dayTarget ? purposeToAsk(turn.message, { firstTurn: priorMessages.length === 0 }) : null;
+    // What the teacher has asked, latest first: for the genre of the lesson.
+    const askedSoFar = [turn.message, ...[...priorMessages].reverse().filter((message) => message.role === AgentType.User).map((message) => String(message.content))];
     // Rules by genre (Nov 28): the latest message that says, else an earlier one.
-    const genre = genreRules
-      ? readGenre([turn.message, ...[...priorMessages].reverse().filter((message) => message.role === AgentType.User).map((message) => String(message.content))])
-      : null;
+    const genre = genreRules ? readGenre(askedSoFar) : null;
     const system = buildLessonPlannerSystemPromptBlocks({
       teacherName: null,
       genre,
@@ -1008,7 +1009,13 @@ async function turnAction({ request }: ActionFunctionArgs) {
           ipHash: computeIpHash(request),
         });
         const askFacts = factCheckCall(attribution);
-        const facts = askFacts ? await withFactCheck(reply, askFacts, { protect: [...quoted.verified, ...companions.verified] }) : { reply, applied: [], flagged: [] };
+        // Never tell students what the work means (R28, R29): a literature
+        // lesson's student-facing words are read alongside the fact check.
+        const askMeaning = isLiterature(askedSoFar) ? factCheckCall(attribution, { feature: 'lesson-planner-meaning-check' }) : undefined;
+        const [facts, meaning] = await Promise.all([
+          askFacts ? withFactCheck(reply, askFacts, { protect: [...quoted.verified, ...companions.verified] }) : Promise.resolve({ reply, applied: [], flagged: [] }),
+          askMeaning ? meaningProblems(reply, askMeaning) : Promise.resolve([]),
+        ]);
         reply = facts.reply;
         // Fix it, don't flag it (plan item 1, Nov 22): what the checks found
         // and could not swap word for word goes to a repair pass, which fixes
@@ -1035,6 +1042,8 @@ async function turnAction({ request }: ActionFunctionArgs) {
           // a plan for a miss (S6), and a model before students try (S4).
           ...checkDuringProblems(reply),
           ...modelFirstProblems(reply),
+          // What the meaning check found, where the fact check left it.
+          ...meaning.filter((problem) => reply.includes(problem.words) || reply.includes(JSON.stringify(problem.words).slice(1, -1))),
         ];
         const askRepair = problems.length ? factCheckCall(attribution, { schema: LESSON_REPAIR_SCHEMA, feature: 'lesson-planner-repair', timeoutMs: 35_000, maxTokens: 6_000 }) : undefined;
         const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: [...quoted.verified, ...companions.verified] }) : { reply, repaired: [], left: problems };
@@ -1080,6 +1089,7 @@ async function turnAction({ request }: ActionFunctionArgs) {
           quotationsMisplaced: quoted.misplaced.length,
           factsCorrected: facts.applied.length,
           factsFlagged: facts.flagged.length,
+          meaningFound: meaning.length,
           repaired: repair.repaired.length,
           excerptsFromSource: excerpts.rewritten,
           companions: companions.used.map((companion) => companion.id).join(',') || 'none',
