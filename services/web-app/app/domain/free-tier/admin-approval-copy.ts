@@ -13,6 +13,12 @@ export const FREE_TIER_SUPPORT_EMAIL = 'support@yawp.school';
 /** Inbound team inbox for free-tier “talk to us” handoffs (Brian / hello). */
 export const FREE_TIER_HELLO_EMAIL = 'hello@yawp.school';
 
+/** CTA on the administrator approval email. The link opens the review page; it does not approve. */
+export const ADMIN_APPROVAL_EMAIL_CTA_LABEL = 'Review';
+
+/** Previous CTA label, still accepted when parsing stored designed emails. */
+export const ADMIN_APPROVAL_EMAIL_CTA_LABEL_LEGACY = 'Review and approve';
+
 export const FREE_TIER_ADMIN_MODEL_TRAINING_LINE =
   'Student writing is kept private and never used to train models.';
 
@@ -205,7 +211,7 @@ Students draft essays with feedback as they write.
 Teachers control assignments and grading.
 ${FREE_TIER_ADMIN_MODEL_TRAINING_LINE}
 
-${plainTextButton('Review and approve', args.approveUrl)}
+${plainTextButton(ADMIN_APPROVAL_EMAIL_CTA_LABEL, args.approveUrl)}
 
 Not the right person? Forward this request:
 ${args.notRightPersonUrl}
@@ -236,7 +242,11 @@ export function adminApprovalUrlsFromDesignedEmailBody(text: string): {
   notRightPersonUrl?: string;
 } {
   const lines = text.split('\n').map((line) => line.trim());
-  const approveHeading = lines.findIndex((line) => line === 'Review and approve:');
+  const approveHeading = lines.findIndex(
+    (line) =>
+      line === `${ADMIN_APPROVAL_EMAIL_CTA_LABEL}:` ||
+      line === `${ADMIN_APPROVAL_EMAIL_CTA_LABEL_LEGACY}:`
+  );
   const forwardHeading = lines.findIndex(
     (line) => line === 'Not the right person? Forward this request:'
   );

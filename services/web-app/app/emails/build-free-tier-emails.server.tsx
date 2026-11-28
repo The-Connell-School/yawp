@@ -23,6 +23,7 @@ import {
   TeacherStillWaitingEmail,
 } from './transactional-emails';
 import {
+  renderTeacherDenyEmailText,
   teacherDenyEmailSubject,
 } from '~/domain/free-tier/admin-deny-copy';
 import { transactionalEmailPublicOrigin } from './public-origin.server';
@@ -121,27 +122,19 @@ export async function buildTeacherDeniedDesignedEmail(args: {
   const origin = args.origin ?? transactionalEmailPublicOrigin();
   const react = (
     <TeacherDeniedEmail
-      firstName={teacherFirstName(args.teacherName)}
-      adminName={args.adminName}
-      schoolName={args.schoolName}
+      teacherName={args.teacherName}
       statusUrl={args.statusUrl}
       chainCapReached={args.chainCapReached}
       origin={origin}
     />
   );
-  const text = [
-    `Hi ${teacherFirstName(args.teacherName)},`,
-    '',
-    `${args.adminName} wasn't able to approve your Yawp! classroom right now. That happens, and it's usually about timing or a school policy, not about you.`,
-    '',
-    'Your class is still here. You can ask another administrator at your school to approve Yawp! for your classroom.',
-    '',
-    args.chainCapReached
-      ? 'Email support: support@yawp.school'
-      : `Ask another administrator: ${args.statusUrl}`,
-  ].join('\n');
+  const text = renderTeacherDenyEmailText({
+    teacherName: args.teacherName,
+    statusUrl: args.statusUrl,
+    chainCapReached: args.chainCapReached,
+  });
   return {
-    subject: teacherDenyEmailSubject(args.schoolName),
+    subject: teacherDenyEmailSubject,
     ...(await renderTransactionalEmail(react, text)),
   };
 }
@@ -213,9 +206,7 @@ export async function buildAdminApprovalDesignedEmail(args: {
     routedByTeacher: args.routedByTeacher,
     reminder: args.reminder,
     pass1,
-    copyVersion: pass1
-      ? ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1
-      : undefined,
+    copyVersion: pass1 ? ADMIN_APPROVAL_EMAIL_COPY_VERSION_PASS1 : undefined,
   });
   return {
     subject,

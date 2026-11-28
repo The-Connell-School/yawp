@@ -42,9 +42,9 @@ function expectDesignedDelivery(delivery: {
   text: string;
   html: string;
 }) {
-  expect(delivery.text).toContain('Review and approve:');
+  expect(delivery.text).toContain('Review:');
   expect(delivery.text).toContain(approveUrl);
-  expect(delivery.html).toContain('Review and approve</a>');
+  expect(delivery.html).toContain('Review</a>');
   expect(delivery.html).toContain(`href="${approveUrl}"`);
   expect(delivery.html).not.toMatch(/plainTextEmailToHtml/i);
   expect(delivery.subject).not.toBe(`Approve Yawp! for ${schoolName}`);
@@ -118,7 +118,7 @@ describe('demo free-tier signup admin email subjects (#659)', () => {
       schoolName,
       pass1: true,
     });
-    expect(html).toContain('Review and approve</a>');
+    expect(html).toContain('Review</a>');
     expect(designed.text).toContain(
       adminApprovalPass1ForwardBanner('Sam Chen', teacherName, schoolName)
     );

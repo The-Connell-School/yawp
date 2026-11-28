@@ -48,9 +48,9 @@ async function expectDesignedAdminEmail(
     expect(designed.subject).toBe(`${atSchool} would like to use Yawp!`);
   }
   expect(designed.text).toContain(`Approve Yawp! for ${atSchool}`);
-  expect(designed.text).toContain('Review and approve:');
+  expect(designed.text).toContain('Review:');
   expect(designed.text).toContain(approveUrl);
-  expect(designed.html).toContain('Review and approve</a>');
+  expect(designed.html).toContain('Review</a>');
   expect(designed.html).toContain(`href="${approveUrl}"`);
   expect(designed.html).toContain(`Approve Yawp! for ${atSchool}`);
   expect(designed.html).toContain('yawp_black_logo.png');
