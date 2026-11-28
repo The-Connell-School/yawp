@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import {
   buildAdminApprovalDesignedEmail,
   buildTeacherApprovedDesignedEmail,
+  buildTeacherDeniedDesignedEmail,
   buildTeacherForwardedDesignedEmail,
   buildTeacherReleaseDesignedEmail,
   buildTeacherStillWaitingDesignedEmail,
@@ -91,6 +92,20 @@ const emails = [
       }),
     subject: "You're approved! Your Yawp! classroom is ready",
     preheader: 'Your administrator approved your classroom',
+  },
+  {
+    id: '04d',
+    build: () =>
+      buildTeacherDeniedDesignedEmail({
+        teacherName: 'Dana Whitaker',
+        adminName: 'Dr. Ramos',
+        schoolName: 'Lincoln High School',
+        statusUrl: urls.pending,
+        chainCapReached: false,
+      }),
+    subject: 'An update on your Yawp! request',
+    preheader:
+      'Your administrator did not approve Yawp! for use in your classroom at this time.',
   },
   {
     id: '05',
@@ -225,7 +240,8 @@ test('05L long-name admin headline wraps in html', async () => {
     'Lincoln High School for Advanced Literary Studies and Creative Writing';
   const rendered = await buildAdminApprovalDesignedEmail({
     teacherName: 'Professor Alexandra Montgomery-Wellington',
-    teacherEmail: 'alexandra.montgomery-wellington@very-long-school-domain.example.edu',
+    teacherEmail:
+      'alexandra.montgomery-wellington@very-long-school-domain.example.edu',
     schoolName: longSchool,
     approveUrl: urls.approve,
     notRightPersonUrl: urls.forward,

@@ -14,7 +14,21 @@ import {
   FREE_TIER_ADMIN_MODEL_TRAINING_LINE,
   teacherAtSchool,
 } from '~/domain/free-tier/admin-approval-copy';
+import {
+  teacherDenyEmailAskAnotherLabel,
+  teacherDenyEmailClose,
+  teacherDenyEmailGreeting,
+  teacherDenyEmailHeadline,
+  teacherDenyEmailIntro,
+  teacherDenyEmailPreheader,
+  teacherDenyEmailSignOff,
+  teacherDenyEmailSupportLabel,
+  teacherDenyEmailSupportMailto,
+  teacherDenyEmailWays,
+} from '~/domain/free-tier/admin-deny-copy';
 import { transactionalEmailLogoUrls } from './public-origin.server';
+import { EMAIL_FOREGROUND, EMAIL_MUTED, FONT_SANS, FONT_SERIF } from './brand';
+import { padX } from './layout/spacing';
 import {
   AboutYawpList,
   CodeBlock,
@@ -56,12 +70,13 @@ export function TeacherReleaseEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            Your spot is ready. Your free Yawp! classroom license covers one class of
-            up to 30 students, at no cost to you or your school.
+            Your spot is ready. Your free Yawp! classroom license covers one
+            class of up to 30 students, at no cost to you or your school.
           </>,
           <>
             Setup takes about five minutes: create your class, then ask your
-            administrator to approve it. You can explore everything while you wait.
+            administrator to approve it. You can explore everything while you
+            wait.
           </>,
         ]}
       />
@@ -72,8 +87,8 @@ export function TeacherReleaseEmail(props: {
       <EmailBodyBlocks
         paragraphs={[
           <>
-            Changed your mind? Just reply and let us know, and we&apos;ll pass your
-            spot to another teacher.
+            Changed your mind? Just reply and let us know, and we&apos;ll pass
+            your spot to another teacher.
           </>,
         ]}
       />
@@ -104,9 +119,9 @@ export function TeacherStillWaitingEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            We haven&apos;t heard from {props.adminName} yet, so we sent a friendly
-            reminder. A quick word in the hallway or a short email from you can help,
-            too.
+            We haven&apos;t heard from {props.adminName} yet, so we sent a
+            friendly reminder. A quick word in the hallway or a short email from
+            you can help, too.
           </>,
           <>In the meantime, your classroom preview is ready to explore.</>,
         ]}
@@ -115,8 +130,8 @@ export function TeacherStillWaitingEmail(props: {
       <EmailBodyBlocks
         paragraphs={[
           <>
-            Think another administrator could approve sooner? You can send your request
-            to them instead.
+            Think another administrator could approve sooner? You can send your
+            request to them instead.
           </>,
         ]}
       />
@@ -156,7 +171,8 @@ export function TeacherForwardedEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            Your approval request is now with {props.adminName} ({props.adminEmail}
+            Your approval request is now with {props.adminName} (
+            {props.adminEmail}
             ). {followUp}
           </>,
         ]}
@@ -167,9 +183,7 @@ export function TeacherForwardedEmail(props: {
 }
 
 export function TeacherDeniedEmail(props: {
-  firstName: string;
-  adminName: string;
-  schoolName: string;
+  teacherName: string;
   statusUrl: string;
   chainCapReached: boolean;
   origin?: string;
@@ -177,35 +191,103 @@ export function TeacherDeniedEmail(props: {
   const urls = logos(props.origin);
   return (
     <YawpEmailLayout
-      preheader="Your class is still here. You can ask another administrator."
+      preheader={teacherDenyEmailPreheader}
       logoBlackUrl={urls.black}
       logoWhiteUrl={urls.white}
       siteUrl={urls.site}
       footerWhy="You're getting this because a school administrator responded to your Yawp! classroom request."
-      headline={`Your Yawp! request for ${props.schoolName}`}
-      showBrianSignOff
+      headline={teacherDenyEmailHeadline}
       linkFallbackUrl={props.statusUrl}
     >
       <EmailBodyBlocks
         paragraphs={[
-          <>Hi {props.firstName},</>,
-          <>
-            {props.adminName} wasn&apos;t able to approve your Yawp! classroom right
-            now. That happens, and it&apos;s usually about timing or a school policy,
-            not about you.
-          </>,
-          <>
-            Your class is still here. You can ask another administrator at your
-            school to approve Yawp! for your classroom.
-          </>,
+          <>{teacherDenyEmailGreeting(props.teacherName)}</>,
+          <>{teacherDenyEmailIntro}</>,
         ]}
       />
+      <TeacherDenyWaysList />
+      <EmailBodyBlocks paragraphs={[<>{teacherDenyEmailClose}</>]} />
       {props.chainCapReached ? (
-        <PillButton label="Email support" href="mailto:support@yawp.school" />
+        <PillButton
+          label={teacherDenyEmailSupportLabel}
+          href={teacherDenyEmailSupportMailto}
+        />
       ) : (
-        <PillButton label="Ask another administrator" href={props.statusUrl} />
+        <PillButton
+          label={teacherDenyEmailAskAnotherLabel}
+          href={props.statusUrl}
+        />
       )}
+      <TeacherDenySignOff />
     </YawpEmailLayout>
+  );
+}
+
+function TeacherDenyWaysList() {
+  return (
+    <tr>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
+        <table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+          <tbody>
+            {teacherDenyEmailWays.map((way) => (
+              <tr key={way.title}>
+                <td
+                  valign="top"
+                  width={18}
+                  style={{ padding: '0 0 12px 0', verticalAlign: 'top' }}
+                >
+                  <span style={{ fontSize: '16px', lineHeight: '26px' }}>
+                    &bull;
+                  </span>
+                </td>
+                <td
+                  className="yawp-text"
+                  style={{
+                    padding: '0 0 12px 0',
+                    fontFamily: FONT_SANS,
+                    fontSize: '16px',
+                    lineHeight: '26px',
+                    color: EMAIL_FOREGROUND,
+                  }}
+                >
+                  <strong>{way.title}</strong> {way.body}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  );
+}
+
+function TeacherDenySignOff() {
+  return (
+    <tr>
+      <td className="yawp-pad-x" style={padX(20, 0)}>
+        <table role="presentation" width="100%" cellPadding={0} cellSpacing={0}>
+          <tbody>
+            {teacherDenyEmailSignOff.map((line, index) => (
+              <tr key={line}>
+                <td
+                  className="yawp-text"
+                  style={{
+                    padding: index === 1 ? '8px 0 0 0' : '0',
+                    fontFamily: index === 1 ? FONT_SERIF : FONT_SANS,
+                    fontSize: index === 1 ? '22px' : '16px',
+                    lineHeight: index === 1 ? '28px' : '26px',
+                    fontWeight: index === 1 ? 600 : 400,
+                    color: index === 2 ? EMAIL_MUTED : EMAIL_FOREGROUND,
+                  }}
+                >
+                  {line}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </td>
+    </tr>
   );
 }
 
@@ -233,9 +315,7 @@ export function TeacherApprovedEmail(props: {
       <EmailBodyBlocks
         paragraphs={[
           <>Hi {props.firstName},</>,
-          <>
-            {approvedClassroomLead(props.adminName)}
-          </>,
+          <>{approvedClassroomLead(props.adminName)}</>,
           <>{APPROVED_CLASSROOM_NEXT_STEP}</>,
         ]}
       />
@@ -366,7 +446,10 @@ export function AdminApprovalEmail(props: {
         ]}
       />
       <AboutYawpList label="About Yawp!" items={ABOUT_YAWP_ITEMS} />
-      <PillButton label={ADMIN_APPROVAL_EMAIL_CTA_LABEL} href={props.approveUrl} />
+      <PillButton
+        label={ADMIN_APPROVAL_EMAIL_CTA_LABEL}
+        href={props.approveUrl}
+      />
       <SecondaryLink
         before="Not the right person?"
         linkLabel="Forward this request"
@@ -390,7 +473,9 @@ export function SignInCodeEmail(props: { code: string; origin?: string }) {
       footerWhy="You're getting this because someone asked to sign in to Yawp! with this email address."
       headline="Your sign-in code"
     >
-      <EmailBodyBlocks paragraphs={[<>Enter this code to finish signing in.</>]} />
+      <EmailBodyBlocks
+        paragraphs={[<>Enter this code to finish signing in.</>]}
+      />
       <CodeBlock code={props.code} expiryLine="Expires in 10 minutes" />
       <EmailBodyBlocks
         paragraphs={[<>Didn&apos;t ask for this? You can ignore this email.</>]}
@@ -458,8 +543,8 @@ export function WelcomeVerifyEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            You&apos;re almost in. Enter this code or tap the button below to verify
-            your email.
+            You&apos;re almost in. Enter this code or tap the button below to
+            verify your email.
           </>,
         ]}
       />
@@ -524,8 +609,8 @@ export function OrgTeacherInviteEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            {props.inviterName} added you as a teacher at {props.schoolName}. Accept
-            the invitation to set up your classes.
+            {props.inviterName} added you as a teacher at {props.schoolName}.
+            Accept the invitation to set up your classes.
           </>,
         ]}
       />
@@ -559,9 +644,9 @@ export function SchoolSetupInviteEmail(props: {
         paragraphs={[
           <>Hi {props.firstName},</>,
           <>
-            Our team created a Yawp! account for {props.schoolName} and named you as
-            its owner. Accept the invitation to add teachers and manage your
-            school&apos;s classes.
+            Our team created a Yawp! account for {props.schoolName} and named
+            you as its owner. Accept the invitation to add teachers and manage
+            your school&apos;s classes.
           </>,
         ]}
       />

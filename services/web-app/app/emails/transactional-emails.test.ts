@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { buildAdminApprovalDesignedEmail } from './build-free-tier-emails.server';
+import {
+  buildAdminApprovalDesignedEmail,
+  buildTeacherDeniedDesignedEmail,
+} from './build-free-tier-emails.server';
 import {
   buildClassInviteEmail,
   buildOrgTeacherInviteEmail,
@@ -13,7 +16,8 @@ import { FREE_TIER_ADMIN_MODEL_TRAINING_LINE } from '~/domain/free-tier/admin-ap
 const FIXTURE = {
   teacherName: 'Dana Whitaker',
   teacherEmail: 'd.whitaker@lincolnhs.org',
-  schoolName: 'Lincoln High School With An Exceptionally Long Name That Should Wrap',
+  schoolName:
+    'Lincoln High School With An Exceptionally Long Name That Should Wrap',
   approveUrl: 'https://yawp.test/free/admin/approve?t=fake',
   forwardUrl: 'https://yawp.test/free/admin/not-right-person?t=fake',
   joinUrl: 'https://yawp.test/free/join?t=fake',
@@ -52,6 +56,44 @@ describe('transactional email renders', () => {
     expect(email.html).toContain('alt="Yawp!"');
     expect(email.html).toContain('yawp_black_logo.png');
     expect(email.html).toContain('yawp_white_logo.png');
+  });
+
+  test("teacher denied email uses Brian's 28 Nov 2026 copy", async () => {
+    const email = await buildTeacherDeniedDesignedEmail({
+      teacherName: FIXTURE.teacherName,
+      adminName: 'Dr. Ramos',
+      schoolName: FIXTURE.schoolName,
+      statusUrl: 'https://yawp.test/app/free-tier/pending?ask=1',
+      chainCapReached: false,
+    });
+    assertBrand(email);
+    expect(email.subject).toBe('An update on your Yawp! request');
+    expect(email.text).toContain('Dear Dana Whitaker,');
+    expect(email.text).toContain(
+      'Your administrator did not approve Yawp! for use in your classroom at this time.'
+    );
+    expect(email.text).toContain('Ask a different administrator.');
+    expect(email.text).toContain('Talk with your administrator.');
+    expect(email.text).toContain('Bring us in.');
+    expect(email.text).toContain('Just reply to this email');
+    expect(email.text).toContain('The Yawp! Team');
+    expect(email.text).toContain(
+      'Ask another administrator: https://yawp.test/app/free-tier/pending?ask=1'
+    );
+    expect(email.html).toContain('Dear Dana Whitaker,');
+    expect(email.html).toContain(
+      '<strong>Ask a different administrator.</strong>'
+    );
+    expect(email.html).toContain(
+      '<strong>Talk with your administrator.</strong>'
+    );
+    expect(email.html).toContain('<strong>Bring us in.</strong>');
+    expect(email.html).toContain('The Yawp! Team');
+    expect(email.html).toContain('Ask another administrator');
+    expect(email.html).not.toContain(
+      "wasn't able to approve your Yawp! classroom right now"
+    );
+    expect(email.html).not.toContain('Founder, Yawp! Writing Program');
   });
 
   test('05 admin approval long names', async () => {
