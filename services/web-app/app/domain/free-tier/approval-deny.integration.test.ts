@@ -301,6 +301,42 @@ describe.skipIf(!enabled)('admin deny approval', () => {
     expect(await loadTeacherDeniedSurface({ applicationId: app.id })).toBeNull();
   });
 
+  test('deny after reopen queues another teacher email and the worker sends it', async () => {
+    const { app, approval, token } = await seedSentApp('reopen-deny');
+    await denySchoolAdminApproval({ token, request: new Request('http://localhost') });
+    const reopened = await reopenDeniedSchoolAdminApproval({ token });
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    sendEmailMock.mockClear();
+    await denySchoolAdminApproval({
+      token: reopened.approveToken,
+      request: new Request('http://localhost'),
+    });
+    const held = await prisma.freeTierApprovalDelivery.findUniqueOrThrow({
+      where: {
+        approvalId_kind_sequence: {
+          approvalId: approval.id,
+          kind: 'teacher_deny',
+          sequence: 1,
+        },
+      },
+    });
+    expect(held.state).toBe('QUEUED');
+    expect(+held.availableAt).toBeGreaterThan(
+      Date.now() + TEACHER_DENY_EMAIL_DELAY_MS - 60_000
+    );
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await runApprovalJobs(new Date(Date.now() + TEACHER_DENY_EMAIL_DELAY_MS + 1000));
+    const sent = await prisma.freeTierApprovalDelivery.findUniqueOrThrow({
+      where: { id: held.id },
+    });
+    expect(sent.state).toBe('SENT');
+    const logs = await prisma.freeTierEmailLog.findMany({
+      where: { applicationId: app.id, kind: 'teacher_deny', success: true },
+    });
+    expect(logs).toHaveLength(1);
+  });
+
   test('reopen refuses a forged or unrelated token', async () => {
     const { token } = await seedSentApp('reopen-forged');
     await denySchoolAdminApproval({ token, request: new Request('http://localhost') });

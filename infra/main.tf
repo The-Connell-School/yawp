@@ -397,7 +397,8 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
         Effect = "Allow"
         Action = [
           "ses:SendEmail",
-          "ses:SendRawEmail"
+          "ses:SendRawEmail",
+          "ses:GetSuppressedDestination"
         ]
         Resource = "*"
       }
