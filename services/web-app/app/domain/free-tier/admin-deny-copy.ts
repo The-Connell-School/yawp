@@ -64,10 +64,7 @@ export function teacherDeniedStatusTitle() {
   return "Your request wasn't approved";
 }
 
-export function teacherDeniedStatusBody(
-  adminName: string,
-  schoolName: string
-) {
+export function teacherDeniedStatusBody(adminName: string, schoolName: string) {
   return `${adminName} didn't approve Yawp! for your classroom this time. Your class is still here, and you can ask another administrator at ${schoolName}.`;
 }
 
@@ -80,9 +77,71 @@ export function teacherAllRequestsUsedBody() {
   return "You've used all three administrator requests for this classroom. Email support and we'll help you find a path forward.";
 }
 
-export function teacherDenyEmailSubject(schoolName: string) {
-  return `Your Yawp! request for ${schoolName}`;
-}
+/** Brian Connell, 28 Nov 2026. Subject typo "And update" corrected to "An update". */
+export const teacherDenyEmailSubject = 'An update on your Yawp! request';
 
 export const teacherDenyEmailPreheader =
-  'Your class is still here. You can ask another administrator.';
+  'Your administrator did not approve Yawp! for use in your classroom at this time.';
+
+export const teacherDenyEmailHeadline = teacherDenyEmailSubject;
+
+export function teacherDenyEmailGreeting(teacherName: string) {
+  return `Dear ${teacherName.trim() || 'there'},`;
+}
+
+export const teacherDenyEmailIntro =
+  "Your administrator did not approve Yawp! for use in your classroom at this time. We know that's disappointing, and we'd still love to get you writing with us. Here are a few ways forward:";
+
+export const teacherDenyEmailWays = [
+  {
+    title: 'Ask a different administrator.',
+    body: 'If someone else at your school or district can approve classroom tools, you can send them a new request from your Yawp! account.',
+  },
+  {
+    title: 'Talk with your administrator.',
+    body: 'Sometimes a "no" is really a "not yet" or "I have questions." A quick conversation about how you\'d use Yawp! with your students can go a long way.',
+  },
+  {
+    title: 'Bring us in.',
+    body: "We're happy to talk with your administrator directly, answer questions about student privacy and how the Tutor works, or give a short demo. Just reply to this email and we'll set it up.",
+  },
+] as const;
+
+export const teacherDenyEmailClose =
+  'We built Yawp! for teachers like you, and we think you and your students would love it. We hope to see you on the platform soon.';
+
+export const teacherDenyEmailSignOff = [
+  'Best always,',
+  'Brian Connell',
+  'The Yawp! Team',
+] as const;
+
+export const teacherDenyEmailAskAnotherLabel = 'Ask another administrator';
+export const teacherDenyEmailSupportLabel = 'Email support';
+export const teacherDenyEmailSupportMailto = 'mailto:support@yawp.school';
+
+export function renderTeacherDenyEmailText(args: {
+  teacherName: string;
+  statusUrl: string;
+  chainCapReached: boolean;
+}) {
+  const ways = teacherDenyEmailWays
+    .map((way) => `- ${way.title} ${way.body}`)
+    .join('\n');
+  const cta = args.chainCapReached
+    ? `${teacherDenyEmailSupportLabel}: support@yawp.school`
+    : `${teacherDenyEmailAskAnotherLabel}: ${args.statusUrl}`;
+  return [
+    teacherDenyEmailGreeting(args.teacherName),
+    '',
+    teacherDenyEmailIntro,
+    '',
+    ways,
+    '',
+    teacherDenyEmailClose,
+    '',
+    ...teacherDenyEmailSignOff,
+    '',
+    cta,
+  ].join('\n');
+}
