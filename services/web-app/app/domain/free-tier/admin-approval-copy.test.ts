@@ -59,13 +59,28 @@ test('admin approval plain text includes link lines and footer', () => {
   expect(text).toContain(
     'They named you as the administrator who can approve classroom software.'
   );
-  expect(text).toContain('Review and approve:');
+  expect(text).toContain('Review:');
   expect(text).toContain('https://yawp.school/free/admin/approve?t=a');
   expect(text).toContain('Not the right person? Forward this request:');
   expect(text).toContain("You don't need a Yawp! account.");
   expect(adminApprovalUrlsFromDesignedEmailBody(text)).toEqual({
     approveUrl: 'https://yawp.school/free/admin/approve?t=a',
     notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=n',
+  });
+});
+
+test('designed-email URL parser still accepts the legacy Review and approve heading', () => {
+  const stored = `Approve Yawp! for Jordan Rivera at Lincoln High School
+
+Review and approve:
+https://yawp.school/free/admin/approve?t=legacy
+
+Not the right person? Forward this request:
+https://yawp.school/free/admin/not-right-person?t=legacy
+`;
+  expect(adminApprovalUrlsFromDesignedEmailBody(stored)).toEqual({
+    approveUrl: 'https://yawp.school/free/admin/approve?t=legacy',
+    notRightPersonUrl: 'https://yawp.school/free/admin/not-right-person?t=legacy',
   });
 });
 
