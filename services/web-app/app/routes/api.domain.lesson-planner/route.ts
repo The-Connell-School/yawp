@@ -67,6 +67,7 @@ import { withDeckMatchingPlan } from '~/domain/lesson-planner/deck-plan-minutes'
 import { planFittingPeriod } from '~/domain/lesson-planner/plan-fit';
 import { passageNotInHand } from '~/domain/lesson-planner/passage-in-hand';
 import { passageWithoutGlosses } from '~/domain/lesson-planner/passage-glosses';
+import { checkDuringProblems, modelFirstProblems } from '~/domain/lesson-planner/shape-checks';
 import { fileLaterHandout } from '~/domain/lesson-planner/file-later-handout.server';
 import { checkQuotations, preparedSourceOf, withQuotationCheck } from '~/domain/lesson-planner/quotation-check.server';
 import { withFactCheck } from '~/domain/lesson-planner/fact-check.server';
@@ -1023,6 +1024,10 @@ async function turnAction({ request }: ActionFunctionArgs) {
           ...passageNotInHand(reply),
           // The passage's hard words glossed where students meet them (R5, S5).
           ...passageWithoutGlosses(reply),
+          // The shape of a lesson (section 1): a check everyone answers, with
+          // a plan for a miss (S6), and a model before students try (S4).
+          ...checkDuringProblems(reply),
+          ...modelFirstProblems(reply),
         ];
         const askRepair = problems.length ? factCheckCall(attribution, { schema: LESSON_REPAIR_SCHEMA, feature: 'lesson-planner-repair', timeoutMs: 35_000, maxTokens: 6_000 }) : undefined;
         const repair = askRepair ? await withLessonRepair(reply, problems, askRepair, { protect: [...quoted.verified, ...companions.verified] }) : { reply, repaired: [], left: problems };
